@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>I dag</title>
+<!-- Forsiden i Kompas: dagen på tværs af projekterne. Læser kun, hvad projekterne selv skriver:
+     /form/coach.json og soevn.json (garmin-coach), /form/liv.json (livsoverblik), /studie/studie.json og
+     /studie/api/genkald (studie), /karriere/api/data (jobagent). Mangler et projekt, udelades dets kort. -->
+<link rel="stylesheet" href="/kompas/assets/tokens.css">
+<link rel="stylesheet" href="/kompas/assets/page.css">
+<style>
+  .wrap { max-width: 1180px; }
+  .grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 16px; }
+  .s12 { grid-column: span 12; } .s8 { grid-column: span 8; } .s7 { grid-column: span 7; } .s5 { grid-column: span 5; } .s4 { grid-column: span 4; }
+
+  /* hero */
+  .hero { position: relative; overflow: hidden; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px; align-items: center; padding: 30px 32px; }
+  .hero::before { content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(120% 140% at 100% 0%, color-mix(in srgb, var(--mark) 12%, transparent) 0%, transparent 55%),
+                radial-gradient(90% 120% at 0% 100%, color-mix(in srgb, var(--c3) 8%, transparent) 0%, transparent 60%); }
+  .hero > * { position: relative; }
+  .eyebrow { font-size: 12.5px; font-weight: 500; letter-spacing: .02em; color: var(--text-secondary); }
+  .hello { font-size: 38px; line-height: 1.1; font-weight: 600; letter-spacing: -0.03em; margin: 6px 0 10px; }
+  .summary { font-size: 15px; line-height: 1.55; color: var(--text-secondary); max-width: 44em; margin: 0; }
+  .summary b { color: var(--text-primary); font-weight: 500; }
+  /* dagens råd fra garmin-coach (rolig, moderat eller klar) med grundene */
+  .raad { display: flex; gap: 10px; align-items: flex-start; max-width: 44em; margin: 16px 0 0; padding: 11px 14px; border-radius: 12px;
+    background: var(--surface-inset); font-size: 13.5px; line-height: 1.5; color: var(--text-secondary); }
+  .raad b { color: var(--text-primary); font-weight: 600; }
+  .raad .ic { flex: none; margin-top: 2px; }
+  .raad.rolig .ic { color: var(--warning); } .raad.moderat .ic { color: var(--mark); } .raad.klar .ic { color: var(--success); }
+  .raad small { display: block; margin-top: 3px; font-size: 12px; }
+  .ring { display: grid; justify-items: center; gap: 6px; text-align: center; }
+  .ring svg { width: 132px; height: 132px; display: block; }
+  .ring .track { stroke: var(--surface-inset); }
+  .ring .arc { stroke: var(--mark); stroke-linecap: round; transition: stroke-dashoffset .8s cubic-bezier(.2,.8,.2,1); }
+  .ring .v { font-size: 34px; font-weight: 600; letter-spacing: -0.03em; fill: var(--text-primary); font-variant-numeric: tabular-nums; }
+  .ring .u { font-size: 11px; fill: var(--text-secondary); }
+  .ring .lbl { font-size: 12.5px; color: var(--text-secondary); }
+  .ring .lbl b { color: var(--text-primary); font-weight: 600; }
+
+  /* krop */
+  .vitals { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+  .vital { padding: 14px 16px; display: grid; gap: 2px; }
+  .vital .k { display: flex; align-items: center; gap: 7px; color: var(--text-secondary); font-size: 12.5px; }
+  .vital .k .ic { color: var(--text-subdued); }
+  .vital .v { font-size: 24px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; margin-top: 4px; }
+  .vital .v small { font-size: 13px; font-weight: 500; color: var(--text-secondary); margin-left: 3px; letter-spacing: 0; }
+  .vital .s { font-size: 12.5px; color: var(--text-subdued); }
+  .flag { display: flex; gap: 10px; align-items: center; padding: 10px 14px; border-radius: 10px; background: var(--warning-tint); color: var(--text-primary); font-size: 13.5px; }
+  .flag .ic { color: var(--warning); flex: none; }
+
+  /* dagen */
+  .band { position: relative; height: 56px; margin: 6px 0 26px; }
+  .band .rail { position: absolute; inset: 18px 0 18px; border-radius: 10px; background: var(--surface-inset); }
+  .band .tick { position: absolute; top: 44px; transform: translateX(-50%); font-size: 11px; color: var(--text-subdued); font-variant-numeric: tabular-nums; }
+  .band .tick::before { content: ""; position: absolute; left: 50%; top: -8px; width: 1px; height: 5px; background: var(--divider); }
+  .band .blk { position: absolute; top: 14px; height: 28px; border-radius: 8px; background: var(--k); box-shadow: 0 0 0 2px var(--container); min-width: 6px; }
+  .band .blk.done { opacity: .35; }
+  .band .fri { position: absolute; top: 18px; height: 20px; border-radius: 7px; border: 1.5px dashed color-mix(in srgb, var(--success) 70%, transparent); }
+  .band .nu { position: absolute; top: 4px; bottom: 10px; width: 2px; margin-left: -1px; background: var(--nav-indicator); border-radius: 1px; }
+  .band .nu::before { content: ""; position: absolute; top: -3px; left: -3px; width: 8px; height: 8px; border-radius: 50%; background: var(--nav-indicator); }
+  .band .nu span { position: absolute; top: -18px; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: 600; white-space: nowrap; }
+  .agenda { display: grid; gap: 4px; }
+  .ev { display: grid; grid-template-columns: 96px 4px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 12px; border-radius: 10px; }
+  .ev .t { font-variant-numeric: tabular-nums; font-size: 13.5px; color: var(--text-secondary); }
+  .ev .sw { width: 4px; height: 28px; border-radius: 2px; background: var(--k); }
+  .ev .n { min-width: 0; }
+  .ev .n b { display: block; font-weight: 500; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ev .n small { color: var(--text-secondary); font-size: 12.5px; }
+  .ev.done { opacity: .45; }
+  .ev.nu { background: var(--container-inset); box-shadow: inset 0 0 0 1px var(--divider); }
+  .ev.fri .sw { background: none; border: 1.5px dashed var(--success); width: 2px; }
+  .ev.fri b { color: var(--success); }
+  .pill { font-size: 11.5px; font-weight: 600; padding: 3px 8px; border-radius: 999px; background: var(--surface-inset); color: var(--text-secondary); white-space: nowrap; }
+  .pill.nu { background: var(--nav-indicator); color: var(--container); }
+  .pill.snart { background: color-mix(in srgb, var(--mark) 14%, transparent); color: var(--mark); }
+
+  /* frister */
+  .dl { display: grid; gap: 2px; }
+  .dli { display: grid; grid-template-columns: 46px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 9px 6px; border-radius: 10px; text-decoration: none; color: inherit; }
+  a.dli:hover { background: var(--surface-hover); }
+  .cal { width: 46px; border-radius: 10px; overflow: hidden; text-align: center; box-shadow: var(--shadow-border-xs); background: var(--container); }
+  .cal .m { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; background: var(--surface-inset); color: var(--text-secondary); padding: 2px 0; }
+  .cal .d { font-size: 18px; font-weight: 600; padding: 3px 0 4px; font-variant-numeric: tabular-nums; }
+  .cal.hot .m { background: var(--destructive); color: #fff; }
+  .dli .n b { display: block; font-weight: 500; font-size: 13.5px; line-height: 1.35; }
+  .dli .n small { display: flex; gap: 6px; align-items: center; color: var(--text-secondary); font-size: 12px; margin-top: 2px; }
+  .cd { font-size: 12px; font-weight: 600; color: var(--text-secondary); white-space: nowrap; }
+  .cd.hot { color: var(--destructive); }
+
+  /* fokus og genveje */
+  .one { display: flex; gap: 12px; align-items: flex-start; }
+  .one .ic-wrap { width: 34px; height: 34px; border-radius: 10px; background: var(--nav-indicator); color: var(--container); display: grid; place-items: center; flex: none; }
+  .one p { margin: 0; line-height: 1.55; }
+  .one .lbl { font-size: 12px; font-weight: 500; color: var(--text-secondary); margin-bottom: 2px; }
+  .fk { list-style: none; margin: 14px 0 0; padding: 14px 0 0; border-top: 1px solid var(--divider); display: grid; gap: 10px; }
+  .fk { counter-reset: f; }
+  .fk li { counter-increment: f; display: grid; grid-template-columns: 20px 1fr; gap: 8px; font-size: 13.5px; line-height: 1.5; color: var(--text-secondary); }
+  /* Nummer, ikke flueben: målene er mål, og om de nås, står først i næste 14-dages rapport */
+  .fk li::before { content: counter(f); width: 20px; height: 20px; margin-top: 1px; border-radius: 6px; background: var(--surface-inset);
+    color: var(--text-primary); font-size: 11.5px; font-weight: 600; display: grid; place-items: center; }
+  .fk-kilde { margin: 10px 0 0; font-size: 12px; color: var(--text-secondary); }
+  .cta { display: grid; gap: 12px; padding: 18px 20px; text-decoration: none; color: inherit; transition: transform .12s ease, box-shadow .12s ease; }
+  .cta:hover { transform: translateY(-1px); box-shadow: var(--shadow-border-xs), 0 8px 24px rgba(0,0,0,.06); }
+  .cta .top { display: flex; justify-content: space-between; align-items: center; }
+  .cta .ico { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: var(--surface-inset); color: var(--text-primary); }
+  .cta .big { font-size: 26px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  .cta .big small { font-size: 13.5px; font-weight: 500; color: var(--text-secondary); letter-spacing: 0; margin-left: 4px; }
+  .cta p { margin: 0; color: var(--text-secondary); font-size: 13px; line-height: 1.5; }
+  .cta .go { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 500; }
+  .meter { height: 6px; border-radius: 3px; background: var(--surface-inset); overflow: hidden; }
+  .meter i { display: block; height: 100%; border-radius: 3px; background: var(--mark); }
+  .foot { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; color: var(--text-subdued); font-size: 12.5px; }
+  .foot a { color: var(--text-secondary); }
+  .fade { animation: ind .5s cubic-bezier(.2,.8,.2,1) both; }
+  @keyframes ind { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) { .fade { animation: none; } .ring .arc { transition: none; } }
+
+  @media (max-width: 1000px) { .s8, .s7, .s5, .s4 { grid-column: span 12; } .vitals { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 640px) {
+    .hero { grid-template-columns: minmax(0, 1fr); padding: 22px 20px; } .hello { font-size: 30px; }
+    .ring { justify-items: start; grid-template-columns: auto 1fr; align-items: center; text-align: left; } .ring svg { width: 96px; height: 96px; }
+    .ev { grid-template-columns: 78px 4px minmax(0, 1fr); } .ev .pill { display: none; }
+    .band .tick:nth-child(even) { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="grid" id="root"><div class="card empty s12">Henter dagen …</div></div>
+</div>
+
+<script src="/kompas/assets/icons.js"></script>
+<script src="/kompas/assets/liv.js"></script>
+<script>
+const get = u => fetch(u, { cache: "no-store" }).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
+const hm = s => { const [h, m] = s.split(/[:.]/).map(Number); return h + m / 60; };
+const kl = h => `${String(Math.floor(h)).padStart(2, "0")}.${String(Math.round((h % 1) * 60)).padStart(2, "0")}`;
+const nuH = () => { const d = new Date(); return d.getHours() + d.getMinutes() / 60; };
+// Varighed i timer → "1 t 39 min", "5 t" eller "45 min" (ikke kommatal)
+function varighed(h) {
+  const m = Math.round(h * 60), t = Math.floor(m / 60), r = m % 60;
+  return t && r ? `${t} t ${r} min` : t ? `${t} t` : `${r} min`;
+}
+const FAG = { alfa: ["Alfa", "var(--c1)"], beta: ["Beta", "var(--c2)"], gamma: ["Gamma", "var(--c3)"] };
+const ART = [[/Lecture/, "Forelæsning"], [/Exercise/, "Øvelse"], [/Supervision/, "Vejledning"], [/Off .*Campus/, "Uden for campus"]];
+const MON = ["jan", "feb", "mar", "apr", "maj", "jun", "jul", "aug", "sep", "okt", "nov", "dec"];
+
+// "Gamma – consectetur · Exercise (On Campus)" → fag, art, farve. Titler uden kursus er "andet".
+function klassificer(titel) {
+  const [navn, rest = ""] = titel.split(" · ");
+  const f = FAG[navn.split(" ")[0].toLowerCase()];
+  if (f) {
+    const art = (ART.find(([re]) => re.test(rest)) || [])[1] || "Undervisning";
+    const form = /Pre-recorded/.test(rest) ? "forudindspillet" : /Online/.test(rest) ? "online" : /On Campus/.test(rest) ? "campus" : "";
+    return { navn: navn.replace(/\s*\([A-Z]{1,3}\)$/, ""), kort: f[0], art, form, farve: f[1], type: "undervisning" };
+  }
+  if (/^Selvstudie · /.test(titel)) return { navn: titel.replace(/^Selvstudie · /, ""), kort: "Selvstudie", art: "Selvstudie", form: "", farve: "var(--c7)", type: "selvstudie" };
+  return { navn: titel, kort: "", art: "", form: "", farve: "var(--gray-400)", type: "andet" };
+}
+const readinessOrd = v => v == null ? "" : v >= 95 ? "Topform" : v >= 75 ? "Høj" : v >= 50 ? "Moderat" : v >= 25 ? "Lav" : "Meget lav";
+const hilsen = h => h < 5 ? "God nat" : h < 10 ? "God morgen" : h < 12 ? "God formiddag" : h < 18 ? "God eftermiddag" : "God aften";
+
+function ring(v) {
+  const r = 52, c = 2 * Math.PI * r, off = c * (1 - Math.max(0, Math.min(100, v ?? 0)) / 100);
+  return `<svg viewBox="0 0 132 132" role="img" aria-label="Training readiness ${v ?? "ukendt"} af 100">
+    <circle class="track" cx="66" cy="66" r="${r}" fill="none" stroke-width="11"/>
+    <circle class="arc" cx="66" cy="66" r="${r}" fill="none" stroke-width="11" stroke-dasharray="${c.toFixed(1)}" stroke-dashoffset="${c.toFixed(1)}" data-off="${off.toFixed(1)}" transform="rotate(-90 66 66)"/>
+    <text class="v" x="66" y="70" text-anchor="middle">${v ?? "–"}</text><text class="u" x="66" y="89" text-anchor="middle">af 100</text></svg>`;
+}
+
+// Dagens program fra garmin-coach, plus frie huller på mindst en time mellem 7 og 22
+function dagen(coach) {
+  const idag = iso(new Date());
+  const dag = coach?.kalender?.dage?.find(d => d.dato === idag);
+  if (!dag) return null;
+  const evs = (dag.program || []).map(p => {
+    const hel = !/\d/.test(p.tid || "");
+    const [a, b] = hel ? [null, null] : p.tid.split("–").map(hm);
+    return { ...klassificer(p.titel), titel: p.titel, a, b, hel };
+  });
+  const timed = evs.filter(e => !e.hel).sort((x, y) => x.a - y.a);
+  const fri = []; let cur = 7;
+  timed.concat([{ a: 22, b: 22 }]).forEach(e => { if (e.a - cur >= 1) fri.push({ a: cur, b: e.a }); cur = Math.max(cur, e.b); });
+  return { evs, timed, fri };
+}
+
+// Studiets frister; jobfrister hører til Karriere og vises ikke her
+function frister(studie) {
+  const idag = iso(new Date()), grænse = iso(addDays(new Date(), 21)), ud = [];
+  for (const d of studie?.deadlines || []) {
+    const dato = d.dato || d.fra; if (!dato || d.type === "ferie") continue;
+    if (d.faerdig) continue;  // markeret færdig på Deadlines
+    // Frister er afleveringer, præsentationer og eksamener; andet kun, når det har en præcis dato
+    if (d.type === "andet" && !d.dato) continue;
+    const slut = d.dato || d.til;
+    // Eksamener kommer altid med, selv om de er langt væk; resten kun tre uger frem
+    if (slut < idag || dato > grænse && d.type !== "eksamen") continue;
+    const titel = d.hvad.replace(/<[^>]+>/g, "").split(" — ")[0].replace(/^Eksamen: /, "Eksamen · ");
+    ud.push({ dato, uge: !d.dato, titel, omr: "Studie", sub: d.fag + (d.tid ? ` · kl. ${d.tid}` : ""), ikon: d.type === "eksamen" ? "clipboard-check" : "graduation-cap", href: "/studie/deadlines.html" });
+  }
+  return ud.sort((a, b) => a.dato.localeCompare(b.dato)).slice(0, 7);
+}
+
+function render({ coach, soevn, liv, studie, genkald, karriere }) {
+  const nu = new Date(), h = nuH(), idag = iso(nu);
+  const r = coach?.restitution, sn = r?.seneste_døgn || {}, nat = soevn?.naetter?.find(n => n.dato === idag);
+  const D = dagen(coach);
+  const næste = D?.timed.find(e => e.b > h);
+  const iGang = D?.timed.find(e => e.a <= h && e.b > h);
+  const fr = frister(studie);
+  const snart = fr.filter(f => daysUntil(f.dato) <= 3);
+
+  // én sætning, der samler dagen
+  const dele = [];
+  if (D) dele.push(D.timed.length ? `<b>${D.timed.length} ${D.timed.length === 1 ? "ting" : "ting"}</b> i kalenderen` : "ingenting i kalenderen");
+  if (iGang) dele.push(`nu: <b>${esc(iGang.kort || iGang.navn)}${iGang.art && iGang.kort ? " " + iGang.art.toLowerCase() : ""}</b> til ${kl(iGang.b)}`);
+  else if (næste) dele.push(`næste: <b>${esc(næste.kort ? `${næste.kort} ${næste.art.toLowerCase()}` : næste.navn)}</b> kl. ${kl(næste.a)}`);
+  else if (D?.timed.length) dele.push("resten af dagen er fri");
+  if (snart.length) dele.push(`<b>${snart.length} ${snart.length === 1 ? "frist" : "frister"}</b> inden for tre dage`);
+
+  const rep = genkald?.statistik, repKort = genkald?.kort?.length ?? 0;
+  const job = (karriere?.jobs || []).filter(j => j.status === "vurderet" && !(/\d{4}-\d{2}-\d{2}/.test(j.frist) && daysUntil(j.frist.slice(0, 10)) < 0));
+  const review = liv ? [...(liv.reviews || [])].sort((a, b) => a.uge.localeCompare(b.uge)).pop() : null;
+  const fokus = coach?.periode?.vurdering?.fokus || [];
+  const periode = coach?.periode;
+  // Rådet gælder kun den dag, det er regnet for
+  const raad = coach?.dagens_raad?.dato === idag ? coach.dagens_raad : null;
+
+  document.getElementById("root").innerHTML = `
+    <section class="card hero s12 fade">
+      <div>
+        <div class="eyebrow">${weekday(nu).replace(/^./, c => c.toUpperCase())} ${nu.getDate()}. ${MONTHS[nu.getMonth()].replace(".", "")} · uge ${isoWeek(nu)}</div>
+        <h1 class="hello">${hilsen(nu.getHours())}</h1>
+        <p class="summary">${dele.length ? dele.join(" · ").replace(/^./, c => c.toUpperCase()) + "." : "Åbn Kompas-appen for at hente dagens tal."}</p>
+        ${raad?.niveau ? `<a class="raad ${raad.niveau}" href="/form/coach.html" style="text-decoration:none">${icon("activity", 16)}<span><b>${esc(raad.titel)}.</b> ${esc(raad.tekst)}<small>Fordi: ${esc(raad.grunde.join(", "))}.</small></span></a>` : ""}
+      </div>
+      ${sn.training_readiness != null ? `<div class="ring">${ring(sn.training_readiness)}<div class="lbl">Readiness · <b>${readinessOrd(sn.training_readiness)}</b></div></div>` : ""}
+    </section>
+
+    ${r ? `<section class="s12 fade" style="animation-delay:.05s">
+      <div class="vitals">
+        <a class="card vital" href="/form/soevn.html" style="text-decoration:none;color:inherit"><span class="k">${icon("moon", 14)}Søvn i nat</span><span class="v">${nat?.soevn_t != null ? varighed(nat.soevn_t).replace(/ (t|min)/g, "<small>$1</small>") : "–"}</span><span class="s">søvnscore ${fmt(sn.søvnscore)}</span></a>
+        <a class="card vital" href="/form/soevn.html" style="text-decoration:none;color:inherit"><span class="k">${icon("activity", 14)}HRV</span><span class="v">${fmt(nat?.hrv ?? r.hrv?.aktuel)}<small>ms</small></span><span class="s">${sn.hrv_status ? { BALANCED: "i balance", UNBALANCED: "ude af balance", LOW: "lav", POOR: "lav" }[sn.hrv_status] || sn.hrv_status.toLowerCase() : "–"} · normalt ${fmt(r.hrv?.baseline)}</span></a>
+        <a class="card vital" href="/form/soevn.html" style="text-decoration:none;color:inherit"><span class="k">${icon("activity", 14)}Hvilepuls</span><span class="v">${fmt(nat?.hvilepuls ?? r.hvilepuls?.aktuel)}<small>bpm</small></span><span class="s">normalt ${fmt(r.hvilepuls?.baseline)}</span></a>
+        <a class="card vital" href="/form/coach.html" style="text-decoration:none;color:inherit"><span class="k">${icon("sparkles", 14)}Body battery</span><span class="v">${fmt(sn.body_battery_top)}</span><span class="s">top i dag · stress ${fmt(sn.stress_snit)}</span></a>
+      </div>
+      ${(r.flag || []).map(f => `<div class="flag" style="margin-top:12px">${icon("activity", 16)}<span>${esc(f.split(" — ")[0].replace(/^./, c => c.toUpperCase()))}.</span></div>`).join("")}
+    </section>` : ""}
+
+    ${D ? `<section class="card panel s8 fade" style="animation-delay:.1s">
+      <div class="panel-head"><h2>Dagen</h2><span class="meta">${D.timed.length ? `${kl(D.timed[0].a)}–${kl(D.timed[D.timed.length - 1].b)}` : "intet planlagt"}</span></div>
+      <div class="band" id="band" aria-hidden="true"></div>
+      <div class="agenda" id="agenda"></div>
+    </section>` : ""}
+
+    ${fr.length ? `<section class="card panel ${D ? "s4" : "s12"} fade" style="animation-delay:.14s">
+      <div class="panel-head"><h2>Frister</h2><span class="meta">tre uger frem</span></div>
+      <div class="dl">${fr.map(f => { const n = daysUntil(f.dato), hot = n <= 3, d = parseDate(f.dato);
+        return `<a class="dli" href="${f.href}"><div class="cal${hot ? " hot" : ""}"><div class="m">${MON[d.getMonth()]}</div><div class="d">${d.getDate()}</div></div>
+          <div class="n"><b>${esc(f.titel)}</b><small>${icon(f.ikon, 12)}${esc(f.omr)} · ${esc(f.sub)}</small></div>
+          <span class="cd${hot ? " hot" : ""}">${nedtaelling(f.dato, f.uge)}</span></a>`; }).join("")}</div>
+    </section>` : ""}
+
+    ${review?.tekst?.en_ting || fokus.length ? `<section class="card panel s7 fade" style="animation-delay:.18s">
+      <div class="panel-head"><h2>Fokus</h2><a class="link" href="/form/uge.html">Ugen i tal ${icon("arrow-right", 14)}</a></div>
+      ${review?.tekst?.en_ting ? `<div class="one"><span class="ic-wrap">${icon("sparkles", 16)}</span><div><div class="lbl">Én ting denne uge</div><p>${esc(review.tekst.en_ting)}</p></div></div>` : ""}
+      ${fokus.length ? `<ol class="fk">${fokus.map(x => `<li><span>${esc(x)}</span></li>`).join("")}</ol>
+        <p class="fk-kilde">Mål fra 14-dages rapporten ${dayMonth(parseDate(periode.start))}–${dayMonth(parseDate(periode.slut))}. Tallene i parentes er fra den periode.</p>` : ""}
+    </section>` : ""}
+
+    <div class="s5 fade" style="animation-delay:.22s;display:grid;gap:16px;align-content:start">
+      ${rep ? `<a class="card cta" href="/studie/genkald.html#idag">
+        <div class="top"><span class="ico">${icon("brain", 17)}</span><span class="go">${repKort ? `Tag dem ${icon("arrow-right", 14)}` : "Færdig i dag"}</span></div>
+        <div class="big">${repKort}<small>${repKort === 1 ? "kort i dag" : "kort i dag"}${repKort ? ` · ca. ${rep.minutter} min` : ""}</small></div>
+        <div class="meter" aria-hidden="true"><i style="width:${Math.round(100 * rep.klaret_i_dag / Math.max(1, rep.klaret_i_dag + repKort))}%"></i></div>
+        <p>${rep.klaret_i_dag} klaret i dag · ${rep.laert} af ${rep.i_alt} sidder. Genkald, begreber og de drills, du tog fejl af.</p></a>` : ""}
+      ${karriere ? `<a class="card cta" href="/karriere/">
+        <div class="top"><span class="ico">${icon("briefcase", 17)}</span><span class="go">Se match ${icon("arrow-right", 14)}</span></div>
+        <div class="big">${job.length}<small>${job.length === 1 ? "jobmatch venter" : "jobmatch venter"}</small></div>
+        <p>${job.length ? `Bedst: ${esc([...job].sort((a, b) => b.score - a.score)[0].virksomhed)} (${[...job].sort((a, b) => b.score - a.score)[0].score}). ` : "Alt er taget stilling til. "}${(karriere.jobs || []).filter(j => ["søgt", "samtale"].includes(j.status)).length} ansøgninger i gang.</p></a>` : ""}
+    </div>
+
+    <div class="s12 foot"><span>${coach?.genereret ? `Tal fra ${stamp(coach.genereret)}` : ""}</span><span><a href="/form/uge.html">Ugens review</a> · <a href="/studie/">Studieugen</a></span></div>`;
+
+  requestAnimationFrame(() => document.querySelectorAll(".ring .arc").forEach(a => a.style.strokeDashoffset = a.dataset.off));
+  if (D) tegnDagen(D, raad);
+}
+
+// Båndet 07–22 og listen opdateres hvert minut, så "nu" følger med
+function tegnDagen(D, raad) {
+  const band = document.getElementById("band"), ag = document.getElementById("agenda");
+  if (!band) return;
+  const h = nuH(), A = 7, B = 22, x = t => `${(100 * (Math.max(A, Math.min(B, t)) - A) / (B - A)).toFixed(2)}%`;
+  let html = `<div class="rail"></div>`;
+  for (let t = A; t <= B; t += 2) html += `<span class="tick" style="left:${x(t)}">${t}</span>`;
+  D.fri.filter(f => f.b > h).forEach(f => { const a = Math.max(f.a, h); if (f.b - a >= 1) html += `<div class="fri" style="left:${x(a)};width:calc(${x(f.b)} - ${x(a)})" title="Fri ${kl(a)}–${kl(f.b)}"></div>`; });
+  D.timed.forEach(e => html += `<div class="blk${e.b <= h ? " done" : ""}" style="--k:${e.farve};left:${x(e.a)};width:calc(${x(e.b)} - ${x(e.a)})" title="${esc(kl(e.a) + "–" + kl(e.b) + " " + (e.kort ? e.kort + " · " + e.art : e.navn))}"></div>`);
+  if (h >= A && h <= B) html += `<div class="nu" style="left:${x(h)}"><span>${kl(h)}</span></div>`;
+  band.innerHTML = html;
+
+  const rækker = [...D.evs.filter(e => e.hel).map(e => ({ ...e, sort: -1 })), ...D.timed.map(e => ({ ...e, sort: e.a })),
+    ...D.fri.filter(f => f.b > h && f.b - Math.max(f.a, h) >= 1).map(f => ({ fri: true, a: Math.max(f.a, h), b: f.b, sort: Math.max(f.a, h) }))].sort((p, q) => p.sort - q.sort);
+  ag.innerHTML = rækker.map(e => {
+    if (e.fri) return `<div class="ev fri"><span class="t">${kl(e.a)}–${kl(e.b)}</span><span class="sw"></span><span class="n"><b>Fri i ${varighed(e.b - e.a)}</b><small>${esc(raad?.fri || "fri tid")}</small></span><span></span></div>`;
+    const done = !e.hel && e.b <= h, nu = !e.hel && e.a <= h && e.b > h, om = !e.hel && e.a > h ? Math.round((e.a - h) * 60) : null;
+    const pill = nu ? `<span class="pill nu">Nu</span>` : om != null && om <= 90 ? `<span class="pill snart">om ${om < 60 ? om + " min" : `${Math.floor(om / 60)} t${om % 60 ? ` ${om % 60} min` : ""}`}</span>` : done ? `<span class="pill">Færdig</span>` : "";
+    return `<div class="ev${done ? " done" : ""}${nu ? " nu" : ""}" style="--k:${e.farve}" title="${esc(e.titel)}">
+      <span class="t">${e.hel ? "Hele dagen" : `${kl(e.a)}–${kl(e.b)}`}</span><span class="sw"></span>
+      <span class="n"><b>${esc(e.kort ? `${e.kort} · ${e.art}` : e.navn)}</b><small>${esc(e.kort ? e.navn + (e.form ? ` · ${e.form}` : "") : e.type === "andet" ? "i kalenderen" : "")}</small></span>${pill}</div>`;
+  }).join("") || `<p class="meta">Intet i kalenderen i dag.</p>`;
+}
+
+let DATA = null;
+async function hent() {
+  const [coach, soevn, liv, studie, genkald, karriere] = await Promise.allSettled([
+    get("/form/coach.json"), get("/form/soevn.json"), get("/form/liv.json"), get("/studie/studie.json"), get("/studie/api/repetition"), get("/karriere/api/data"),
+  ]).then(rs => rs.map(r => r.status === "fulfilled" ? r.value : null));
+  DATA = { coach: coach?.fejl ? null : coach, soevn: soevn?.fejl ? null : soevn, liv, studie, genkald, karriere };
+  render(DATA);
+}
+hent();
+setInterval(() => { if (DATA?.coach) tegnDagen(dagen(DATA.coach), DATA.coach.dagens_raad?.dato === iso(new Date()) ? DATA.coach.dagens_raad : null); }, 60000);
+setInterval(hent, 10 * 60000);
+</script>
+</body>
+</html>

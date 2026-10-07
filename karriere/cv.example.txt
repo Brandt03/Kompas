@@ -1,0 +1,22 @@
+                                   ALEX
+                     alex@example.com · +45 00 00 00 00 · København N
+
+UDDANNELSE
+  Bachelor i lorem ipsum, Lorem Ipsum Universitet                      1. år, i gang
+  Gymnasial eksamen, lorem ipsum-linjen                                 afsluttet
+
+ERHVERVSERFARING
+  Kundeservicemedarbejder (deltid), Rytterstalden Cykler (webshop)      2 år
+   - Besvarede henvendelser om ordrer, levering og returneringer
+   - Byggede et ugentligt Excel-ark over returneringer og årsager
+     til indkøbsteamet
+   - Skrev en kort guide til nye kolleger om webshoppens ordresystem
+
+  Kasserer (frivillig), lokal idrætsforening                            2 år
+   - Budget, bogføring i regneark og månedlig afstemning af bankkonto
+   - Fremlagde regnskabet på generalforsamlingen
+
+KOMPETENCER
+  Excel (opslag, pivottabeller, datarensning) · Google Sheets
+  Gamma – consectetur (fra studiet)
+  Dansk (modersmål) · Engelsk (flydende)

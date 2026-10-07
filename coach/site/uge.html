@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ugen i tal</title>
+<!-- Vises i Kompas (https://kompas.localhost/form/uge.html), som leverer designkittet under /kompas/assets/.
+     Data: liv.json, som livsoverblik skriver med `liv eksport` (mandagsreviewet). Afvigelser, normalområder
+     og sammenhænge er regnet dér; siden viser dem kun. -->
+<link rel="stylesheet" href="/kompas/assets/tokens.css">
+<link rel="stylesheet" href="/kompas/assets/page.css">
+<link rel="stylesheet" href="form.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="page">
+    <div>
+      <h1>Ugen i tal</h1>
+      <p class="sub" id="sub">Mandagsreviewet på tværs af træning, søvn, økonomi og studie</p>
+    </div>
+    <div class="pnav" id="pnav"></div>
+  </header>
+  <div class="stack" id="root"><div class="card empty">Henter …</div></div>
+</div>
+
+<script src="/kompas/assets/icons.js"></script>
+<script src="/kompas/assets/liv.js"></script>
+<script src="/kompas/assets/chart.js"></script>
+<script>
+const LIV = {
+  soevn_timer_snit: { l: "Søvn pr. nat", u: "t", d: 1, g: "Søvn og restitution" },
+  soevnscore_snit: { l: "Søvnscore", u: "", d: 0, g: "Søvn og restitution" },
+  hrv_snit: { l: "HRV om natten", u: "ms", d: 0, g: "Søvn og restitution" },
+  hvilepuls_snit: { l: "Hvilepuls", u: "bpm", d: 1, g: "Søvn og restitution" },
+  stress_snit: { l: "Stress", u: "", d: 0, g: "Søvn og restitution" },
+  garmin_dage: { l: "Dage med Garmin-data", u: "", d: 0, g: "Søvn og restitution" },
+  traening_timer: { l: "Træningstid", u: "t", d: 1, g: "Træning og bevægelse", bar: 1 },
+  traening_pas: { l: "Træningspas", u: "", d: 0, g: "Træning og bevægelse", bar: 1 },
+  belastning: { l: "Belastning", u: "", d: 0, g: "Træning og bevægelse", bar: 1 },
+  skridt_snit: { l: "Skridt pr. dag", u: "", d: 0, g: "Træning og bevægelse" },
+  variabelt_kr: { l: "Variable køb", u: "kr.", d: 0, g: "Økonomi", bar: 1 },
+  takeaway_kr: { l: "Take-away", u: "kr.", d: 0, g: "Økonomi", bar: 1 },
+  takeaway_koeb: { l: "Take-away-køb", u: "", d: 0, g: "Økonomi", bar: 1 },
+  cafe_bar_kr: { l: "Café og bar", u: "kr.", d: 0, g: "Økonomi", bar: 1 },
+  dagligvarer_kr: { l: "Dagligvarer", u: "kr.", d: 0, g: "Økonomi", bar: 1 },
+  undervisning_timer: { l: "Undervisning", u: "t", d: 1, g: "Studie", bar: 1 },
+  selvstudie_timer: { l: "Selvstudie", u: "t", d: 1, g: "Studie", bar: 1 },
+  selvstudie_dage: { l: "Dage med selvstudie", u: "", d: 0, g: "Studie", bar: 1 },
+};
+const KPI = ["soevn_timer_snit", "hrv_snit", "stress_snit", "skridt_snit", "traening_timer", "variabelt_kr"];
+const TREND = ["soevn_timer_snit", "hrv_snit", "hvilepuls_snit", "stress_snit", "skridt_snit", "traening_timer", "variabelt_kr", "takeaway_kr", "undervisning_timer"];
+const DAG = ["man", "tir", "ons", "tor", "fre", "lør", "søn"];
+const SPORT = { strength_training: "Styrke", lap_swimming: "Svømning", running: "Løb", cycling: "Cykling", e_bike_fitness: "Elcykel-pas",
+  indoor_rowing: "Roning", walking: "Gåtur", bouldering: "Klatring", indoor_climbing: "Klatring", soccer: "Fodbold", hiking: "Vandring" };
+const sportName = s => SPORT[s] || (s || "Træning").replace(/_/g, " ");
+const uv = (k, v) => v == null ? "–" : fmt(v, LIV[k]?.d ?? 1) + (LIV[k]?.u ? " " + LIV[k].u : "");
+const hm = s => { const [h, m] = s.split(":").map(Number); return h + m / 60; };
+const shortTitle = t => { const e = parseEvent({ titel: t, type: /\([A-Z]{1,3}\)\s+-\s+\S+\.\S+\s+-\s+/.test(t) ? "undervisning" : "andet" });
+  return e.fag ? `${e.fag}${e.art ? " · " + e.art : ""}` : t.replace(/^Selvstudie · /, ""); };
+let L = null, sel = 0;
+const $ = id => document.getElementById(id);
+
+function kpi(k, a) {
+  if (!a) return "";
+  const arrow = a.retning === "over" ? "arrow-up" : a.retning === "under" ? "arrow-down" : "minus";
+  const badge = a.tydelig ? `<span class="badge ${a.vurdering === "godt" ? "good" : a.vurdering === "skidt" ? "bad" : ""}">${icon(arrow, 12)}${a.vurdering === "godt" ? "Godt" : a.vurdering === "skidt" ? "Skidt" : "Usædvanligt"}</span>`
+    : `<span class="badge">Inden for normalen</span>`;
+  return `<div class="card tile"><div class="label">${esc(LIV[k].l)}</div>
+    <div class="value">${fmt(a.vaerdi, LIV[k].d)}${a.vaerdi != null && LIV[k].u ? `<small>${esc(LIV[k].u)}</small>` : ""}</div>
+    <div class="foot">${badge}<span>normalt ${fmt(a.normal, LIV[k].d)}</span></div></div>`;
+}
+
+function hero(r) {
+  const t = r.tekst, af = r.rapport.afvigelser;
+  const list = xs => xs?.length ? `<ul class="list">${xs.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : `<p class="meta">Intet at bemærke.</p>`;
+  return `<section class="card panel stack" style="gap:14px">
+      <div class="panel-head" style="margin:0"><h2>Uge ${weekNo(r.uge)} · ${range(r.mandag)}</h2>${t ? `<span class="badge good">Review ${dayMonth(parseDate(r.genereret))}</span>` : `<span class="badge">Kun tal · review ikke skrevet</span>`}</div>
+      ${t?.saetning ? `<p class="lead">${esc(t.saetning)}</p>` : `<p class="meta">Mandagsreviewet er ikke skrevet for denne uge. Tallene nedenfor er regnet, men der er ingen tekst.</p>`}
+      ${t?.forbehold?.length ? `<div class="banner warn" style="padding:0"><span class="bi">${icon("activity", 16)}</span><div><div class="bl">Manglede i data</div>${t.forbehold.map(x => `<p>${esc(x)}</p>`).join("")}</div></div>` : ""}
+      ${t?.en_ting ? `<div class="one"><span class="ic-wrap">${icon("sparkles", 16)}</span><div><div class="lbl">Én ting at gøre anderledes</div><p>${esc(t.en_ting)}</p></div></div>` : ""}
+    </section>
+    <section class="tiles">${KPI.map(k => kpi(k, af[k])).join("")}</section>
+    ${t ? `<div class="cols"><section class="card panel"><div class="panel-head"><h2>Det skilte sig ud</h2></div>${list(t.udskilte)}</section>
+      <section class="card panel"><div class="panel-head"><h2>Sammenhænge</h2></div>${list(t.sammenhaenge)}</section></div>` : ""}`;
+}
+
+function dev(r) {
+  const af = r.rapport.afvigelser;
+  let html = "", last = null;
+  Object.keys(LIV).forEach(k => {
+    const a = af[k]; if (!a) return;
+    if (LIV[k].g !== last) { last = LIV[k].g; html += `<div class="dev-group">${esc(last)}</div>`; }
+    const [lo, hi] = a.normal_interval, v = a.vaerdi;
+    let mn = Math.min(lo, v), mx = Math.max(hi, v);
+    const pad = (mx - mn) * .08 || Math.abs(mx) * .1 || 1; mn -= pad; mx += pad;
+    const x = q => (100 * (q - mn) / (mx - mn)).toFixed(1) + "%";
+    const c = a.tydelig ? (a.vurdering === "godt" ? "good" : a.vurdering === "skidt" ? "bad" : "") : "";
+    const tag = a.tydelig ? ` <span class="badge ${c}">${a.vurdering === "godt" ? "godt" : a.vurdering === "skidt" ? "skidt" : "usædvanligt"}</span>` : "";
+    html += `<div class="dev-row"><div class="n">${esc(LIV[k].l)}${tag}<small>${esc(a.forklaring)}</small></div>
+      <div class="strip" role="img" aria-label="${esc(LIV[k].l)}: ${esc(uv(k, v))}, normalt ${esc(uv(k, a.normal))}, normalområde ${esc(uv(k, lo))} til ${esc(uv(k, hi))}">
+        <div class="axis"></div><div class="band" style="left:${x(lo)};width:calc(${x(hi)} - ${x(lo)})"></div>
+        <div class="med" style="left:${x(a.normal)}"></div><div class="pt ${c}" style="left:${x(v)}"></div></div>
+      <div class="r">${esc(uv(k, v))}<small>normalt ${esc(uv(k, a.normal))}</small></div></div>`;
+  });
+  return `<section class="card panel"><div class="panel-head"><h2>Mod dit normale</h2><span class="meta">${esc(r.rapport.baseline)}</span></div>
+    <div class="dev">${html}</div>
+    <div class="legend"><span><i style="background:color-mix(in srgb, var(--mark) 20%, transparent)"></i>Normalområde (laveste–højeste uge)</span><span><i style="background:var(--text-subdued);width:2px"></i>Median</span>
+      <span><i style="background:var(--success);border-radius:50%"></i>Tydeligt bedre</span><span><i style="background:var(--destructive);border-radius:50%"></i>Tydeligt dårligere</span><span><i style="background:var(--text-primary);border-radius:50%"></i>Inden for det normale</span></div>
+    <p class="meta" style="margin:10px 0 0;line-height:1.5">Tydelig betyder mindst ${fmt(L.z_graense, 1)} robuste standardafvigelser fra medianen. En prik uden for båndet kan stadig være normal, hvis ugerne har svinget meget.</p></section>`;
+}
+
+function days(r) {
+  if (!r.dage) return "";
+  const af = r.rapport.afvigelser, D = r.dage;
+  const head = (x, i) => `<div class="th">${DAYS[i]} ${dayMonth(parseDate(x.dato))}</div>`;
+  const C = [
+    ["soevn", "Søvn", "soevn_timer_snit", 1, "t", 1, x => x.soevn_t, (x, i) => `${head(x, i)}<b>${fmt(x.soevn_t, 1)} t</b><br>dyb ${fmt(x.dyb_t, 1)} · REM ${fmt(x.rem_t, 1)} · let ${fmt(x.let_t, 1)}`],
+    ["hrv", "HRV om natten", "hrv_snit", 0, "ms", 0, x => x.hrv, (x, i) => `${head(x, i)}HRV <b>${fmt(x.hrv)} ms</b>`],
+    ["hvilepuls", "Hvilepuls", "hvilepuls_snit", 1, "bpm", 0, x => x.hvilepuls, (x, i) => `${head(x, i)}hvilepuls <b>${fmt(x.hvilepuls)} bpm</b>`],
+    ["skridt", "Skridt", "skridt_snit", 0, "", 1, x => x.skridt, (x, i) => `${head(x, i)}<b>${fmt(x.skridt)}</b> skridt`],
+    ["stress", "Stress", "stress_snit", 0, "", 1, x => x.stress, (x, i) => `${head(x, i)}stress <b>${fmt(x.stress)}</b>`],
+    ["score", "Søvnscore", "soevnscore_snit", 0, "", 1, x => x.soevnscore, (x, i) => `${head(x, i)}søvnscore <b>${fmt(x.soevnscore)}</b>`],
+  ];
+  setTimeout(() => C.forEach(([id, l, k, d, u, bar, f, tip]) => {
+    const a = af[k] || {};
+    (bar ? barChart : lineChart)($("d-" + id), { height: 140, label: `${l} dag for dag`, fmt: v => fmt(v, 0),
+      ref: a.normal != null ? { y: a.normal, label: "normalt" } : null,
+      points: D.map((x, i) => ({ label: DAG[i], y: f(x) ?? null, tip: f(x) == null ? `${head(x, i)}ingen måling` : tip(x, i) })) });
+  }));
+  return `<section><div class="panel-head" style="margin-bottom:10px"><h2>Dag for dag</h2><span class="meta">stiplet linje er dit normale snit</span></div>
+    <div class="charts">${C.map(([id, l, k, d, u]) => `<div class="card panel mini"><h3>${l}</h3>
+      <div class="val">${fmt(af[k]?.vaerdi, d)}${u ? `<small>${u} snit</small>` : `<small>snit</small>`}</div><div id="d-${id}"></div></div>`).join("")}</div></section>`;
+}
+
+// Ugekalender 6–22. For den kommende uge vises frie vinduer på mindst 1½ time.
+const WK0 = 6, WK1 = 22, PX = 24;
+const fmtH = h => `${Math.floor(h)}:${String(Math.round((h % 1) * 60)).padStart(2, "0")}`;
+function weekGrid(m, events, pas, visFri) {
+  const now = new Date(), tIso = iso(now), H = (WK1 - WK0) * PX;
+  let hrs = ""; for (let h = WK0; h <= WK1; h += 2) hrs += `<span style="top:${(h - WK0) * PX}px">${h}</span>`;
+  let head = `<div></div>`, allday = `<div></div>`, cols = `<div class="hrs" style="height:${H}px">${hrs}</div>`, anyAll = false;
+  for (let i = 0; i < 7; i++) {
+    const d = iso(addDays(parseDate(m), i));
+    head += `<div class="hd${d === tIso ? " today" : ""}">${DAG[i]}<small>${parseDate(d).getDate()}.</small></div>`;
+    const ev = events.filter(e => e.dato === d), ad = ev.filter(e => e.heldag);
+    if (ad.length) anyAll = true;
+    allday += `<div>${ad.map(e => `<div class="allday" title="${esc(e.titel)}">${esc(e.titel)}</div>`).join("")}</div>`;
+    const timed = ev.filter(e => !e.heldag && e.start && e.slut).map(e => ({ ...e, a: hm(e.start), b: Math.max(hm(e.slut), hm(e.start) + 0.25) }));
+    const blocks = timed.concat((pas || []).filter(p => p.dato === d).map(p => ({ type: "traening", a: hm(p.start), b: hm(p.start) + p.minutter / 60,
+      titel: `${sportName(p.sport)} · ${p.minutter} min`, start: p.start })));
+    let inner = "";
+    for (let h = WK0 + 2; h < WK1; h += 2) inner += `<div class="hline" style="top:${(h - WK0) * PX}px"></div>`;
+    if (visFri) {
+      const busy = timed.map(e => [Math.max(WK0, e.a), Math.min(WK1, e.b)]).filter(([a, b]) => b > a).sort((p, q) => p[0] - q[0]);
+      let cur = WK0; const nu = d === tIso ? now.getHours() + now.getMinutes() / 60 : WK0;
+      busy.concat([[WK1, WK1]]).forEach(([a, b]) => {
+        const s = Math.max(cur, nu);
+        if (a - s >= 1.5) inner += `<div class="blk fri" style="top:${((s - WK0) * PX).toFixed(0)}px;height:${((a - s) * PX - 2).toFixed(0)}px" title="Fri ${fmtH(s)}–${fmtH(a)}">fri ${fmt(a - s, (a - s) % 1 ? 1 : 0)} t</div>`;
+        cur = Math.max(cur, b);
+      });
+    }
+    // Overlappende blokke deler bredden i spor, så ingen gemmer sig bag en anden
+    blocks.sort((p, q) => p.a - q.a);
+    let cluster = [], cEnd = -1;
+    const flush = () => { const lanes = []; cluster.forEach(e => { let l = lanes.findIndex(end => end <= e.a); if (l < 0) l = lanes.length; lanes[l] = e.b; e.lane = l; }); cluster.forEach(e => e.lanes = lanes.length); cluster = []; };
+    blocks.forEach(e => { if (e.a >= cEnd) flush(); cluster.push(e); cEnd = Math.max(cEnd, e.b); }); flush();
+    blocks.forEach(e => {
+      const a = Math.max(WK0, e.a), b = Math.min(WK1, e.b); if (b <= a) return;
+      const ov = e.type !== "traening" && timed.some(o => o !== e && o.a < e.b && e.a < o.b);
+      const pos = e.lanes > 1 ? `left:calc(${(100 * e.lane / e.lanes).toFixed(1)}% + 2px);right:auto;width:calc(${(100 / e.lanes).toFixed(1)}% - 4px);` : "";
+      inner += `<div class="blk ${e.type}${ov ? " overlap" : ""}" style="${pos}top:${((a - WK0) * PX).toFixed(0)}px;height:${Math.max(14, (b - a) * PX - 2).toFixed(0)}px" title="${esc((e.start || "") + (e.slut ? "–" + e.slut : "") + " " + shortTitle(e.titel))}${ov ? " (overlapper)" : ""}">${esc(shortTitle(e.titel))}</div>`;
+    });
+    cols += `<div class="wcol${d === tIso ? " today" : ""}" style="height:${H}px">${inner}</div>`;
+  }
+  return `<div class="wk-wrap"><div class="wk">${head}${anyAll ? allday : ""}${cols}</div></div>`;
+}
+const wkLegend = (fri, trn) => `<div class="legend"><span><i style="background:var(--c1)"></i>Undervisning</span><span><i style="background:var(--c3)"></i>Selvstudie</span><span><i style="background:var(--c4)"></i>Andet</span>${trn ? `<span><i style="background:var(--text-primary)"></i>Træning</span>` : ""}${fri ? `<span><i style="border:1.5px dashed var(--success)"></i>Fri ≥ 1½ t</span>` : ""}<span><i style="box-shadow:0 0 0 1.5px var(--destructive)"></i>Overlapper</span></div>`;
+const hoursBy = (ev, type) => ev.filter(e => e.type === type && e.start && e.slut).reduce((s, e) => s + hm(e.slut) - hm(e.start), 0);
+
+function cal(r) {
+  if (!r.kalender) return "";
+  const next = iso(addDays(parseDate(r.mandag), 7)), t = r.tekst;
+  const selvTxt = iso(addDays(parseDate(r.mandag), 6)) < L.selvstudie_fra ? "selvstudie ikke logget endnu" : `selvstudie ${fmt(hoursBy(r.kalender, "selvstudie"), 1)} t`;
+  const pasTxt = r.pas?.length ? r.pas.map(p => `${DAG[Math.round((parseDate(p.dato) - parseDate(r.mandag)) / 864e5)]} ${sportName(p.sport)} ${p.minutter} min`).join(" · ") : "ingen pas";
+  return `<section class="card panel"><div class="panel-head"><h2>Ugen der gik</h2><span class="meta">undervisning ${fmt(hoursBy(r.kalender, "undervisning"), 1)} t · ${selvTxt} · ${esc(pasTxt)}</span></div>
+      ${weekGrid(r.mandag, r.kalender, r.pas, false)}${wkLegend(false, true)}</section>
+    <section class="card panel"><div class="panel-head"><h2>Den kommende uge</h2><span class="meta">${range(next)} · undervisning ${fmt(hoursBy(r.kommende || [], "undervisning"), 1)} t</span></div>
+      ${t?.kommende_uge?.length ? `<h3 class="sub-h" style="margin-top:0">Plan ud fra kalender og restitution</h3><ul class="list" style="margin-bottom:16px">${t.kommende_uge.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
+      ${weekGrid(next, r.kommende || [], null, true)}${wkLegend(true, false)}
+      <p class="meta" style="margin:10px 0 0">Kalenderen som den så ud, da reviewet blev skrevet.</p></section>`;
+}
+
+function hyp(r) {
+  const X = k => (LIV[k]?.l || k).toLowerCase();
+  const rows = r.rapport.sammenhaenge.map(h => {
+    let bar, st, cls = "ingen";
+    if (h.rho == null) {
+      const n = h.n_uger, need = L.min_uger_korrelation;
+      bar = `<div class="prog" role="img" aria-label="${n} af ${need} uger"><div class="f" style="width:${Math.min(100, 100 * n / need).toFixed(0)}%"></div></div>`;
+      st = `<span class="badge">${need - n} uger mangler</span>`;
+    } else {
+      cls = h.status === "stærk" ? "staerk" : h.status === "antydning" ? "antydning" : "ingen";
+      const w = Math.abs(h.rho) * 50, left = h.rho < 0 ? 50 - w : 50;
+      bar = `<div class="rho" role="img" aria-label="rho ${fmt(h.rho, 2)}"><div class="f ${cls}" style="left:${left}%;width:${w}%"></div><div class="mid"></div></div>`;
+      st = `<span class="badge${cls === "staerk" ? " good" : ""}">${cls === "ingen" ? "Ingen" : cls === "staerk" ? "Stærk" : "Antydning"}</span>`;
+    }
+    const dir = h.rho != null && cls !== "ingen" ? (h.rho < 0 ? `Når ${X(h.x)} er høj, er ${X(h.y)} typisk lavere` : `Når ${X(h.x)} er høj, er ${X(h.y)} typisk også højere`) + ` · rho ${fmt(h.rho, 2)}, ${h.n_uger} uger`
+      : h.rho != null ? `rho ${fmt(h.rho, 2)}, p ${fmt(h.p, 2)}, ${h.n_uger} uger` : `${h.n_uger} af ${L.min_uger_korrelation} uger med data`;
+    return `<div class="hyp-row"><div class="q">${esc(h.spoergsmaal)}<small>${esc(dir)}</small></div>${bar}<div class="s">${st}</div></div>`;
+  }).join("");
+  return `<section class="card panel"><div class="panel-head"><h2>Sammenhænge</h2><span class="meta">${r.rapport.sammenhaenge.length} faste hypoteser</span></div>
+    <div class="hyp">${rows}</div>
+    <p class="meta" style="margin:10px 0 0;line-height:1.5">Søjlen er rho fra −1 (venstre) til +1 (højre). Spearman-korrelation med permutationstest; stærk kræver p under 0,05 delt på antal hypoteser og |rho| ≥ 0,3. Korrelation er ikke årsag.</p></section>`;
+}
+
+function trend(r) {
+  const i = L.uger.findIndex(u => u.uge === r.uge), rows = L.uger.slice(Math.max(0, i - 15), i + 1), si = rows.length - 1;
+  const ks = TREND.filter(k => rows.filter(u => u[k] != null).length >= 2);
+  setTimeout(() => ks.forEach(k => (LIV[k].bar ? barChart : lineChart)($("t-" + k), { height: 130, label: `${LIV[k].l} uge for uge`, fmt: v => fmt(v, 0),
+    points: rows.map((u, j) => ({ label: `u${weekNo(u.uge)}`, y: u[k], dim: LIV[k].bar && j !== si, tip: `<div class="th">Uge ${weekNo(u.uge)}</div><b>${esc(uv(k, u[k]))}</b>` })) })));
+  const tbl = `<details><summary>Alle ugetal i en tabel</summary><div class="scroll"><table class="plain"><thead><tr><th>Nøgletal</th>${rows.map(u => `<th class="num">u${weekNo(u.uge)}</th>`).join("")}</tr></thead><tbody>`
+    + L.kolonner.map(c => `<tr><td title="${esc(c.forklaring)}">${esc(LIV[c.k]?.l || c.forklaring)}</td>${rows.map(u => `<td class="num">${fmt(u[c.k], LIV[c.k]?.d ?? 0)}</td>`).join("")}</tr>`).join("")
+    + `</tbody></table></div></details>`;
+  return `<section><div class="panel-head" style="margin-bottom:10px"><h2>Uge for uge</h2><span class="meta">de seneste ${rows.length} uger · valgt uge står stærkest</span></div>
+    <div class="charts">${ks.map(k => `<div class="card panel mini"><h3>${esc(LIV[k].l)}</h3><div class="val">${fmt(rows[si][k], LIV[k].d)}${rows[si][k] != null && LIV[k].u ? `<small>${esc(LIV[k].u)}</small>` : ""}</div><div id="t-${k}"></div></div>`).join("")}</div></section>
+    <section class="card panel">${tbl}</section>`;
+}
+
+function sources(r) {
+  const sun = iso(addDays(parseDate(r.mandag), 6));
+  return `<section class="card panel"><div class="panel-head"><h2>Kilder</h2><span class="meta">– betyder ukendt, ikke 0</span></div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">${L.kilder.map(k => { const old = k.data_til && k.data_til.slice(0, 10) < iso(addDays(parseDate(sun), -3));
+      return `<span class="badge${old ? " bad" : ""}">${esc(k.kilde)} · data til ${k.data_til ? dayMonth(parseDate(k.data_til)) : "–"}${old ? " · for gammel til ugen" : ""}</span>`; }).join("")}</div>
+    ${r.rapport.metode ? `<p class="meta" style="margin:10px 0 0;line-height:1.5">${esc(r.rapport.metode)}</p>` : ""}</section>`;
+}
+
+function render() {
+  const R = L.reviews, r = R[sel];
+  $("pnav").innerHTML = `
+    <button type="button" class="nav-btn" data-step="-1" aria-label="Ugen før"${sel === 0 ? " disabled" : ""}>${icon("arrow-left", 14)}</button>
+    <select id="wsel" aria-label="Vælg uge">${R.map((x, i) => `<option value="${i}"${i === sel ? " selected" : ""}>Uge ${weekNo(x.uge)} · ${range(x.mandag)}${x.tekst ? "" : " (kun tal)"}</option>`).join("")}</select>
+    <button type="button" class="nav-btn" data-step="1" aria-label="Ugen efter"${sel === R.length - 1 ? " disabled" : ""}>${icon("arrow-right", 14)}</button>`;
+  $("sub").textContent = `Mandagsreviewet · opdateret ${stamp(L.genereret)}`;
+  $("root").innerHTML = hero(r) + dev(r) + days(r) + cal(r) + hyp(r) + trend(r) + sources(r);
+  $("wsel").onchange = e => { sel = +e.target.value; render(); };
+  document.querySelectorAll(".nav-btn").forEach(b => b.onclick = () => { sel = Math.max(0, Math.min(R.length - 1, sel + +b.dataset.step)); render(); });
+}
+
+fetch("liv.json", { cache: "no-store" }).then(r => { if (!r.ok) throw new Error(`liv.json svarede ${r.status}`); return r.json(); }).then(d => {
+  L = d; L.reviews = [...(L.reviews || [])].sort((a, b) => a.uge.localeCompare(b.uge)); sel = L.reviews.length - 1;
+  if (!L.reviews.length) { $("root").innerHTML = `<div class="card empty">Ingen uger endnu. Kør <code>liv opdater</code> og <code>liv eksport</code>.</div>`; return; }
+  render();
+}, e => { $("root").innerHTML = `<div class="card empty">${esc(e.message)}. Skriv den med <code>~/kompas/livsoverblik/.venv/bin/liv eksport</code>.</div>`; });
+</script>
+</body>
+</html>

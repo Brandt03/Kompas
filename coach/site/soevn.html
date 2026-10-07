@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Søvn &amp; restitution</title>
+<!-- Vises i Kompas (https://kompas.localhost), som leverer designkittet under /kompas/assets/.
+     Data: soevn.json, skrevet af `python -m garmin_coach.site byg`. Siden regner ikke selv. -->
+<link rel="stylesheet" href="/kompas/assets/tokens.css">
+<link rel="stylesheet" href="/kompas/assets/page.css">
+<style>
+  table.nights { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.nights th { text-align: left; font-weight: 500; color: var(--text-secondary); padding: 6px 8px; border-bottom: 1px solid var(--divider); }
+  table.nights td { padding: 6px 8px; border-bottom: 1px solid var(--divider); }
+  table.nights .num { text-align: right; }
+  .scroll { overflow-x: auto; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="page">
+    <div>
+      <h1>Søvn &amp; restitution</h1>
+      <p class="sub">De seneste 60 nætter fra Garmin, holdt op mod dit eget grundniveau</p>
+    </div>
+    <div class="meta" id="meta"></div>
+  </header>
+  <div class="stack" id="root"><div class="card empty">Henter …</div></div>
+</div>
+
+<script src="/kompas/assets/icons.js"></script>
+<script src="/kompas/assets/liv.js"></script>
+<script src="/kompas/assets/chart.js"></script>
+<script>
+const sd = x => x == null ? "" : `${x > 0 ? "+" : ""}${fmt(x, 1)} SD`;
+// Flagene er skrevet til coachen; vis kun selve konstateringen
+const flagText = f => f.split(" — ")[0].replace(/^./, c => c.toUpperCase()) + ".";
+
+function tileBase(label, b, unit, d, goodDir) {
+  if (!b || b.aktuel == null) return `<div class="card tile"><div class="label">${label}</div><div class="value">–</div><div class="foot">for få målinger</div></div>`;
+  const z = b.afvigelse_sd;
+  const off = z != null && Math.abs(z) >= 1;
+  const good = z != null && (goodDir === "op" ? z > 0 : z < 0);
+  const badge = z == null ? `<span class="badge">intet grundniveau endnu</span>`
+    : off ? `<span class="badge ${good ? "good" : "bad"}">${icon(z > 0 ? "arrow-up" : "arrow-down", 12)}${sd(z)}</span>`
+    : `<span class="badge">${sd(z)}</span>`;
+  return `<div class="card tile"><div class="label">${label} · snit 7 dage</div>
+    <div class="value">${fmt(b.aktuel, d)}<small>${unit}</small></div>
+    <div class="foot">${badge}<span>grundniveau ${fmt(b.baseline, d)}</span></div></div>`;
+}
+
+function render(d) {
+  const root = document.getElementById("root");
+  if (d.fejl) { root.innerHTML = `<div class="card empty">Kunne ikke beregne søvndata: ${esc(d.fejl)}</div>`; return; }
+  const r = d.restitution, sn = r.seneste_døgn || {}, st = r["søvn_timer"] || {};
+  document.getElementById("meta").textContent = `Data til ${r.datafriskhed?.seneste_data ? dayMonth(parseDate(r.datafriskhed.seneste_data)) : "–"} · bygget ${stamp(d.genereret)}`;
+
+  const flags = r.flag || [];
+  const banner = flags.length
+    ? flags.map(f => `<div class="card banner warn"><span class="bi">${icon("activity", 16)}</span><div><div class="bl">Værd at bemærke</div><p>${esc(flagText(f))}</p></div></div>`).join("")
+    : `<div class="card banner good"><span class="bi">${icon("activity", 16)}</span><div><div class="bl">Ingen flag</div><p>HRV, hvilepuls og søvn ligger inden for dit normale de seneste 7 dage.</p></div></div>`;
+
+  const nights = d.naetter || [];
+  const lbl = n => { const x = parseDate(n.dato); return `${x.getDate()}/${x.getMonth() + 1}`; };
+  const head = n => `<div class="th">${weekday(parseDate(n.dato))} ${dayMonth(parseDate(n.dato))}</div>`;
+
+  root.innerHTML = `
+    ${banner}
+    <section class="tiles" aria-label="Status">
+      ${tileBase("HRV", r.hrv, "ms", 0, "op")}
+      ${tileBase("Hvilepuls", r.hvilepuls, "bpm", 0, "ned")}
+      <div class="card tile"><div class="label">Søvn · snit 14 nætter</div><div class="value">${fmt(st.snit, 1)}<small>t</small></div>
+        <div class="foot">${st["nætter_under_7t"] ?? "–"} af ${st["målte_nætter"] ?? "–"} nætter under 7 t</div></div>
+      <div class="card tile"><div class="label">Seneste nat · ${sn.dato ? dayMonth(parseDate(sn.dato)) : "–"}</div><div class="value">${fmt(sn["søvnscore"])}<small>score</small></div>
+        <div class="foot">readiness ${fmt(sn.training_readiness)} · body battery ${fmt(sn.body_battery_top)}</div></div>
+    </section>
+
+    <section class="card panel"><div class="panel-head"><h2>Søvn pr. nat</h2><span class="meta">timer · lyse søjler er nætter under 7 t</span></div><div id="c-sleep"></div></section>
+    <div class="cols">
+      <section class="card panel"><div class="panel-head"><h2>HRV om natten</h2><span class="meta">ms · stiplet er grundniveau</span></div><div id="c-hrv"></div></section>
+      <section class="card panel"><div class="panel-head"><h2>Hvilepuls</h2><span class="meta">bpm · stiplet er grundniveau</span></div><div id="c-rhr"></div></section>
+    </div>
+
+    <section class="card panel"><details><summary>Nætterne som tabel (seneste 14)</summary><div class="scroll">
+      <table class="nights"><thead><tr><th>Nat</th><th class="num">Søvn</th><th class="num">Dyb</th><th class="num">REM</th><th class="num">Score</th><th class="num">HRV</th><th class="num">Hvilepuls</th><th class="num">Readiness</th></tr></thead>
+      <tbody>${nights.slice(-14).reverse().map(n => `<tr><td>${weekday(parseDate(n.dato)).slice(0, 3)} ${dayMonth(parseDate(n.dato))}</td>
+        <td class="num">${fmt(n.soevn_t, 1)}</td><td class="num">${fmt(n.dyb_t, 1)}</td><td class="num">${fmt(n.rem_t, 1)}</td><td class="num">${fmt(n.soevnscore)}</td>
+        <td class="num">${fmt(n.hrv)}</td><td class="num">${fmt(n.hvilepuls)}</td><td class="num">${fmt(n.readiness)}</td></tr>`).join("")}</tbody></table>
+    </div></details></section>
+    <p class="meta">Grundniveauet er de 53 dage før de seneste 7, som i garmin-coach. En nat uden måling står tom, ikke som 0.</p>
+  `;
+
+  barChart(document.getElementById("c-sleep"), {
+    label: "Søvn pr. nat i timer", height: 220, fmt: v => fmt(v, 0),
+    ref: { y: 7, label: "7 t" },
+    points: nights.map(n => ({ label: lbl(n), y: n.soevn_t, dim: n.soevn_t != null && n.soevn_t < 7,
+      tip: n.soevn_t == null ? `${head(n)}ingen måling` : `${head(n)}<b>${fmt(n.soevn_t, 1)} t</b> søvn · score <b>${fmt(n.soevnscore)}</b><br>dyb ${fmt(n.dyb_t, 1)} · REM ${fmt(n.rem_t, 1)} · let ${fmt(n.let_t, 1)} · vågen ${fmt(n.vaagen_t, 1)}` })),
+  });
+  lineChart(document.getElementById("c-hrv"), {
+    label: "HRV om natten", height: 180, fmt: v => fmt(v, 0),
+    ref: r.hrv?.baseline != null ? { y: r.hrv.baseline, label: `grundniveau ${fmt(r.hrv.baseline, 0)}` } : null,
+    points: nights.map(n => ({ label: lbl(n), y: n.hrv, tip: `${head(n)}HRV <b>${fmt(n.hrv)} ms</b>${n.hrv_status ? ` · ${esc(n.hrv_status.toLowerCase())}` : ""}` })),
+  });
+  lineChart(document.getElementById("c-rhr"), {
+    label: "Hvilepuls", height: 180, fmt: v => fmt(v, 0),
+    ref: r.hvilepuls?.baseline != null ? { y: r.hvilepuls.baseline, label: `grundniveau ${fmt(r.hvilepuls.baseline, 0)}` } : null,
+    points: nights.map(n => ({ label: lbl(n), y: n.hvilepuls, tip: `${head(n)}hvilepuls <b>${fmt(n.hvilepuls)} bpm</b>` })),
+  });
+}
+
+fetch("soevn.json", { cache: "no-store" }).then(r => { if (!r.ok) throw new Error(`soevn.json svarede ${r.status}`); return r.json(); })
+  .then(render, e => { document.getElementById("root").innerHTML = `<div class="card empty">${esc(e.message)}. Byg med <code>python -m garmin_coach.site byg</code>.</div>`; });
+</script>
+</body>
+</html>

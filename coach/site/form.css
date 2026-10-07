@@ -1,0 +1,107 @@
+/* Fælles for Form & Fokus-siderne i Kompas (perioder, uge, søvn, coach). Bygger på /kompas/assets/page.css. */
+.pnav { display: flex; align-items: center; gap: 6px; }
+.pnav select { font: inherit; font-size: 13px; color: var(--text-primary); background: var(--container); border: 0; box-shadow: var(--shadow-border-xs); border-radius: 8px; padding: 6px 8px; max-width: 220px; }
+.nav-btn { display: inline-grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 8px; background: var(--container); box-shadow: var(--shadow-border-xs); color: var(--text-secondary); cursor: pointer; }
+.nav-btn:hover:not(:disabled) { color: var(--text-primary); background: var(--container-hover); }
+.nav-btn:disabled { opacity: .4; cursor: default; }
+
+.lead { font-size: 17px; line-height: 1.5; font-weight: 500; margin: 0; max-width: 52em; text-wrap: pretty; }
+.one { display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; border-radius: 10px; background: var(--container-inset); box-shadow: inset 0 0 0 1px var(--border-subdued); }
+.one .ic-wrap { width: 30px; height: 30px; border-radius: 8px; background: var(--nav-indicator); color: var(--container); display: grid; place-items: center; flex: none; }
+.one .lbl { font-size: 12px; font-weight: 500; color: var(--text-secondary); }
+.one p { margin: 2px 0 0; line-height: 1.5; }
+
+.cols3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+.cols3 h3, .sub-h { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 13.5px; font-weight: 600; }
+.sub-h { margin-top: 18px; }
+.i-good { color: var(--success); } .i-bad { color: var(--destructive); } .i-neu { color: var(--text-secondary); }
+
+.fokus { counter-reset: f; list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.fokus li { counter-increment: f; display: grid; grid-template-columns: 26px 1fr; gap: 10px; line-height: 1.55; color: var(--text-secondary); }
+.fokus li::before { content: counter(f); width: 24px; height: 24px; border-radius: 7px; background: var(--nav-indicator); color: var(--container); display: grid; place-items: center; font-size: 12px; font-weight: 600; }
+.fu { display: grid; gap: 8px; }
+.fu div { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: start; color: var(--text-secondary); line-height: 1.5; }
+.fu b { color: var(--text-primary); font-weight: 500; }
+
+button.tile { font: inherit; text-align: left; border: 0; cursor: pointer; width: 100%; }
+button.tile:hover { background: var(--container-hover); }
+button.tile[aria-pressed="true"] { box-shadow: var(--shadow-xs), 0 0 0 1.5px var(--nav-indicator); }
+.tile .hint { color: var(--text-subdued); font-size: 12px; margin-top: 4px; min-height: 1em; }
+
+/* horisontale søjler med tekst (fordeling) */
+.hbars { display: grid; gap: 10px; }
+.hbar { display: grid; grid-template-columns: minmax(90px, 30%) 1fr auto; gap: 10px; align-items: center; font-size: 13.5px; }
+.hbar .t { height: 8px; border-radius: 4px; background: var(--surface-inset); overflow: hidden; }
+.hbar .t i { display: block; height: 100%; border-radius: 4px; background: var(--mark); }
+.hbar .v { color: var(--text-secondary); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 13px; }
+
+table.plain { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.plain th { text-align: left; font-weight: 500; color: var(--text-secondary); padding: 7px 8px; border-bottom: 1px solid var(--divider); white-space: nowrap; }
+table.plain td { padding: 7px 8px; border-bottom: 1px solid var(--divider); }
+table.plain tr:last-child td { border-bottom: 0; }
+table.plain .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.scroll { overflow-x: auto; }
+
+/* "Mod dit normale": normalområde som bånd, median som streg, ugen som prik */
+.dev { display: grid; gap: 2px; }
+.dev-group { font-size: 12px; font-weight: 500; color: var(--text-secondary); margin: 12px 0 4px; }
+.dev-group:first-child { margin-top: 0; }
+.dev-row { display: grid; grid-template-columns: minmax(140px, 32%) 1fr 120px; gap: 14px; align-items: center; padding: 6px 0; }
+.dev-row .n { font-size: 13.5px; min-width: 0; }
+.dev-row .n small { display: block; color: var(--text-subdued); font-size: 12px; }
+.dev-row .r { text-align: right; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.dev-row .r small { display: block; color: var(--text-subdued); font-size: 12px; }
+.strip { position: relative; height: 22px; }
+.strip .axis { position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: var(--divider); }
+.strip .band { position: absolute; top: 5px; bottom: 5px; border-radius: 6px; background: color-mix(in srgb, var(--mark) 20%, transparent); }
+.strip .med { position: absolute; top: 3px; bottom: 3px; width: 2px; margin-left: -1px; background: var(--text-subdued); border-radius: 1px; }
+.strip .pt { position: absolute; top: 50%; width: 11px; height: 11px; margin: -5.5px 0 0 -5.5px; border-radius: 50%; background: var(--text-primary); box-shadow: 0 0 0 2px var(--container); }
+.strip .pt.good { background: var(--success); } .strip .pt.bad { background: var(--destructive); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; color: var(--text-secondary); font-size: 12.5px; margin-top: 12px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { display: inline-block; width: 12px; height: 10px; border-radius: 3px; }
+
+/* små grafer i gitter */
+.charts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.mini h3 { margin: 0; font-size: 13.5px; font-weight: 600; }
+.mini .val { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; margin: 2px 0 6px; }
+.mini .val small { font-size: 13px; font-weight: 500; color: var(--text-secondary); margin-left: 3px; }
+
+/* ugekalender 6–22 */
+.wk-wrap { overflow-x: auto; }
+.wk { display: grid; grid-template-columns: 30px repeat(7, minmax(92px, 1fr)); gap: 0 6px; min-width: 700px; }
+.wk .hd { font-size: 12.5px; color: var(--text-secondary); padding: 0 0 6px 2px; }
+.wk .hd small { color: var(--text-subdued); margin-left: 4px; }
+.wk .hd.today { color: var(--text-primary); font-weight: 600; }
+.wk .allday { font-size: 11.5px; padding: 3px 6px; margin-bottom: 4px; border-radius: 6px; background: var(--warning-tint); color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wk .hrs { position: relative; }
+.wk .hrs span { position: absolute; right: 4px; transform: translateY(-50%); font-size: 11px; color: var(--text-subdued); font-variant-numeric: tabular-nums; }
+.wcol { position: relative; background: var(--container-inset); border-radius: 8px; }
+.wcol.today { box-shadow: inset 0 0 0 1.5px var(--nav-indicator); }
+.wcol .hline { position: absolute; left: 0; right: 0; height: 1px; background: var(--divider); }
+.blk { position: absolute; left: 3px; right: 3px; border-radius: 6px; padding: 3px 6px; font-size: 11px; line-height: 1.25; overflow: hidden; color: var(--text-primary);
+  background: var(--container); box-shadow: var(--shadow-border-xs); border-left: 3px solid var(--k, var(--gray-400)); }
+.blk.undervisning { --k: var(--c1); } .blk.selvstudie { --k: var(--c3); } .blk.andet { --k: var(--c4); } .blk.traening { --k: var(--text-primary); }
+.blk.fri { background: none; box-shadow: none; border: 1.5px dashed var(--success); color: var(--success); font-weight: 500; }
+.blk.overlap { box-shadow: 0 0 0 1.5px var(--destructive); }
+
+/* sammenhænge */
+.hyp { display: grid; gap: 4px; }
+.hyp-row { display: grid; grid-template-columns: minmax(0, 1fr) 160px 110px; gap: 14px; align-items: center; padding: 8px 0; border-top: 1px solid var(--divider); }
+.hyp-row:first-child { border-top: 0; }
+.hyp-row .q { font-size: 13.5px; }
+.hyp-row .q small { display: block; color: var(--text-subdued); font-size: 12px; margin-top: 2px; }
+.rho, .prog { position: relative; height: 8px; border-radius: 4px; background: var(--surface-inset); }
+.rho .f { position: absolute; top: 0; bottom: 0; border-radius: 4px; background: var(--text-subdued); }
+.rho .f.staerk { background: var(--mark); } .rho .f.antydning { background: var(--mark-dim); }
+.rho .mid { position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: var(--text-subdued); }
+.prog .f { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; background: var(--mark-dim); }
+.hyp-row .s { text-align: right; }
+
+@media (max-width: 900px) {
+  .cols3, .charts { grid-template-columns: minmax(0, 1fr); }
+  .dev-row { grid-template-columns: minmax(0, 1fr) 90px; }
+  .dev-row .strip { grid-column: 1 / -1; grid-row: 2; }
+  .hyp-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .hyp-row .rho, .hyp-row .prog { grid-column: 1 / -1; grid-row: 2; }
+}

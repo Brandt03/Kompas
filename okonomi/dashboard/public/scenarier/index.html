@@ -1,0 +1,437 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scenarier</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M3 24 C10 22 16 14 29 8 L29 18 C16 20 10 24 3 26Z' fill='%232a78d6' opacity='.3'/%3E%3Cpath d='M3 25 C10 23 16 17 29 13' fill='none' stroke='%232a78d6' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="../common.css">
+<style>
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 14px; align-items: start; }
+  .tiles { grid-template-columns: repeat(2, 1fr); }
+  .side { position: sticky; top: 14px; display: flex; flex-direction: column; gap: 14px; }
+  .side .panel { margin: 0; }
+  .side .grid-form { grid-template-columns: 1fr 1fr; }
+  .event { border-top: 1px solid var(--grid); padding-top: 12px; margin-top: 12px; }
+  .event:first-of-type { border-top: 0; margin-top: 0; padding-top: 0; }
+  .event .grid-form { margin-top: 10px; }
+  .event[data-off] .grid-form { display: none; }
+  .range-row { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center; }
+  .range-row output { font-variant-numeric: tabular-nums; font-weight: 600; font-size: 13px; min-width: 56px; text-align: right; color: var(--ink); }
+  #compare td:first-child { font-weight: 550; min-width: 200px; }
+  #compare td.num { white-space: nowrap; }
+  #fan .hover-line { stroke: var(--axis); stroke-width: 1; }
+  @media (max-width: 1000px) { .layout { grid-template-columns: 1fr; } .side { position: static; } }
+  @media (max-width: 520px) { .tiles { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Scenarier</h1>
+    <div class="meta"><span id="meta"></span> <span class="save" id="save"></span></div>
+  </header>
+
+  <div class="layout">
+    <main>
+      <section class="tiles" id="tiles"></section>
+
+      <section class="card panel">
+        <div class="panel-head">
+          <h2 id="fanTitle">Din formue de næste år</h2>
+          <div class="legend" id="fanLegend"></div>
+        </div>
+        <p class="hint" id="fanHint"></p>
+        <svg class="chart" id="fan" role="img" aria-label="Simuleret formue over tid" style="height:340px"></svg>
+      </section>
+
+      <section class="card panel">
+        <div class="panel-head"><h2>Hvad hvis …</h2></div>
+        <p class="hint">Samme simulation med én ting ændret ad gangen. Beløbene er i dagens kroner.</p>
+        <div style="overflow-x:auto">
+          <table id="compare">
+            <thead><tr><th>Scenarie</th><th class="num" id="cmpHead">Formue</th><th class="num hide-sm">80 % af forløbene</th><th class="num">Risiko for minus</th><th class="num">Nødbuffer nås</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card panel note">
+        <details class="more">
+          <summary>Sådan virker simulationen</summary>
+          <div style="margin-top:10px" id="how"></div>
+        </details>
+      </section>
+    </main>
+
+    <aside class="side">
+      <section class="card panel">
+        <div class="panel-head"><h2>Udgangspunkt</h2></div>
+        <div class="grid-form" id="base"></div>
+      </section>
+      <section class="card panel">
+        <div class="panel-head"><h2>Livsbegivenheder</h2></div>
+        <div id="events"></div>
+      </section>
+      <section class="card panel">
+        <div class="panel-head"><h2>Økonomien omkring dig</h2></div>
+        <div id="macro" style="display:flex;flex-direction:column;gap:12px"></div>
+      </section>
+    </aside>
+  </div>
+</div>
+<div class="tip" id="tip" role="tooltip"></div>
+
+<script src="../common.js"></script>
+<script>
+(() => {
+  "use strict";
+  const { kr, num, pct, $, el, svgEl, addMonths, monthDiff, monthName, TODAY_KEY, loadData, metaLine, store, showTip, hideTip, yAxis } = window.Dash;
+
+  const N_MAIN = 1000, N_SIDE = 400;
+  const TARGET_PROB = 0.8;           // "anbefalet opsparing" = 80 % chance for the goal by its date
+  const HISTORY_MONTHS = 36;         // variable spending history used for the month-to-month swings
+
+  let DATA, S, DEF, MULT = [1], HIST = null;
+  const saver = store("scenarier", (msg, err) => { const s = $("save"); s.textContent = msg ? "· " + msg : ""; s.classList.toggle("err", err); });
+
+  // ---------- defaults from Sure ----------
+  function defaults(d) {
+    const next = addMonths(TODAY_KEY, 1);
+    const b = [...d.budgets].reverse().find((x) => x.month <= next && x.spending) || {};
+    const spending = Number(b.spending) || 6000, variable = Number(b.variable) || Math.round(spending * 0.3);
+    const start = d.accounts.reduce((s, a) => s + (a.classification === "liability" ? -1 : 1) * Number(a.balance), 0);
+    const goal = d.goals[0];
+    const year = Number(TODAY_KEY.slice(0, 4));   // starting guesses for job and sabbatical, saved once changed
+    return {
+      start: Math.round(start), income: Math.round(Number(b.income) || 0), fixed: Math.round(spending - variable), variable: Math.round(variable),
+      years: 10, infl: 2, incomeInfl: true, cashRate: 1, investShare: 0, ret: 6, vol: 15, noise: true, overrun: 0,
+      goalName: goal ? goal.name : "Nødbuffer", goal: goal ? Math.round(Number(goal.target)) : 25000,
+      goalDate: goal?.target_date ? goal.target_date.slice(0, 7) : addMonths(TODAY_KEY, 24),
+      job: { on: true, from: `${year + 3}-08`, income: 25000, spend: 14000 },
+      sabbat: { on: false, from: `${year + 1}-08`, months: 12, income: 0, spend: 6000, delays: true },
+      oneoff: { on: false, date: addMonths(TODAY_KEY, 12), amount: 10000, label: "Stor udgift" },
+    };
+  }
+
+  // Month-to-month swings in variable spending: each month relative to the median of the months around it
+  // (so moving out / changing lifestyle doesn't count as a swing), scaled so the average month = budget.
+  function historyMultipliers(d) {
+    const byMonth = new Map();
+    for (const t of d.transactions) if (t.group === "Variable udgifter") byMonth.set(t.ym, (byMonth.get(t.ym) || 0) + t.amount);
+    const keys = [];
+    for (let k = addMonths(TODAY_KEY, -HISTORY_MONTHS); k < TODAY_KEY; k = addMonths(k, 1)) if (byMonth.has(k)) keys.push(k);
+    const vals = keys.map((k) => Math.max(byMonth.get(k), 0));
+    if (vals.length < 12) return null;
+    const median = (a) => { const s = [...a].sort((x, y) => x - y); const m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+    const raw = vals.map((v, i) => v / (median(vals.slice(Math.max(0, i - 6), i + 6)) || 1));
+    const mean = raw.reduce((a, b) => a + b, 0) / raw.length;
+    const mult = raw.map((r) => Math.min(r / mean, 5)).sort((a, b) => a - b);
+    const q = (p) => mult[Math.min(mult.length - 1, Math.floor(p * mult.length))];
+    return { mult, n: mult.length, p10: q(0.1), p50: q(0.5), p90: q(0.9), from: keys[0], to: keys[keys.length - 1] };
+  }
+
+  // ---------- simulation ----------
+  function mulberry32(a) { return () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+
+  // Deterministic plan per month in today's kroner: [income, fixed, variable, one-off]
+  function schedule(p, T) {
+    const varShare = p.variable / Math.max(p.fixed + p.variable, 1);
+    const sabEnd = p.sabbat.on ? addMonths(p.sabbat.from, p.sabbat.months) : null;
+    const jobFrom = p.job.on ? (p.sabbat.on && p.sabbat.delays && p.sabbat.from < p.job.from ? addMonths(p.job.from, p.sabbat.months) : p.job.from) : null;
+    const out = [];
+    for (let t = 1; t <= T; t++) {
+      const k = addMonths(TODAY_KEY, t);
+      let inc = p.income, fix = p.fixed, vr = p.variable;
+      if (jobFrom && k >= jobFrom) { inc = p.job.income; fix = p.job.spend * (1 - varShare); vr = p.job.spend * varShare; }
+      if (sabEnd && k >= p.sabbat.from && k < sabEnd) { inc = p.sabbat.income; fix = p.sabbat.spend * (1 - varShare); vr = p.sabbat.spend * varShare; }
+      // extra saving comes out of the variable part first
+      const cut = Math.min(p.extra || 0, vr + fix);
+      const cutVar = Math.min(cut, vr);
+      out.push([inc, fix - (cut - cutVar), vr - cutVar, p.oneoff.on && k === p.oneoff.date ? p.oneoff.amount : 0, k]);
+    }
+    return { rows: out, jobFrom, sabEnd };
+  }
+
+  function simulate(p, N, T, { keepPaths = true } = {}) {
+    const rng = mulberry32(123456789);
+    const plan = schedule(p, T).rows;
+    const inflM = Math.pow(1 + p.infl / 100, 1 / 12), cashM = Math.pow(1 + p.cashRate / 100, 1 / 12) - 1;
+    const sig = p.vol / 100 / Math.sqrt(12), mu = Math.log(1 + p.ret / 100) / 12 - sig * sig / 2;
+    const mult = p.noise && MULT.length ? MULT : [1];
+    const over = 1 + p.overrun / 100;
+    const goalT = Math.max(0, Math.min(T, monthDiff(TODAY_KEY, p.goalDate)));
+    const paths = keepPaths ? Array.from({ length: T + 1 }, () => new Float64Array(N)) : null;
+    const finals = new Float64Array(N);
+    let neg = 0, goalHit = 0; const reach = [];
+    for (let n = 0; n < N; n++) {
+      let W = p.start, f = 1, wentNeg = W < 0, reached = W >= p.goal ? 0 : Infinity;
+      if (paths) paths[0][n] = W;
+      for (let t = 1; t <= T; t++) {
+        const [inc, fix, vr, one] = plan[t - 1];
+        f *= inflM;
+        const m = mult[Math.floor(rng() * mult.length)];
+        W += (p.incomeInfl ? inc * f : inc) - (fix + vr * m * over + one) * f;
+        // interest on cash; the share above the buffer that is invested follows the market
+        const invested = W > p.goal * f ? (W - p.goal * f) * p.investShare / 100 : 0;
+        const cash = W - invested;
+        if (cash > 0) W += cash * cashM;
+        if (invested > 0) {
+          const u1 = rng() || 1e-12, u2 = rng();
+          const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+          W += invested * (Math.exp(mu + sig * z) - 1);
+        }
+        const real = W / f;
+        if (real < 0) wentNeg = true;
+        if (reached === Infinity && real >= p.goal) reached = t;
+        if (t === goalT && real >= p.goal) goalHit++;
+        if (paths) paths[t][n] = real;
+        if (t === T) finals[n] = real;
+      }
+      if (goalT === 0 && p.start >= p.goal) goalHit++;
+      if (wentNeg) neg++;
+      reach.push(reached);
+    }
+    reach.sort((a, b) => a - b);
+    const q = (arr, pr) => arr[Math.min(arr.length - 1, Math.floor(pr * arr.length))];
+    finals.sort();
+    const bands = paths ? paths.map((col) => { col.sort(); return [0.1, 0.25, 0.5, 0.75, 0.9].map((pr) => q(col, pr)); }) : null;
+    return { bands, neg: neg / N, goalProb: goalHit / N, reachMedian: q(reach, 0.5), final: [q(finals, 0.1), q(finals, 0.5), q(finals, 0.9)], goalT };
+  }
+
+  // smallest extra saving per month that gives TARGET_PROB chance of the goal by its date
+  function recommend(p) {
+    const T = Math.max(1, monthDiff(TODAY_KEY, p.goalDate));
+    const prob = (extra) => simulate({ ...p, extra }, N_SIDE, T, { keepPaths: false }).goalProb;
+    if (prob(0) >= TARGET_PROB) return 0;
+    let lo = 0, hi = 20000;
+    if (prob(hi) < TARGET_PROB) return null;
+    while (hi - lo > 25) { const mid = (lo + hi) / 2; if (prob(mid) >= TARGET_PROB) hi = mid; else lo = mid; }
+    return Math.ceil(hi / 25) * 25;
+  }
+
+  // ---------- render ----------
+  const T_of = (p) => p.years * 12;
+  const reachText = (r) => r === Infinity ? "ikke i perioden" : r === 0 ? "allerede nu" : monthName(addMonths(TODAY_KEY, r));
+
+  function render() {
+    const T = T_of(S);
+    const main = simulate(S, N_MAIN, T);
+    const changed = S.sabbat.on || S.oneoff.on;
+    const baseline = changed ? simulate({ ...S, sabbat: { ...S.sabbat, on: false }, oneoff: { ...S.oneoff, on: false } }, N_SIDE, T) : null;
+    renderTiles(main);
+    renderFan(main, baseline);
+    renderCompare(T, main);
+  }
+
+  function renderTiles(main) {
+    const tiles = $("tiles"); tiles.replaceChildren();
+    const tile = (label, value, sub) => tiles.append(el("div", { class: "card tile" },
+      el("div", { class: "label", text: label }), el("div", { class: "value", title: value, text: value }), el("div", { class: "sub", text: sub })));
+    const rec = recommend(S);
+    const monthly = S.income - S.fixed - S.variable;
+    tile(`Formue om ${S.years} år`, kr.format(main.final[1]), `typisk forløb · 80 % ligger mellem ${kr.format(main.final[0])} og ${kr.format(main.final[2])}`);
+    tile(`${S.goalName} (${kr.format(S.goal)})`, reachText(main.reachMedian), `nås typisk da · ${pct.format(main.goalProb)} chance for at have den i ${monthName(S.goalDate)}`);
+    tile("Opsparing der skal til", rec == null ? "over 20.000 kr./md." : rec === 0 ? "Du er på sporet" : `+${kr.format(rec)} pr. md.`,
+      rec === 0 ? `mindst ${pct.format(TARGET_PROB)} chance for at have ${kr.format(S.goal)} stående i ${monthName(S.goalDate)} med dit budget (${kr.format(monthly)}/md. tilovers)`
+        : `oven i budgettets ${kr.format(monthly)}/md. for ${pct.format(TARGET_PROB)} chance for at have ${kr.format(S.goal)} stående i ${monthName(S.goalDate)}`);
+    tile("Risiko for at gå i minus", pct.format(main.neg), "på et tidspunkt i perioden, altså at pengene ikke rækker");
+  }
+
+  function renderFan(main, baseline) {
+    const svg = $("fan"); svg.replaceChildren();
+    const W = svg.clientWidth || 800, H = 340, padL = 70, padR = 16, padT = 14, padB = 28;
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+    const B = main.bands, T = B.length - 1;
+    const lo = Math.min(0, ...B.map((b) => b[0])), hi = Math.max(S.goal, ...B.map((b) => b[4]), ...(baseline ? baseline.bands.map((b) => b[2]) : []));
+    const y = yAxis(svg, { min: lo, max: hi, top: padT, bottom: H - padB, left: padL, right: W - padR });
+    const x = (t) => padL + (W - padL - padR) * (t / T);
+    const area = (a, b) => B.map((v, t) => `${t ? "L" : "M"}${x(t)},${y(v[a])}`).join(" ") + " " + B.map((v, t) => `L${x(T - t)},${y(B[T - t][b])}`).join(" ") + " Z";
+    const line = (bands, i) => bands.map((v, t) => `${t ? "L" : "M"}${x(t)},${y(v[i])}`).join(" ");
+
+    // x axis: one tick per year (every other year on long horizons)
+    const every = S.years > 12 ? 2 : 1;
+    for (let yr = 0; yr <= S.years; yr += every) {
+      const t = yr * 12; if (t > T) break;
+      const lab = svgEl("text", { x: x(t), y: H - 8, "text-anchor": yr === 0 ? "start" : yr === S.years ? "end" : "middle" });
+      lab.textContent = yr === 0 ? "nu" : addMonths(TODAY_KEY, t).slice(0, 4);
+      svg.append(lab);
+    }
+    // life events as light bands
+    const plan = schedule(S, T);
+    const mark = (from, to, text) => {
+      const a = monthDiff(TODAY_KEY, from), b = Math.min(T, monthDiff(TODAY_KEY, to));
+      if (b <= 0 || a >= T) return;
+      svg.append(svgEl("rect", { x: x(Math.max(a, 0)), y: padT, width: Math.max(x(b) - x(Math.max(a, 0)), 1), height: H - padT - padB, fill: "var(--wash)" }));
+      const tx = svgEl("text", { x: x(Math.max(a, 0)) + 4, y: padT + 12 }); tx.textContent = text; svg.append(tx);
+    };
+    if (plan.sabEnd) mark(S.sabbat.from, plan.sabEnd, "Sabbatår");
+    if (plan.jobFrom && monthDiff(TODAY_KEY, plan.jobFrom) < T) {
+      const jx = x(Math.max(0, monthDiff(TODAY_KEY, plan.jobFrom)));
+      svg.append(svgEl("line", { x1: jx, x2: jx, y1: padT, y2: H - padB, stroke: "var(--axis)", "stroke-width": 1 }));
+      const tx = svgEl("text", { x: jx + 4, y: padT + 12 }); tx.textContent = "Job"; svg.append(tx);
+    }
+
+    svg.append(svgEl("path", { d: area(0, 4), fill: "var(--s1)", "fill-opacity": 0.12 }));
+    svg.append(svgEl("path", { d: area(1, 3), fill: "var(--s1)", "fill-opacity": 0.18 }));
+    // goal line
+    svg.append(svgEl("line", { x1: padL, x2: W - padR, y1: y(S.goal), y2: y(S.goal), stroke: "var(--ink-2)", "stroke-width": 1 }));
+    const gl = svgEl("text", { x: W - padR - 4, y: y(S.goal) - 6, "text-anchor": "end", style: "fill:var(--ink-2)" }); gl.textContent = S.goalName; svg.append(gl);
+    if (baseline) svg.append(svgEl("path", { d: line(baseline.bands, 2), fill: "none", stroke: "var(--s2)", "stroke-width": 2, "stroke-linejoin": "round" }));
+    svg.append(svgEl("path", { d: line(B, 2), fill: "none", stroke: "var(--s1)", "stroke-width": 2, "stroke-linejoin": "round" }));
+
+    // hover: crosshair + tooltip
+    const hl = svgEl("line", { class: "hover-line", y1: padT, y2: H - padB, x1: -10, x2: -10 });
+    const dot = svgEl("circle", { r: 4, fill: "var(--s1)", stroke: "var(--card)", "stroke-width": 2, cx: -10, cy: -10 });
+    svg.append(hl, dot);
+    const hit = svgEl("rect", { x: padL, y: padT, width: W - padL - padR, height: H - padT - padB, fill: "transparent" });
+    hit.addEventListener("pointermove", (ev) => {
+      const r = svg.getBoundingClientRect();
+      const px = (ev.clientX - r.left) * (W / r.width);
+      const t = Math.max(0, Math.min(T, Math.round(((px - padL) / (W - padL - padR)) * T)));
+      hl.setAttribute("x1", x(t)); hl.setAttribute("x2", x(t));
+      dot.setAttribute("cx", x(t)); dot.setAttribute("cy", y(B[t][2]));
+      const lines = [["var(--s1)", "Typisk", kr.format(B[t][2])], ["transparent", "80 % mellem", `${num.format(B[t][0])}–${num.format(B[t][4])}`]];
+      if (baseline) lines.push(["var(--s2)", "Uden begivenhed", kr.format(baseline.bands[t][2])]);
+      showTip(ev, t === 0 ? "Nu" : monthName(addMonths(TODAY_KEY, t), true), lines);
+    });
+    hit.addEventListener("pointerleave", () => { hideTip(); hl.setAttribute("x1", -10); hl.setAttribute("x2", -10); dot.setAttribute("cx", -10); });
+    svg.append(hit);
+
+    $("fanTitle").textContent = `Din formue de næste ${S.years} år`;
+    $("fanHint").textContent = `${num.format(N_MAIN)} simulerede forløb i dagens kroner${S.infl ? ` (med ${S.infl} % inflation)` : ""}. Linjen er det typiske forløb (medianen), det mørke bånd er de midterste 50 %, og det lyse bånd er de midterste 80 %.`;
+    const leg = [
+      el("span", {}, el("i", { class: "ln", style: "background:var(--s1)" }), "Typisk forløb"),
+      el("span", {}, el("i", { class: "band", style: "background:var(--s1);opacity:.3" }), "80 % af forløbene"),
+    ];
+    if (baseline) leg.push(el("span", {}, el("i", { class: "ln", style: "background:var(--s2)" }), `Uden ${[S.sabbat.on && "sabbatår", S.oneoff.on && "engangsudgift"].filter(Boolean).join(" og ")}`));
+    $("fanLegend").replaceChildren(...leg);
+  }
+
+  function renderCompare(T, main) {
+    const variants = [
+      ["Dine valg", S],
+      S.sabbat.on ? ["Uden sabbatår", { ...S, sabbat: { ...S.sabbat, on: false } }] : [`Med sabbatår (${S.sabbat.months} mdr. fra ${monthName(S.sabbat.from)})`, { ...S, sabbat: { ...S.sabbat, on: true } }],
+      ["Inflation 3 %", { ...S, infl: 3 }],
+      ["Inflation 3 %, men indkomsten følger ikke med", { ...S, infl: 3, incomeInfl: false }],
+      ["Spar 500 kr. mere pr. måned", { ...S, extra: 500 }],
+      S.investShare ? ["Uden at investere", { ...S, investShare: 0 }] : ["Investér 50 % af det, der er over bufferen", { ...S, investShare: 50 }],
+    ];
+    $("cmpHead").textContent = `Formue om ${S.years} år`;
+    const body = $("compare").querySelector("tbody"); body.replaceChildren();
+    for (const [name, p] of variants) {
+      const r = p === S ? main : simulate(p, N_SIDE, T, { keepPaths: false });
+      body.append(el("tr", {},
+        el("td", { text: name }),
+        el("td", { class: "num", text: kr.format(r.final[1]) }),
+        el("td", { class: "num hide-sm", text: `${num.format(r.final[0])} – ${num.format(r.final[2])}` }),
+        el("td", { class: "num", text: pct.format(r.neg) }),
+        el("td", { class: "num", text: reachText(r.reachMedian) })));
+    }
+  }
+
+  // ---------- controls ----------
+  let tmr;
+  // only what differs from Sure's own numbers is saved, so balances and budget keep following Sure
+  function diff(cur, base) {
+    const out = {};
+    for (const [k, v] of Object.entries(cur)) {
+      if (v && typeof v === "object") { const d = diff(v, base[k] || {}); if (Object.keys(d).length) out[k] = d; }
+      else if (v !== base[k]) out[k] = v;
+    }
+    return out;
+  }
+  function changed(now) { saver.save(diff(S, DEF)); clearTimeout(tmr); tmr = setTimeout(render, now ? 0 : 120); }
+
+  function numField(obj, key, label, help, attrs = {}) {
+    return el("label", { class: "f" }, label,
+      el("input", { type: "number", value: obj[key], step: 100, ...attrs, onchange: (e) => { obj[key] = Number(e.target.value) || 0; changed(true); } }),
+      help ? el("small", { text: help }) : null);
+  }
+  function monthField(obj, key, label) {
+    return el("label", { class: "f" }, label,
+      el("input", { type: "month", value: obj[key], onchange: (e) => { if (e.target.value) { obj[key] = e.target.value; changed(true); } } }));
+  }
+  function rangeField(obj, key, label, min, max, step, fmt) {
+    const out = el("output", { text: fmt(obj[key]) });
+    return el("label", { class: "f" }, label, el("div", { class: "range-row" },
+      el("input", { type: "range", min, max, step, value: obj[key], oninput: (e) => { obj[key] = Number(e.target.value); out.textContent = fmt(obj[key]); changed(); } }), out));
+  }
+  function check(obj, key, label, after) {
+    return el("label", { class: "check" }, el("input", { type: "checkbox", checked: obj[key], onchange: (e) => { obj[key] = e.target.checked; after && after(); changed(true); } }), label);
+  }
+
+  function renderControls() {
+    $("base").replaceChildren(
+      numField(S, "start", "Formue nu", "Summen af dine konti i Sure"),
+      numField(S, "income", "Indkomst pr. md.", "SU, boligstøtte osv. efter skat"),
+      numField(S, "fixed", "Faste udgifter pr. md."),
+      numField(S, "variable", "Variabelt forbrug pr. md."),
+      numField(S, "goal", `${S.goalName} (mål)`, "Fra dine mål i Sure"),
+      monthField(S, "goalDate", "Nås senest"),
+    );
+
+    const ev = $("events"); ev.replaceChildren();
+    const event = (obj, title, desc, fields) => {
+      const box = el("div", { class: "event", "data-off": !obj.on || null },
+        check(obj, "on", el("span", {}, el("b", { text: title }), el("span", { style: "color:var(--muted)", text: ` · ${desc}` })), () => box.toggleAttribute("data-off", !obj.on)),
+        el("div", { class: "grid-form" }, ...fields));
+      ev.append(box);
+    };
+    event(S.job, "Job efter studiet", "løn og forbrug skifter", [
+      monthField(S.job, "from", "Fra"), numField(S.job, "income", "Løn efter skat"), numField(S.job, "spend", "Forbrug pr. md.", "Faste + variable"),
+    ]);
+    event(S.sabbat, "Sabbatår", "ingen SU i perioden", [
+      monthField(S.sabbat, "from", "Fra"), numField(S.sabbat, "months", "Måneder", null, { step: 1, min: 1, max: 36 }),
+      numField(S.sabbat, "income", "Indkomst pr. md.", "Fx løn efter skat"), numField(S.sabbat, "spend", "Forbrug pr. md.", "Inkl. rejser"),
+      el("div", { style: "grid-column:1/-1" }, check(S.sabbat, "delays", "Udskyder jobstart tilsvarende")),
+    ]);
+    event(S.oneoff, "Engangsudgift", "fx rejse, bil, depositum", [
+      monthField(S.oneoff, "date", "Hvornår"), numField(S.oneoff, "amount", "Beløb"),
+    ]);
+
+    $("macro").replaceChildren(
+      rangeField(S, "years", "Periode", 1, 30, 1, (v) => `${v} år`),
+      rangeField(S, "infl", "Inflation", 0, 8, 0.5, (v) => `${String(v).replace(".", ",")} %`),
+      check(S, "incomeInfl", "Indkomsten stiger med inflationen"),
+      rangeField(S, "cashRate", "Rente på opsparing", 0, 5, 0.25, (v) => `${String(v).replace(".", ",")} %`),
+      rangeField(S, "investShare", "Investér af det, der er over bufferen", 0, 100, 10, (v) => `${v} %`),
+      rangeField(S, "ret", "Forventet afkast, investeret", 0, 12, 0.5, (v) => `${String(v).replace(".", ",")} %`),
+      rangeField(S, "vol", "Udsving i afkast (volatilitet)", 0, 30, 1, (v) => `${v} %`),
+      check(S, "noise", HIST ? "Variabelt forbrug svinger som i din historik" : "Variabelt forbrug svinger (for lidt historik)"),
+      rangeField(S, "overrun", "Overskrider det variable budget med", -30, 50, 5, (v) => `${v} %`),
+    );
+  }
+
+  function renderHow() {
+    const box = $("how"); box.replaceChildren();
+    const p = (...k) => box.append(el("p", {}, ...k));
+    p("Siden starter med din formue i dag og regner én måned frem ad gangen, ", el("b", { text: `${num.format(N_MAIN)} gange` }), ". Hver måned lægges indkomsten til og udgifterne trækkes fra. Hvis du har slået det til, får opsparingen også rente og afkast. Udgangspunktet er dit budget i Sure.");
+    if (HIST) p(el("b", { text: "Udsving fra din historik: " }), `I hvert forløb trækker siden tilfældige måneder fra dit variable forbrug ${monthName(HIST.from)}–${monthName(HIST.to)} (${HIST.n} måneder). Månederne sammenlignes med dem omkring sig, så en ny livssituation, fx da du flyttede, ikke tæller som et udsving. I en typisk måned bruger du ${pct.format(HIST.p50)} af gennemsnittet. De dyreste 10 % af månederne koster over ${pct.format(HIST.p90)} af gennemsnittet, fordi rejser og større køb kommer i klumper. Budgettet holder altså i gennemsnit, men ikke hver måned. Brug skyderen "Overskrider det variable budget", hvis du tror, du i gennemsnit bruger mere.`);
+    p(el("b", { text: "Inflation: " }), "Alle beløb vises i dagens kroner. Stiger indkomsten med inflationen, er det kun renten på din opsparing, der taber til inflationen. Følger indkomsten ikke med, bliver budgettet strammere år for år.");
+    p(el("b", { text: "Minus: " }), "Går formuen i minus, fortsætter forløbet som gæld, men siden regner ikke renter på gælden. I virkeligheden bliver det altså dyrere end vist.");
+    p(el("b", { text: "Investering: " }), "Kun den del af formuen, der ligger over nødbufferen, kan investeres. Afkastet er tilfældigt med det forventede afkast og udsving, du har valgt. Bemærk at historiske afkast ikke er en garanti, og at siden ikke er investeringsrådgivning.");
+    p(el("b", { text: "Anbefalet opsparing: " }), `Det mindste ekstra beløb pr. måned, der giver ${pct.format(TARGET_PROB)} chance for, at du har hele målet stående på datoen (ikke bare har nået det én gang undervejs). Det er ren regning ud fra dine egne tal. Job, løn og forbrug efter studiet er gæt, som du selv skal rette.`);
+  }
+
+  addEventListener("resize", (() => { let t; return () => { clearTimeout(t); t = setTimeout(render, 150); }; })());
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);
+
+  Promise.all([loadData(), saver.load()]).then(([d, saved]) => {
+    DATA = d;
+    HIST = historyMultipliers(d);
+    MULT = HIST ? HIST.mult : [1];
+    const def = DEF = defaults(d);
+    S = { ...def, ...saved, job: { ...def.job, ...saved.job }, sabbat: { ...def.sabbat, ...saved.sabbat }, oneoff: { ...def.oneoff, ...saved.oneoff } };
+    delete S.saved_at; delete S._unsynced; delete S._local_at;
+    $("meta").replaceChildren(...metaLine(d));
+    renderControls();
+    renderHow();
+    render();
+  }).catch((e) => {
+    $("tiles").replaceChildren(el("div", { class: "card tile", style: "grid-column:1/-1" }, el("div", { class: "label", text: "Kunne ikke hente data" }), el("div", { class: "sub", text: String(e) })));
+  });
+})();
+</script>
+</body>
+</html>

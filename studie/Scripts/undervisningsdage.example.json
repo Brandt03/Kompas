@@ -1,0 +1,35 @@
+{
+ "_forklaring": "Eksempel. Kopiér til undervisningsdage.json og skriv dit eget skema. Bruges af canvas-sortering.js: forelæsning n = n'te dato i listen. Et emne gør filnavnet pænere (20260907_FL1_Lorem ipsum.pdf); uden emne beholder filen Canvas-navnet. Datoer kan også stå alene, som under Beta.",
+ "Alfa": {
+  "Forelæsninger": [
+   { "dato": "2026-09-07", "emne": "Lorem ipsum" },
+   { "dato": "2026-09-14", "emne": "Dolor sit amet" },
+   { "dato": "2026-09-21", "emne": "Consectetur" },
+   { "dato": "2026-09-28", "emne": "Adipiscing elit" }
+  ],
+  "Øvelser": [
+   { "dato": "2026-09-08", "emne": "Sed do eiusmod" },
+   { "dato": "2026-09-15", "emne": "Tempor" },
+   { "dato": "2026-09-22", "emne": "Incididunt" },
+   { "dato": "2026-09-29", "emne": "Ut labore" }
+  ]
+ },
+ "Gamma": {
+  "Forelæsninger": [
+   { "dato": "2026-09-08", "emne": "Magna aliqua" },
+   { "dato": "2026-09-15", "emne": "Ut enim" },
+   { "dato": "2026-09-22", "emne": "Minim veniam" },
+   { "dato": "2026-09-29", "emne": "Quis nostrud" }
+  ],
+  "Øvelser": [
+   { "dato": "2026-09-10", "emne": "Exercitation" },
+   { "dato": "2026-09-17", "emne": "Ullamco" },
+   { "dato": "2026-09-24", "emne": "Laboris nisi" },
+   { "dato": "2026-10-01", "emne": "Aliquip" }
+  ]
+ },
+ "Beta": {
+  "Forelæsninger": ["2026-09-09", "2026-09-16", "2026-09-23", "2026-09-30"],
+  "Øvelser": ["2026-09-09", "2026-09-16", "2026-09-23", "2026-09-30"]
+ }
+}

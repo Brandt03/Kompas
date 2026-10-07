@@ -1,0 +1,596 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Forbrug</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='11' fill='none' stroke='%232a78d6' stroke-width='6' stroke-dasharray='40 100'/%3E%3Ccircle cx='16' cy='16' r='11' fill='none' stroke='%23eb6834' stroke-width='6' stroke-dasharray='0 42 22 100'/%3E%3C/svg%3E">
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7;
+    --surface: #fcfcfb;
+    --card: #ffffff;
+    --ink: #0b0b0b;
+    --ink-2: #52514e;
+    --muted: #898781;
+    --grid: #e1e0d9;
+    --axis: #c3c2b7;
+    --border: rgba(11,11,11,0.10);
+    --wash: rgba(11,11,11,0.04);
+    --good: #006300;
+    --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #e87ba4; --s6: #008300; --s7: #4a3aa7; --s8: #e34948;
+    --other: #b9b8b1;
+    --track: #efeee9;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --page: #0d0d0d; --surface: #1a1a19; --card: #1a1a19;
+      --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
+      --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10); --wash: rgba(255,255,255,0.05);
+      --good: #0ca30c;
+      --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
+      --other: #5a5955; --track: #262624;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --card: #1a1a19;
+    --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10); --wash: rgba(255,255,255,0.05);
+    --good: #0ca30c;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
+    --other: #5a5955; --track: #262624;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--page); color: var(--ink);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 28px 24px 64px; }
+  header { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+  h1 { font-size: 22px; font-weight: 650; margin: 0; letter-spacing: -0.01em; }
+  .meta { color: var(--muted); font-size: 12.5px; }
+  .meta a { color: var(--ink-2); }
+
+  /* filter row */
+  .filters { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 18px; }
+  .seg { display: inline-flex; background: var(--wash); border-radius: 10px; padding: 3px; gap: 2px; }
+  .seg button {
+    border: 0; background: transparent; color: var(--ink-2); font: inherit; font-size: 13px;
+    padding: 6px 12px; border-radius: 8px; cursor: pointer;
+  }
+  .seg button[aria-pressed="true"] { background: var(--card); color: var(--ink); font-weight: 600; box-shadow: 0 0 0 1px var(--border); }
+  .stepper { display: inline-flex; align-items: center; gap: 4px; background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 3px; }
+  .stepper button { border: 0; background: transparent; color: var(--ink-2); width: 28px; height: 28px; border-radius: 7px; cursor: pointer; font-size: 16px; }
+  .stepper button:hover:not(:disabled) { background: var(--wash); }
+  .stepper button:disabled { opacity: .3; cursor: default; }
+  .stepper span { min-width: 124px; text-align: center; font-weight: 600; font-size: 13.5px; }
+
+  /* tiles */
+  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 14px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; }
+  .tile { padding: 16px 18px 18px; min-width: 0; }
+  .tile .label { color: var(--ink-2); font-size: 13px; display: flex; align-items: center; gap: 7px; }
+  .tile .value { font-size: 28px; font-weight: 650; letter-spacing: -0.02em; margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tile .sub { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+  .dot { width: 9px; height: 9px; border-radius: 3px; flex: none; }
+
+  /* breakdown */
+  .panel { padding: 18px 20px 20px; margin-bottom: 14px; }
+  .panel-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+  h2 { font-size: 16px; font-weight: 650; margin: 0; }
+  .breakdown { display: grid; grid-template-columns: 300px 1fr; gap: 28px; align-items: start; }
+  .donut-box { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+  .donut { width: 240px; height: 240px; }
+  .donut circle.seg-arc { cursor: pointer; transition: opacity .15s; }
+  .donut.dim circle.seg-arc:not(.on) { opacity: .28; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; justify-content: center; color: var(--ink-2); font-size: 12.5px; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+
+  .rows { display: flex; flex-direction: column; }
+  .row {
+    display: grid; grid-template-columns: 1fr auto 52px; gap: 4px 12px; align-items: baseline;
+    padding: 9px 10px; border-radius: 10px; cursor: pointer; border: 0; background: transparent;
+    font: inherit; color: inherit; text-align: left; width: 100%;
+  }
+  .row:hover { background: var(--wash); }
+  .row[aria-pressed="true"] { background: var(--wash); box-shadow: inset 0 0 0 1px var(--border); }
+  .row .nm { display: flex; align-items: center; gap: 8px; min-width: 0; font-weight: 550; }
+  .row .nm small { color: var(--muted); font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .nm b { font-weight: 550; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .amt { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .row .pct { color: var(--muted); font-size: 12.5px; text-align: right; font-variant-numeric: tabular-nums; }
+  .row .bar { grid-column: 1 / -1; height: 6px; background: var(--track); border-radius: 3px; overflow: hidden; }
+  .row .bar i { display: block; height: 100%; border-radius: 3px; }
+  .more { margin-top: 6px; background: none; border: 0; color: var(--ink-2); font: inherit; font-size: 13px; cursor: pointer; padding: 6px 10px; text-align: left; }
+  .more:hover { color: var(--ink); text-decoration: underline; }
+  .empty { color: var(--muted); padding: 32px 0; text-align: center; }
+
+  /* trend */
+  .hint { color: var(--muted); font-size: 12.5px; margin: -6px 0 10px; }
+  #trend { width: 100%; height: 260px; display: block; }
+  #trend .col { cursor: pointer; }
+  #trend text { fill: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+
+  /* table */
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th { text-align: left; color: var(--muted); font-weight: 500; font-size: 12.5px; padding: 8px 10px; border-bottom: 1px solid var(--grid); }
+  td { padding: 8px 10px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td.neg { color: var(--good); }
+  td .cat { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); }
+  .tag { display: inline-flex; align-items: center; gap: 6px; background: var(--wash); border-radius: 999px; padding: 2px 4px 2px 10px; font-size: 12.5px; color: var(--ink-2); }
+  .tag button { border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 14px; line-height: 1; padding: 2px 6px; border-radius: 999px; }
+  .tag button:hover { color: var(--ink); background: var(--wash); }
+
+  .tip {
+    position: fixed; pointer-events: none; z-index: 10; background: var(--card); color: var(--ink);
+    border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; font-size: 12.5px;
+    box-shadow: 0 6px 24px rgba(0,0,0,.12); min-width: 150px; opacity: 0; transition: opacity .08s;
+  }
+  .tip .t-head { color: var(--muted); margin-bottom: 4px; }
+  .tip .t-row { display: grid; grid-template-columns: 12px 1fr auto; gap: 8px; align-items: center; }
+  .tip .t-row i { height: 2px; border-radius: 1px; }
+  .tip .t-row b { font-variant-numeric: tabular-nums; }
+  .tip .t-row span { color: var(--ink-2); }
+  .tip .t-total { border-top: 1px solid var(--grid); margin-top: 5px; padding-top: 5px; display: flex; justify-content: space-between; }
+
+  @media (max-width: 900px) {
+    .tiles { grid-template-columns: repeat(2, 1fr); }
+    .breakdown { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 520px) {
+    .wrap { padding: 20px 16px 48px; }
+    .tile .value { font-size: 22px; }
+    .donut { width: 200px; height: 200px; }
+    .hide-sm { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Forbrug</h1>
+    <div class="meta" id="meta"></div>
+  </header>
+
+  <div class="filters" role="toolbar" aria-label="Periode">
+    <div class="seg" id="presets"></div>
+    <div class="stepper" id="stepper">
+      <button id="prev" aria-label="Forrige måned">‹</button>
+      <span id="periodLabel"></span>
+      <button id="next" aria-label="Næste måned">›</button>
+    </div>
+  </div>
+
+  <section class="tiles" id="tiles"></section>
+
+  <section class="card panel">
+    <div class="panel-head">
+      <h2>Fordeling af forbrug</h2>
+      <div class="seg" id="dims"></div>
+    </div>
+    <div class="breakdown">
+      <div class="donut-box">
+        <svg class="donut" id="donut" viewBox="0 0 200 200" role="img" aria-label="Donutdiagram over forbrug"></svg>
+        <div class="legend" id="legend"></div>
+      </div>
+      <div>
+        <div class="rows" id="rows"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card panel">
+    <div class="panel-head">
+      <h2 id="trendTitle">Udvikling pr. måned</h2>
+      <div class="legend" id="trendLegend"></div>
+    </div>
+    <p class="hint">Klik på en post i fordelingen for at se den alene. Klik på en søjle for at se dens posteringer.</p>
+    <svg id="trend" role="img" aria-label="Forbrug pr. måned"></svg>
+  </section>
+
+  <section class="card panel">
+    <div class="panel-head">
+      <h2>Posteringer</h2>
+      <div id="tags" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+    </div>
+    <div style="overflow-x:auto">
+      <table>
+        <thead><tr><th>Dato</th><th>Tekst</th><th class="hide-sm">Kategori</th><th class="hide-sm">Konto</th><th class="num">Beløb</th></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <button class="more" id="moreTx" hidden></button>
+  </section>
+</div>
+<div class="tip" id="tip" role="tooltip"></div>
+
+<script>
+(() => {
+  "use strict";
+  let MOVE_IN = null;                      // "Siden flytning" (YYYY-MM) from config.json; no month = no preset
+  const INCOME_GROUP = "Indtægter";
+  const SAVINGS_GROUP = "Opsparing og investering";   // money kept, not spent
+  const UNCAT = "Ukategoriseret";
+  const OTHER = "Andet";
+  const SLOTS = ["--s1", "--s2", "--s3", "--s4", "--s5", "--s6", "--s7", "--s8"];
+  const MONTHS = ["jan", "feb", "mar", "apr", "maj", "jun", "jul", "aug", "sep", "okt", "nov", "dec"];
+  const MONTHS_LONG = ["januar", "februar", "marts", "april", "maj", "juni", "juli", "august", "september", "oktober", "november", "december"];
+
+  const kr = new Intl.NumberFormat("da-DK", { style: "currency", currency: "DKK", maximumFractionDigits: 0 });
+  const kr2 = new Intl.NumberFormat("da-DK", { style: "currency", currency: "DKK", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const pctFmt = new Intl.NumberFormat("da-DK", { style: "percent", maximumFractionDigits: 1 });
+  const $ = (id) => document.getElementById(id);
+  const el = (tag, props = {}, ...kids) => {
+    const n = document.createElement(tag);
+    for (const [k, v] of Object.entries(props)) {
+      if (k === "style") n.setAttribute("style", v);
+      else if (k.startsWith("on")) n.addEventListener(k.slice(2), v);
+      else if (k === "text") n.textContent = v;
+      else n.setAttribute(k, v);
+    }
+    kids.forEach((c) => c != null && n.append(c));
+    return n;
+  };
+  const svgEl = (tag, attrs = {}) => {
+    const n = document.createElementNS("http://www.w3.org/2000/svg", tag);
+    for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+    return n;
+  };
+  const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+  const ym = (d) => d.slice(0, 7);
+  const monthName = (k, long) => { const [y, m] = k.split("-").map(Number); return `${(long ? MONTHS_LONG : MONTHS)[m - 1]} ${y}`; };
+  const addMonths = (k, n) => { const [y, m] = k.split("-").map(Number); const d = new Date(y, m - 1 + n, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; };
+  const monthsBetween = (a, b) => { const out = []; for (let k = a; k <= b; k = addMonths(k, 1)) out.push(k); return out; };
+
+  // Collapse bank texts ("VD 00482 REMA1000 APP 956") into a readable payee name.
+  // The [pattern, name] pairs come from config.json ("modtagere", see config.example.json); patterns ignore case.
+  let CHAINS = [];
+  function payee(t) {
+    if (t.merchant) return t.merchant;
+    let n = t.name.replace(/^VD \d+\s+/, "").replace(/^BS\s+/, "").replace(/^MOB\.PAY\*/, "").trim();
+    for (const [re, label] of CHAINS) if (re.test(n)) return label;
+    if (/^MobilePay /.test(n)) return n.replace(/^MobilePay\s+/, "").split(/\s+/).slice(0, 2).join(" ");
+    const words = n.split(/\s+/);
+    const kept = [words[0], ...words.slice(1).filter((w) => !/\d/.test(w))].slice(0, 3);
+    return kept.join(" ").replace(/\b([A-ZÆØÅ])([A-ZÆØÅ]+)\b/g, (_, a, b) => a + b.toLowerCase());
+  }
+
+  let DATA = [], TODAY_KEY, FIRST_KEY, LAST_KEY;
+  const state = { preset: "month", month: null, dim: "category", selected: null, txMonth: null, showAll: false, showAllTx: false };
+
+  // ---------- colours ----------
+  // Groups are pinned. Categories/payees are ranked once (all time); the donut's named
+  // slices always get distinct hues, never grey.
+  const GROUP_SLOTS = { "Faste udgifter": "--s1", "Variable udgifter": "--s2", "Indflytning": "--s3" };
+  const home = { category: new Map(), merchant: new Map() };
+  const view = { category: new Map(), merchant: new Map() };
+  function assignSlots() {
+    for (const dim of ["category", "merchant"]) {
+      const totals = new Map();
+      for (const t of DATA) if (t.spend) totals.set(t[dim], (totals.get(t[dim]) || 0) + t.amount);
+      [...totals.entries()].filter(([k, v]) => v > 0 && k !== UNCAT).sort((a, b) => b[1] - a[1])
+        .forEach(([k], i) => home[dim].set(k, i));
+    }
+  }
+  // The visible slices get the palette's first hues in its validated order, handed out by
+  // all-time rank - so the biggest everyday categories usually keep the same colour.
+  function resolveView(dim, keys) {
+    const rank = (k) => home[dim].get(k) ?? Infinity;
+    const m = new Map();
+    keys.filter((k) => k !== UNCAT).sort((a, b) => rank(a) - rank(b)).forEach((k, i) => m.set(k, i));
+    view[dim] = m;
+  }
+  // donut shows at most 6 slices: the top 5 + "Andet" (a lone leftover is shown by name instead)
+  const donutItems = (items) => (items.length === 6 ? items : items.slice(0, 5));
+  const colorOf = (dim, key) => dim === "group"
+    ? (GROUP_SLOTS[key] ? `var(${GROUP_SLOTS[key]})` : "var(--other)")
+    : (view[dim].has(key) ? `var(${SLOTS[view[dim].get(key)]})` : "var(--other)");
+
+  // ---------- period ----------
+  function periodRange() {
+    switch (state.preset) {
+      case "month": return [state.month, state.month];
+      case "ytd": return [`${TODAY_KEY.slice(0, 4)}-01`, TODAY_KEY];
+      case "movein": return [MOVE_IN, TODAY_KEY];
+      case "12m": return [addMonths(TODAY_KEY, -11), TODAY_KEY];
+      default: return [FIRST_KEY, LAST_KEY];
+    }
+  }
+  function periodText() {
+    const [a, b] = periodRange();
+    return a === b ? monthName(a, true) : `${monthName(a)} – ${monthName(b)}`;
+  }
+
+  // Net spend per key: refunds reduce their own category, keys that net to <= 0 drop out
+  function breakdown(rows, dim) {
+    const m = new Map();
+    for (const t of rows) {
+      if (!t.spend) continue;
+      const cur = m.get(t[dim]) || { key: t[dim], total: 0, n: 0, group: t.group };
+      cur.total += t.amount; cur.n += 1; m.set(t[dim], cur);
+    }
+    return [...m.values()].filter((x) => x.total > 0.005).sort((a, b) => b.total - a.total);
+  }
+
+  // ---------- render ----------
+  function render() {
+    const [a, b] = periodRange();
+    const inPeriod = DATA.filter((t) => t.ym >= a && t.ym <= b);
+    const byCat = breakdown(inPeriod, "category");
+    const total = byCat.reduce((s, x) => s + x.total, 0);
+    const monthsCount = monthsBetween(a, b > TODAY_KEY ? TODAY_KEY : b).length || 1;
+
+    // filters
+    $("presets").querySelectorAll("button").forEach((btn) => btn.setAttribute("aria-pressed", String(btn.dataset.p === state.preset)));
+    $("stepper").style.display = state.preset === "month" ? "" : "none";
+    $("periodLabel").textContent = periodText();
+    $("prev").disabled = state.month <= FIRST_KEY;
+    $("next").disabled = state.month >= LAST_KEY;
+    $("dims").querySelectorAll("button").forEach((btn) => btn.setAttribute("aria-pressed", String(btn.dataset.d === state.dim)));
+
+    // tiles
+    resolveView("category", donutItems(byCat).map((x) => x.key));
+    const top = byCat.filter((x) => x.key !== UNCAT)[0];
+    const nTx = inPeriod.filter((t) => t.spend).length;
+    const tiles = $("tiles"); tiles.replaceChildren();
+    const tile = (label, value, sub, dotColor) => tiles.append(el("div", { class: "card tile" },
+      el("div", { class: "label" }, dotColor ? el("i", { class: "dot", style: `background:${dotColor}` }) : null, label),
+      el("div", { class: "value", title: value, text: value }),
+      sub ? el("div", { class: "sub", text: sub }) : null));
+    tile("Forbrug i alt", kr.format(total), periodText());
+    tile("Gennemsnit pr. måned", kr.format(total / monthsCount), `${monthsCount} ${monthsCount === 1 ? "måned" : "måneder"}`);
+    tile("Største kategori", top ? top.key : "–", top ? `${pctFmt.format(top.total / total)} af forbruget · ${kr.format(top.total)}` : "", top ? colorOf("category", top.key) : null);
+    tile("Posteringer", String(nTx), "køb og betalinger i perioden");
+
+    renderBreakdown(inPeriod);
+    renderTrend();
+    renderTable(inPeriod);
+  }
+
+  function renderBreakdown(inPeriod) {
+    const dim = state.dim;
+    const items = breakdown(inPeriod, dim);
+    const total = items.reduce((s, x) => s + x.total, 0);
+
+    // donut: at most 6 segments (5 named + Andet)
+    const shown = donutItems(items);
+    if (dim !== "group") resolveView(dim, shown.map((x) => x.key));
+    const rest = items.slice(shown.length);
+    const segs = shown.map((x) => ({ ...x, color: colorOf(dim, x.key) }));
+    const restTotal = rest.reduce((s, x) => s + x.total, 0);
+    if (restTotal > 0) segs.push({ key: OTHER, total: restTotal, color: "var(--other)", isOther: true, members: rest.map((r) => r.key) });
+
+    const svg = $("donut"); svg.replaceChildren();
+    const R = 78, SW = 26, C = 2 * Math.PI * R, GAP = segs.length > 1 ? 2 : 0; // surface gap between segments
+    svg.append(svgEl("circle", { cx: 100, cy: 100, r: R, fill: "none", stroke: "var(--track)", "stroke-width": SW }));
+    let off = 0;
+    const selectedKeys = state.selected && state.selected.dim === dim ? new Set([state.selected.key]) : null;
+    svg.classList.toggle("dim", !!selectedKeys);
+    for (const s of segs) {
+      const len = (s.total / total) * C;
+      const arc = svgEl("circle", {
+        class: "seg-arc" + (selectedKeys && (selectedKeys.has(s.key) || (s.isOther && s.members.some((m) => selectedKeys.has(m)))) ? " on" : ""),
+        cx: 100, cy: 100, r: R, fill: "none", stroke: s.color, "stroke-width": SW,
+        "stroke-dasharray": `${Math.max(len - GAP, 0.5)} ${C}`, "stroke-dashoffset": -off,
+        transform: "rotate(-90 100 100)", tabindex: 0, role: "button",
+        "aria-label": `${s.key}: ${kr.format(s.total)}`,
+      });
+      const show = (ev) => showTip(ev, s.key === OTHER ? `${OTHER} (${s.members.length})` : s.key, [[s.color, pctFmt.format(s.total / total), kr.format(s.total)]]);
+      arc.addEventListener("pointermove", show);
+      arc.addEventListener("focus", (ev) => show(ev));
+      arc.addEventListener("pointerleave", hideTip);
+      arc.addEventListener("blur", hideTip);
+      if (!s.isOther) arc.addEventListener("click", () => toggleSelect(dim, s.key));
+      svg.append(arc);
+      off += len;
+    }
+    const t1 = svgEl("text", { x: 100, y: 92, "text-anchor": "middle", fill: "var(--muted)", "font-size": 12 }); t1.textContent = "I alt";
+    const t2 = svgEl("text", { x: 100, y: 116, "text-anchor": "middle", fill: "var(--ink)", "font-size": 20, "font-weight": 650 }); t2.textContent = kr.format(total);
+    svg.append(t1, t2);
+
+    const legend = $("legend"); legend.replaceChildren();
+    segs.forEach((s) => legend.append(el("span", {}, el("i", { class: "dot", style: `background:${s.color}` }), s.key)));
+
+    // ranked list
+    const rows = $("rows"); rows.replaceChildren();
+    if (!items.length) { rows.append(el("div", { class: "empty", text: "Intet forbrug i perioden" })); return; }
+    const max = items[0].total;
+    const LIMIT = 12;
+    (state.showAll ? items : items.slice(0, LIMIT)).forEach((x) => {
+      const sel = state.selected && state.selected.dim === dim && state.selected.key === x.key;
+      const sub = dim === "category" ? x.group : dim === "merchant" ? `${x.n} ${x.n === 1 ? "postering" : "posteringer"}` : "";
+      rows.append(el("button", { class: "row", "aria-pressed": String(!!sel), onclick: () => toggleSelect(dim, x.key) },
+        el("span", { class: "nm" }, el("i", { class: "dot", style: `background:${colorOf(dim, x.key)}` }), el("b", { text: x.key }), sub && sub !== x.key ? el("small", { text: "· " + sub }) : null),
+        el("span", { class: "amt", text: kr2.format(x.total) }),
+        el("span", { class: "pct", text: pctFmt.format(x.total / total) }),
+        el("span", { class: "bar" }, el("i", { style: `width:${(x.total / max) * 100}%;background:${colorOf(dim, x.key)}` }))));
+    });
+    if (items.length > LIMIT) {
+      const more = el("button", { class: "more", text: state.showAll ? "Vis færre" : `Vis alle ${items.length}`, onclick: () => { state.showAll = !state.showAll; render(); } });
+      rows.append(more);
+    }
+  }
+
+  function renderTrend() {
+    const svg = $("trend"); svg.replaceChildren();
+    const W = svg.clientWidth || 800, H = 260, padL = 52, padR = 8, padT = 12, padB = 26;
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+    const [pa, pb] = periodRange();
+    // context window: the 12 months ending with the later of the period end and today;
+    // long periods (> 2 years) switch to one column per year
+    const end = pb > TODAY_KEY ? pb : TODAY_KEY;
+    const start = [addMonths(end, -11), FIRST_KEY].sort().pop();
+    const months = monthsBetween(start < pa ? start : pa, end);
+    const yearly = months.length > 24;
+    const buckets = yearly
+      ? [...new Set(months.map((m) => m.slice(0, 4)))].map((y) => ({ key: y, label: y, long: y, inRange: y >= pa.slice(0, 4) && y <= pb.slice(0, 4) }))
+      : months.map((m, i) => ({ key: m, label: MONTHS[Number(m.slice(5)) - 1] + (m.endsWith("-01") || i === 0 ? ` ${m.slice(2, 4)}` : ""), long: monthName(m, true), inRange: m >= pa && m <= pb }));
+
+    const sel = state.selected;
+    let series;
+    if (sel) {
+      series = [{ key: sel.key, color: colorOf(sel.dim, sel.key), match: (t) => t[sel.dim] === sel.key }];
+      $("trendTitle").textContent = `Udvikling pr. ${yearly ? "år" : "måned"} · ${sel.key}`;
+    } else {
+      const groups = breakdown(DATA, "group").map((g) => g.key);
+      series = groups.map((g) => ({ key: g, color: colorOf("group", g), match: (t) => t.group === g }));
+      $("trendTitle").textContent = `Udvikling pr. ${yearly ? "år" : "måned"}`;
+    }
+    const tl = $("trendLegend"); tl.replaceChildren();
+    if (series.length > 1) series.forEach((s) => tl.append(el("span", {}, el("i", { class: "dot", style: `background:${s.color}` }), s.key)));
+
+    // per bucket net per series (<=0 counts as 0 so stacks stay honest)
+    const vals = buckets.map((b) => series.map((s) => {
+      const v = DATA.filter((t) => t.spend && t.ym.startsWith(b.key) && s.match(t)).reduce((acc, t) => acc + t.amount, 0);
+      return Math.max(v, 0);
+    }));
+    const totals = vals.map((v) => v.reduce((a, b) => a + b, 0));
+    const maxV = Math.max(...totals, 1);
+    const step = niceStep(maxV / 4);
+    const top = Math.ceil(maxV / step) * step;
+    const y = (v) => padT + (H - padT - padB) * (1 - v / top);
+
+    for (let v = 0; v <= top + 0.001; v += step) {
+      svg.append(svgEl("line", { x1: padL, x2: W - padR, y1: y(v), y2: y(v), stroke: v === 0 ? "var(--axis)" : "var(--grid)", "stroke-width": 1 }));
+      const tx = svgEl("text", { x: padL - 8, y: y(v) + 4, "text-anchor": "end" }); tx.textContent = new Intl.NumberFormat("da-DK").format(v); svg.append(tx);
+    }
+    const band = (W - padL - padR) / buckets.length;
+    const bw = Math.min(24, band * 0.6);
+    buckets.forEach((b, i) => {
+      const cx = padL + band * i + band / 2;
+      const g = svgEl("g", { class: "col", opacity: b.inRange ? 1 : 0.35, tabindex: 0, role: "button", "aria-label": `${b.long}: ${kr.format(totals[i])}` });
+      g.append(svgEl("rect", { x: padL + band * i, y: padT, width: band, height: H - padT - padB, fill: state.txMonth === b.key ? "var(--wash)" : "transparent" }));
+      let acc = 0;
+      const nonZero = vals[i].map((v, j) => [v, j]).filter(([v]) => v > 0);
+      nonZero.forEach(([v, j], idx) => {
+        const y0 = y(acc), y1 = y(acc + v);
+        const isTop = idx === nonZero.length - 1;
+        const hgt = Math.max(y0 - y1 - (idx > 0 ? 2 : 0), 0.5);
+        g.append(svgEl("path", { d: roundedTop(cx - bw / 2, y1, bw, hgt, isTop ? Math.min(4, hgt) : 0), fill: series[j].color }));
+        acc += v;
+      });
+      const lab = svgEl("text", { x: cx, y: H - 8, "text-anchor": "middle" });
+      lab.textContent = b.label;
+      g.append(lab);
+      const show = (ev) => showTip(ev, b.long, series.map((s, j) => [s.color, s.key, kr.format(vals[i][j])]), series.length > 1 ? kr.format(totals[i]) : null);
+      g.addEventListener("pointermove", show);
+      g.addEventListener("focus", show);
+      g.addEventListener("pointerleave", hideTip);
+      g.addEventListener("blur", hideTip);
+      g.addEventListener("click", () => { state.txMonth = state.txMonth === b.key ? null : b.key; state.showAllTx = false; render(); });
+      g.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); g.dispatchEvent(new Event("click")); } });
+      svg.append(g);
+    });
+  }
+  function roundedTop(x, y, w, h, r) {
+    return `M${x},${y + h} V${y + r} Q${x},${y} ${x + r},${y} H${x + w - r} Q${x + w},${y} ${x + w},${y + r} V${y + h} Z`;
+  }
+  function niceStep(raw) {
+    const p = Math.pow(10, Math.floor(Math.log10(raw)));
+    for (const m of [1, 2, 2.5, 5, 10]) if (raw <= m * p) return m * p;
+    return 10 * p;
+  }
+
+  function renderTable(inPeriod) {
+    let rows = state.txMonth ? DATA.filter((t) => t.ym.startsWith(state.txMonth)) : inPeriod;
+    const sel = state.selected;
+    if (sel) rows = rows.filter((t) => t[sel.dim] === sel.key);
+    rows = rows.filter((t) => t.spend).sort((a, b) => b.date.localeCompare(a.date));
+
+    const tags = $("tags"); tags.replaceChildren();
+    const tag = (label, onClear) => tags.append(el("span", { class: "tag" }, label, el("button", { "aria-label": `Fjern filter ${label}`, onclick: onClear, text: "×" })));
+    if (state.txMonth) tag(state.txMonth.length === 4 ? state.txMonth : monthName(state.txMonth, true), () => { state.txMonth = null; render(); });
+    if (sel) tag(sel.key, () => { state.selected = null; render(); });
+
+    const body = $("tbody"); body.replaceChildren();
+    const LIMIT = 40;
+    (state.showAllTx ? rows : rows.slice(0, LIMIT)).forEach((t) => {
+      const [yy, mm, dd] = t.date.split("-");
+      body.append(el("tr", {},
+        el("td", { class: "num", style: "text-align:left", text: `${dd}.${mm}.${yy.slice(2)}` }),
+        el("td", { text: t.name }),
+        el("td", { class: "hide-sm" }, el("span", { class: "cat" }, el("i", { class: "dot", style: `background:${colorOf("category", t.category)}` }), t.category)),
+        el("td", { class: "hide-sm", style: "color:var(--ink-2)", text: t.account }),
+        el("td", { class: "num" + (t.amount < 0 ? " neg" : ""), text: kr2.format(-t.amount) })));
+    });
+    if (!rows.length) body.append(el("tr", {}, el("td", { colspan: 5, class: "empty", text: "Ingen posteringer" })));
+    const more = $("moreTx");
+    more.hidden = rows.length <= LIMIT;
+    more.textContent = state.showAllTx ? "Vis færre" : `Vis alle ${rows.length}`;
+  }
+
+  function toggleSelect(dim, key) {
+    state.selected = state.selected && state.selected.dim === dim && state.selected.key === key ? null : { dim, key };
+    state.showAllTx = false;
+    render();
+  }
+
+  // ---------- tooltip ----------
+  const tip = $("tip");
+  function showTip(ev, head, lines, total) {
+    tip.replaceChildren(el("div", { class: "t-head", text: head }));
+    for (const [color, label, value] of lines) {
+      tip.append(el("div", { class: "t-row" }, el("i", { style: `background:${color}` }), el("span", { text: label }), el("b", { text: value })));
+    }
+    if (total) tip.append(el("div", { class: "t-total" }, el("span", { text: "I alt" }), el("b", { text: total })));
+    let x, yPos;
+    if (ev.clientX != null && ev.type !== "focus") { x = ev.clientX; yPos = ev.clientY; }
+    else { const r = ev.target.getBoundingClientRect(); x = r.left + r.width / 2; yPos = r.top; }
+    tip.style.opacity = 1;
+    const w = tip.offsetWidth, h = tip.offsetHeight;
+    tip.style.left = Math.min(Math.max(8, x + 14), innerWidth - w - 8) + "px";
+    tip.style.top = Math.min(Math.max(8, yPos - h - 12), innerHeight - h - 8) + "px";
+  }
+  function hideTip() { tip.style.opacity = 0; }
+
+  // ---------- controls ----------
+  const PRESETS = [["month", "Måned"], ["movein", "Siden flytning"], ["ytd", "År til dato"], ["12m", "12 mdr."], ["all", "Alt"]];
+  PRESETS.forEach(([p, label]) => $("presets").append(el("button", { "data-p": p, text: label, onclick: () => { state.preset = p; state.txMonth = null; state.showAll = false; render(); } })));
+  [["group", "Grupper"], ["category", "Kategorier"], ["merchant", "Modtagere"]].forEach(([d, label]) =>
+    $("dims").append(el("button", { "data-d": d, text: label, onclick: () => { state.dim = d; state.showAll = false; if (state.selected && state.selected.dim !== d) state.selected = null; render(); } })));
+  $("prev").addEventListener("click", () => { state.month = addMonths(state.month, -1); state.txMonth = null; render(); });
+  $("next").addEventListener("click", () => { state.month = addMonths(state.month, 1); state.txMonth = null; render(); });
+  $("moreTx").addEventListener("click", () => { state.showAllTx = !state.showAllTx; render(); });
+  let rz; addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(renderTrend, 120); });
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);
+
+  // ---------- load ----------
+  Promise.all([
+    fetch("data.json", { cache: "no-store" }).then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); }),
+    // personal settings (move-in month, payee names) - optional, see config.example.json
+    fetch("config.json", { cache: "no-store" }).then((r) => (r.ok ? r.json() : {})).catch(() => ({})),
+  ]).then(([d, cfg]) => {
+    MOVE_IN = cfg.flytning || null;
+    CHAINS = (cfg.modtagere || []).map(([re, label]) => [new RegExp(re, "i"), label]);
+    if (!MOVE_IN) $("presets").querySelector('[data-p="movein"]').remove();
+    DATA = d.transactions.map((t) => {
+      const amount = Number(t.amount);
+      const group = t.group || UNCAT;
+      const category = t.category || UNCAT;
+      // spend = everything outside income and savings; uncategorised only counts outgoing money
+      const spend = group !== INCOME_GROUP && group !== SAVINGS_GROUP && (category !== UNCAT || amount > 0);
+      return { ...t, amount, group, category, ym: ym(t.date), spend, merchant: payee(t) };
+    });
+    const now = new Date();
+    TODAY_KEY = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    FIRST_KEY = DATA.length ? DATA[0].ym : TODAY_KEY;
+    LAST_KEY = DATA.reduce((m, t) => (t.ym > m ? t.ym : m), TODAY_KEY);
+    state.month = TODAY_KEY;
+    assignSlots();
+
+    const fmt = (s) => s ? new Date(s).toLocaleString("da-DK", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "–";
+    $("meta").replaceChildren(`Bank synkroniseret ${fmt(d.last_sync)} · data hentet ${fmt(d.generated_at)} · `, el("a", { href: "/", text: "Åbn Sure" }));
+    render();
+  }).catch((e) => {
+    $("tiles").replaceChildren(el("div", { class: "card tile", style: "grid-column:1/-1" }, el("div", { class: "label", text: "Kunne ikke hente data.json" }), el("div", { class: "sub", text: String(e) })));
+  });
+})();
+</script>
+</body>
+</html>

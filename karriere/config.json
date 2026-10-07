@@ -1,0 +1,33 @@
+{
+  "_note": "Ord matches fra ordstart ('data' rammer 'dataanalyse'); ord på 1-3 tegn skal være hele ord. geoareaid 1 = Region Hovedstaden. employment_type 3 = Studiejob, 6 = Praktikplads (Jobindex' egne filtre). fritekst_soegninger: ekstra søgninger, der fanger studiejob uden Jobindex' mærke; kun opslag med studiejob/praktik i titlen beholdes. max_uafklarede_i_kompas: Kompas viser højst så mange uafklarede opslag; dem med lavest score skjules (ligger stadig under Alle).",
+  "geoareaid": [1],
+  "employment_types": {"3": "Studiejob", "6": "Praktik"},
+  "max_sider_pr_soegning": 50,
+  "fritekst_soegninger": ["studentermedhjælper", "studentermedarbejder", "student assistant", "working student",
+                          "studiejob", "praktikant", "internship"],
+  "max_sider_pr_fritekst": 20,
+  "max_nye_pr_koersel": 30,
+  "min_forfilter_score": 4,
+  "match_taerskel": 70,
+  "max_uafklarede_i_kompas": 50,
+
+  "positive_ord": {
+    "3": ["data", "analyst", "analytiker", "analyse", "excel", "power bi", "powerbi", "sql", "python",
+          "rapportering", "reporting", "controlling", "controller", "business intelligence", "bi",
+          "dashboard", "automatisering", "automation", "proces", "process"],
+    "2": ["økonomi", "finance", "finans", "regnskab", "accounting", "bogholder", "budget",
+          "it-support", "it support", "servicedesk", "helpdesk", "erp", "sap", "dynamics", "crm",
+          "business", "forretning", "operations", "drift", "administration", "sagsbehandl",
+          "pension", "forsikring", "bank", "revision", "audit", "konsulent", "consult",
+          "digitalisering", "digital", "system", "projektkoordinator", "pmo", "strategi"],
+    "1": ["studentermedhjælp", "student assistant", "studiejob", "praktikant", "internship", "praktik", "erhvervsøkonomi",
+          "cand.merc", "it", "support", "kontor", "office"]
+  },
+  "positive_kategorier": ["Økonomi og regnskab", "Finans og forsikring", "IT", "Kontor og administration",
+                          "Ledelse og personale", "Handel og service"],
+  "negative_ord": ["lektiehjælp", "lager", "pædagog", "sygeplej", "laborant", "laboratory", "chauffør",
+                   "rengøring", "tjener", "kok", "opvask", "bartender", "lærervikar", "medicinstuderende",
+                   "jurastuderende", "jurist", "advokatfuldmægtig", "farmaceut", "tandlæge", "fysioterapeut",
+                   "psykologistuderende", "ingeniørstuderende", "kemi", "biolog", "telefonsalg", "dørsalg",
+                   "fundraiser", "hjemmehjælp", "handicaphjælper", "barnepige", "babysitter", "finansbachelor", "ulønnet", "frivillig"]
+}

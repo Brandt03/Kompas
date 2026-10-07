@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Studie · Genkald</title>
+<!-- Studieprojektets træningsside i Kompas (https://kompas.localhost/studie/genkald.html). Kopieres af
+     Scripts/kompas-eksport.js. Læser og skriver dit arbejde gennem Scripts/kompas-server.js (/studie/api/).
+     Reglen fra CLAUDE.md gælder her: facit vises først efter dit forsøg, og siden udfylder aldrig noget selv. -->
+<link rel="stylesheet" href="/kompas/assets/tokens.css">
+<link rel="stylesheet" href="/kompas/assets/page.css">
+<style>
+  .btn { display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: 13px; font-weight: 500; line-height: 1; padding: 9px 13px; border-radius: 8px; border: 0; cursor: pointer; background: var(--nav-indicator); color: var(--container); text-decoration: none; }
+  .btn:hover { opacity: .88; } .btn:disabled { opacity: .45; cursor: default; }
+  .btn.ghost { background: var(--container); color: var(--text-primary); box-shadow: var(--shadow-border-xs); }
+  .btn.ghost:hover { background: var(--container-hover); opacity: 1; }
+  .btn.quiet { background: none; color: var(--text-secondary); padding: 9px 8px; }
+  .btn.quiet:hover { color: var(--text-primary); background: var(--surface-hover); opacity: 1; }
+  .btn.m-sad { background: var(--success-tint); color: var(--success); } .btn.m-halvt { background: var(--warning-tint); color: var(--warning); } .btn.m-blankt { background: var(--destructive-tint); color: var(--destructive); }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .spacer { flex: 1; }
+  .bar { display: flex; gap: 10px 14px; align-items: center; flex-wrap: wrap; margin-bottom: 4px; }
+  select { font: inherit; font-size: 13px; color: var(--text-primary); background: var(--container); border: 0; box-shadow: var(--shadow-border-xs); border-radius: 8px; padding: 7px 9px; }
+  textarea, input.gaet { width: 100%; font: inherit; font-size: 14px; line-height: 1.55; color: var(--text-primary); background: var(--container-inset); border: 0; box-shadow: inset 0 0 0 1px var(--divider); border-radius: 10px; padding: 11px 13px; }
+  textarea { min-height: 140px; resize: vertical; }
+  textarea:focus, input.gaet:focus { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+  .q { padding: 22px 24px; display: grid; gap: 14px; }
+  .q .kicker { color: var(--text-secondary); font-size: 12.5px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .q .spm { font-size: 15.5px; line-height: 1.6; color: var(--text-primary); }
+  .q .spm p { margin: 0 0 8px; } .q .spm p:last-child { margin: 0; }
+  .facit { border-radius: 10px; padding: 14px 16px; background: var(--success-tint); }
+  .facit .lbl, .forrige .lbl { font-size: 12px; font-weight: 600; color: var(--success); margin-bottom: 6px; }
+  .facit .md { color: var(--text-primary); }
+  .forrige { border-radius: 10px; padding: 12px 14px; background: var(--container-inset); font-size: 13.5px; color: var(--text-secondary); white-space: pre-wrap; }
+  .forrige .lbl { color: var(--text-secondary); }
+  .begreb { font-size: 26px; font-weight: 600; letter-spacing: -0.02em; }
+  .liste { display: grid; gap: 2px; }
+  .li { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 7px 8px; border-radius: 8px; cursor: pointer; font-size: 13.5px; border: 0; background: none; text-align: left; font: inherit; color: inherit; width: 100%; }
+  .li:hover { background: var(--surface-hover); }
+  .li[aria-current="true"] { background: var(--container-inset); box-shadow: inset 0 0 0 1px var(--divider); }
+  .li .n { color: var(--text-subdued); font-variant-numeric: tabular-nums; }
+  .li .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-secondary); }
+  .mk { display: inline-grid; place-items: center; min-width: 26px; height: 22px; border-radius: 6px; font-size: 12px; font-weight: 600; background: var(--surface-inset); color: var(--text-subdued); }
+  .mk.sad { background: var(--success-tint); color: var(--success); } .mk.halvt { background: var(--warning-tint); color: var(--warning); } .mk.blankt { background: var(--destructive-tint); color: var(--destructive); }
+  .grp { font-size: 12px; font-weight: 500; color: var(--text-secondary); margin: 12px 8px 4px; }
+  .drill { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 34%); gap: 10px 16px; padding: 12px 0; border-top: 1px solid var(--divider); align-items: start; }
+  .drill:first-child { border-top: 0; }
+  .drill .d { font-size: 13.5px; font-weight: 500; margin-bottom: 6px; }
+  .drill pre { margin: 0; font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--container-inset); padding: 8px 10px; border-radius: 8px; overflow-x: auto; white-space: pre; }
+  .drill form { display: grid; gap: 6px; }
+  input.gaet { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; padding: 8px 10px; }
+  .res { font-size: 12.5px; line-height: 1.45; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; }
+  .res.ok { color: var(--success); } .res.nej { color: var(--destructive); }
+  .hvorfor { font-size: 13px; line-height: 1.5; color: var(--text-secondary); } .hvorfor p { margin: 0; }
+  .hint { color: var(--text-subdued); font-size: 12.5px; line-height: 1.5; }
+  .skjult { filter: blur(6px); user-select: none; pointer-events: none; }
+  #toast { position: fixed; left: 50%; bottom: 20px; transform: translate(-50%, 20px); opacity: 0; transition: .15s; z-index: 50; background: var(--nav-indicator); color: var(--container); border-radius: 10px; padding: 10px 14px; font-size: 13.5px; pointer-events: none; }
+  #toast.vis { opacity: 1; transform: translate(-50%, 0); }
+  @media (max-width: 760px) { .drill { grid-template-columns: minmax(0, 1fr); } .q { padding: 18px 16px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="page">
+    <div>
+      <h1>Genkald</h1>
+      <p class="sub" id="sub">Svar fra hukommelsen først. Facit kommer bagefter.</p>
+    </div>
+    <div class="seg" role="tablist" aria-label="Vælg" id="faner">
+      <button type="button" data-fane="idag" aria-pressed="true">Dagens kort</button>
+      <button type="button" data-fane="genkald" aria-pressed="false">Genkald</button>
+      <button type="button" data-fane="begreber" aria-pressed="false">Begreber</button>
+      <button type="button" data-fane="drills" aria-pressed="false">Drills</button>
+      <button type="button" data-fane="oevelser" aria-pressed="false">Øvelser</button>
+    </div>
+  </header>
+  <div class="stack" id="root"><div class="card empty">Henter …</div></div>
+</div>
+<div id="toast" role="status"></div>
+
+<script src="/kompas/assets/icons.js"></script>
+<script src="/kompas/assets/liv.js"></script>
+<script src="/kompas/assets/md.js"></script>
+<script src="studie.js"></script>
+<script>
+const API = "/studie/api";
+const MK = { "✓": "sad", "~": "halvt", "✗": "blankt" };
+const FAGNAVN = { alfa: "Alfa", beta: "Beta", gamma: "Gamma" };
+let fane = (location.hash.slice(1) || "idag"), G = null, B = null, D = null, S = null, R = null;
+let rCur = null, rVist = false, rSik = null, rSvar = null, gSik = null;
+// Kalibrering: vælg hvor sikker du er, før svaret vises
+const SIK = [["sikker", "Sikker"], ["usikker", "Usikker"], ["gaet", "Gætter / kan ikke"]];
+const sikKnapper = (kræverTekst) => `<div class="row"><span class="meta">Hvor sikker er du?</span>${SIK.map(([k, t], i) =>
+  `<button type="button" class="btn${i ? " ghost" : ""}" data-sik="${k}"${kræverTekst && k !== "gaet" ? " data-krav" : ""}>${t}</button>`).join("")}<span class="spacer"></span><span class="meta">så vises svaret</span></div>`;
+let gFag = "alfa", gFil = "alle", gCur = null, gVist = false, gFacit = null;
+let bFag = "alfa", bTilstand = "udfyld", bCur = null, bVist = false, bRet = null;  // bRet: et udfyldt begreb, du retter
+let dKap = 0, dKunTomme = false, oUge = null;
+try { const x = JSON.parse(localStorage.getItem("genkald-valg") || "{}"); ({ gFag = gFag, bFag = bFag, dKap = dKap } = x); } catch (e) {}
+const huskValg = () => { try { localStorage.setItem("genkald-valg", JSON.stringify({ gFag, bFag, dKap })); } catch (e) {} };
+const kladde = { hent: k => { try { return localStorage.getItem("kladde:" + k) || ""; } catch (e) { return ""; } },
+  gem: (k, v) => { try { v ? localStorage.setItem("kladde:" + k, v) : localStorage.removeItem("kladde:" + k); } catch (e) {} } };
+
+async function hent(sti) { const r = await fetch(API + sti, { cache: "no-store" }); if (!r.ok) throw new Error(`svarede ${r.status}`); return r.json(); }
+async function post(sti, krop) {
+  const r = await fetch(API + sti, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(krop) });
+  const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.fejl || `svarede ${r.status}`); return d;
+}
+let tt; function toast(t) { const el = document.getElementById("toast"); el.textContent = t; el.classList.add("vis"); clearTimeout(tt); tt = setTimeout(() => el.classList.remove("vis"), 3500); }
+const fejlkort = e => `<div class="card empty">Genkald-serveren svarer ikke (${esc(e.message)}).<br>Den kører normalt altid i baggrunden. Se <code>~/.kompas/studie-server.log</code>, eller genstart den: <code>launchctl kickstart -k gui/$(id -u)/local.kompas.studie</code></div>`;
+const root = () => document.getElementById("root");
+
+// ── Dagens kort (spaced repetition på tværs af genkald, begreber og drills) ──
+const TYPENAVN = { genkald: "Genkald", begreb: "Begreb", drill: "Drill", eksamen: "Eksamen" };
+const pct = (a, b) => b ? Math.round(100 * a / b) : 0;
+function rNulstil() { rVist = false; rSik = null; rSvar = null; }
+function kalibrering(k) {
+  const rows = SIK.filter(([s]) => k[s]?.n).map(([s, t]) => `<div class="row" style="gap:10px"><span style="width:120px">${t}</span>
+    <span class="meter" style="flex:1;height:8px;border-radius:4px;background:var(--surface-inset);overflow:hidden"><i style="display:block;height:100%;width:${pct(k[s].sad, k[s].n)}%;background:var(--mark)"></i></span>
+    <span class="meta" style="width:130px;text-align:right">${pct(k[s].sad, k[s].n)} % sad · ${k[s].n} kort</span></div>`).join("");
+  if (!rows) return `<p class="meta" style="margin:0">Når du har svaret på nogle kort, kan du her se, hvor tit du har ret, når du er sikker. Det er målet: at "sikker" betyder sikker.</p>`;
+  const s = k.sikker, over = s?.n >= 5 && pct(s.sad, s.n) < 75;
+  return `<div style="display:grid;gap:8px">${rows}</div>${over ? `<p class="meta" style="margin:10px 0 0;color:var(--warning)">Når du er sikker, sidder det kun ${pct(s.sad, s.n)} % af gangene. Brug fejlene til at finde de emner, hvor du overvurderer dig selv.</p>` : ""}`;
+}
+function renderIdag() {
+  const st = R.statistik, k = R.kort[0];
+  const ialt = st.klaret_i_dag + R.kort.length;
+  if (k && rCur !== k.id) { rCur = k.id; rNulstil(); }
+  const typeChip = t => `<span class="mk" style="min-width:auto;padding:0 8px">${TYPENAVN[t]}</span>`;
+  root().innerHTML = `
+    <div class="bar"><span class="meta">${R.kort.length ? `<b style="color:var(--text-primary)">${R.kort.length} kort tilbage</b> i dag · ca. ${Math.max(1, Math.round(R.kort.length * 0.75))} min` : "Færdig for i dag"} · ${st.klaret_i_dag} klaret</span>
+      <span class="spacer"></span><span class="meta">${st.laert} af ${st.i_alt} kort sidder (✓ to gange i træk)</span></div>
+    <div class="meter" style="height:6px;border-radius:3px;background:var(--surface-inset);overflow:hidden;margin:-4px 0 4px"><i style="display:block;height:100%;width:${pct(st.klaret_i_dag, ialt)}%;background:var(--mark)"></i></div>
+    ${k ? `<section class="card q">
+      <div class="kicker">${typeChip(k.type)}<span>${esc(k.kicker)}</span>${k.ny ? `<span class="mk">ny</span>` : ""}</div>
+      ${k.type === "begreb" ? `<div class="begreb">${esc(k.titel)}</div>` : `<div class="d" style="font-weight:500">${esc(k.titel)}</div>`}
+      <div class="spm md">${md(k.spoergsmaal)}</div>
+      ${k.kontekst ? `<div class="meta" style="margin-bottom:-8px">Fra filen</div><pre style="margin:0;font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--container-inset);padding:10px 12px;border-radius:8px;overflow-x:auto">${esc(k.kontekst)}</pre>` : ""}
+      ${k.udtryk ? `<pre style="margin:0;font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--container-inset);padding:10px 12px;border-radius:8px;overflow-x:auto">${esc(k.udtryk)}</pre>` : ""}
+      <textarea id="r-svar" placeholder="${k.type === "drill" ? "Dit gæt …" : "Svar fra hukommelsen (eller sig det højt) …"}" style="min-height:${k.type === "drill" ? 60 : 110}px">${esc(kladde.hent("r:" + k.id))}</textarea>
+      ${rVist ? `<div class="facit"><div class="lbl">${k.type === "genkald" ? "Facit" : k.type === "begreb" ? "Din definition" : "JavaScript giver"}</div>
+          ${rSvar?.form === "md" ? `<div class="md">${md(rSvar.svar || "Der er ingen facit.")}</div>` : rSvar?.form === "kode" ? `<pre style="margin:0;font:13px ui-monospace,Menlo,monospace">${esc(rSvar.svar ?? "")}</pre>` : `<div>${esc(rSvar?.svar || "")}</div>`}
+          ${rSvar?.se ? `<div class="lbl" style="margin-top:10px">Hvad det får dig til at se</div><div>${esc(rSvar.se)}</div>` : ""}
+          ${rSvar?.forklaring ? `<div class="lbl" style="margin-top:10px">Hvorfor</div><div class="md">${md(rSvar.forklaring)}</div>` : ""}</div>
+        <div class="row"><span class="meta">Hvordan gik det?</span>${k.type === "drill"
+          ? `<button type="button" class="btn m-sad" data-rmark="sad">✓ Rigtigt</button><button type="button" class="btn m-blankt" data-rmark="blankt">✗ Forkert</button>`
+          : `<button type="button" class="btn m-sad" data-rmark="sad">✓ Sad</button><button type="button" class="btn m-halvt" data-rmark="halvt">~ Halvt</button><button type="button" class="btn m-blankt" data-rmark="blankt">✗ Blankt</button>`}
+          <span class="spacer"></span><span class="meta">du sagde: ${esc(SIK.find(([s]) => s === rSik)?.[1] || "")}</span></div>`
+      : `${sikKnapper(false)}<div class="row"><span class="spacer"></span><button type="button" class="btn quiet" id="r-spring">Tag den senere</button></div>`}
+    </section>` : `<div class="card empty">Du er igennem dagens kort.${st.naeste ? ` Næste kort kommer ${dayMonth(new Date(st.naeste))}.` : ""}<br>Vil du mere, så tag nye spørgsmål under Genkald eller skriv begreber under Begreber.</div>`}
+    ${st.nye_venter_paa_laesning ? `<a class="card panel" href="fag.html" style="display:flex;gap:12px;align-items:center;text-decoration:none;color:inherit">
+      <span class="mk" style="min-width:auto;padding:0 8px">${st.nye_venter_paa_laesning}</span>
+      <span style="flex:1">nye genkaldsspørgsmål venter, til du markerer deres uge som læst under <b>Fag → Styr på</b>.</span>${icon("arrow-right", 14)}</a>` : ""}
+    <section class="card panel"><div class="panel-head"><h2>Kalibrering</h2><span class="meta">hvor tit sad det, når du sagde …</span></div>${kalibrering(st.kalibrering)}</section>
+    <p class="hint">Kort, der sidder, kommer igen efter 3, 7, 21, 60 og 120 dage. Halvt: igen om 2 dage. Blankt eller forkert: i morgen. Drills er dem, du har gættet forkert på mindst én gang; begreber er dem, du selv har defineret. Op til 5 nye genkaldsspørgsmål om dagen.</p>`;
+  const ta = document.getElementById("r-svar");
+  if (ta) { ta.oninput = () => kladde.gem("r:" + k.id, ta.value); if (!rVist) ta.focus(); }
+}
+async function rVisSvar(sik) {
+  const k = R.kort[0];
+  try { rSvar = await hent(`/repetition/svar?noegle=${encodeURIComponent(k.id)}`); rSik = sik; rVist = true; renderIdag(); }
+  catch (e) { toast(`Kunne ikke hente svaret: ${e.message}`); }
+}
+async function rMarker(mark) {
+  const k = R.kort[0], svar = document.getElementById("r-svar")?.value || "";
+  try {
+    await post("/repetition", { noegle: k.id, mark, sikkerhed: rSik, svar: k.type === "genkald" ? svar : undefined });
+    kladde.gem("r:" + k.id, "");
+    R.kort.shift(); R.statistik.klaret_i_dag++;
+    const kal = R.statistik.kalibrering[rSik]; if (kal) { kal.n++; kal[mark]++; }
+    rNulstil(); rCur = null; renderIdag();
+    if (k.type === "genkald") G = null;
+    // Tom kø: hent igen, så "næste kort" og statistikken er rigtige
+    if (!R.kort.length) { try { R = await hent("/repetition"); renderIdag(); } catch (x) { /* beholder den lokale */ } }
+  } catch (e) { toast(`Kunne ikke gemme: ${e.message}`); }
+}
+
+// ── Genkald ────────────────────────────────────────────────────────
+// Rækkefølge: ikke forsøgt (i filens orden), så ✗, så ~, så ✓ — ældste forsøg først
+function gAlle() {
+  return G.filter(f => f.fag === gFag && (gFil === "alle" || f.fil === gFil))
+    .flatMap(f => f.spoergsmaal.map(q => ({ ...q, fil: f.fil, fag: f.fag, uger: f.uger, har_facit: f.har_facit })));
+}
+const vægt = { null: 0, "✗": 1, "~": 2, "✓": 3 };
+function gNaeste(efter) {
+  const qs = gAlle().filter(q => !efter || !(q.fil === efter.fil && q.nr === efter.nr));
+  return qs.sort((a, b) => vægt[a.mark] - vægt[b.mark] || (a.mark ? String(a.sidst || a.dato || "").localeCompare(String(b.sidst || b.dato || "")) : 0))[0] || null;
+}
+function renderGenkald() {
+  if (!G.length) { root().innerHTML = `<div class="card empty">Der er ingen genkaldsfiler endnu.</div>`; return; }
+  const filer = G.filter(f => f.fag === gFag), qs = gAlle();
+  if (!gCur || !qs.find(q => q.fil === gCur.fil && q.nr === gCur.nr)) { gCur = gNaeste(); gVist = false; gFacit = null; }
+  const q = gCur && qs.find(x => x.fil === gCur.fil && x.nr === gCur.nr);
+  const n = { sad: 0, halvt: 0, blankt: 0 }; qs.forEach(x => x.mark && n[MK[x.mark]]++);
+  const forsøgt = n.sad + n.halvt + n.blankt, k = q ? `${q.fag}/${q.fil}#${q.nr}` : "";
+  root().innerHTML = `
+    <div class="bar"><div class="seg" role="group" aria-label="Fag">${["alfa", "beta"].map(f => `<button type="button" data-gfag="${f}" aria-pressed="${f === gFag}">${FAGNAVN[f]}</button>`).join("")}</div>
+      <select id="gfil" aria-label="Fil"><option value="alle">Alle uger</option>${filer.map(f => `<option value="${esc(f.fil)}"${f.fil === gFil ? " selected" : ""}>${esc(f.uger)}</option>`).join("")}</select>
+      <span class="spacer"></span><span class="meta">${forsøgt} af ${qs.length} forsøgt · ${n.sad} sad · ${n.halvt} halvt · ${n.blankt} blankt</span></div>
+    ${q ? `<section class="card q">
+      <div class="kicker"><span>${esc(q.uger)} · ${esc(q.afsnit)}</span><span>spørgsmål ${q.nr}</span>${q.mark ? `<span class="mk ${MK[q.mark]}">${q.mark}</span>` : ""}</div>
+      <div class="spm md">${md(q.tekst)}</div>
+      ${q.svar ? `<details><summary>Dit forrige svar${q.dato ? ` (${esc(q.dato)})` : ""}</summary><div class="forrige">${esc(q.svar)}</div></details>` : ""}
+      <textarea id="svar" placeholder="Skriv dit svar fra hukommelsen, før du ser facit …">${esc(kladde.hent(k))}</textarea>
+      ${gVist ? `<div class="facit"><div class="lbl">Facit</div><div class="md">${gFacit ? md(gFacit) : "Der er ingen facit til dette spørgsmål."}</div></div>
+        <div class="row"><span class="meta">Hvordan gik det?</span><button type="button" class="btn m-sad" data-mark="sad">✓ Sad</button><button type="button" class="btn m-halvt" data-mark="halvt">~ Halvt</button><button type="button" class="btn m-blankt" data-mark="blankt">✗ Blankt</button>
+          <span class="spacer"></span><span class="meta">gemmes i ${esc(q.fil)}</span></div>`
+      : `${sikKnapper(true)}<div class="row"><span class="spacer"></span><button type="button" class="btn quiet" id="spring">Spring over</button></div>`}
+    </section>` : `<div class="card empty">Ingen spørgsmål her.</div>`}
+    <section class="card panel"><div class="panel-head"><h2>Alle spørgsmål</h2><span class="meta">klik for at øve et bestemt</span></div>
+      <div class="liste">${filer.filter(f => gFil === "alle" || f.fil === gFil).map(f => `<div class="grp">${esc(f.titel)}</div>` + f.spoergsmaal.map(x =>
+        `<button type="button" class="li" data-fil="${esc(f.fil)}" data-nr="${x.nr}" aria-current="${q && q.fil === f.fil && q.nr === x.nr}"><span class="n">${x.nr}.</span><span class="t">${esc(x.tekst.replace(/[*_`]/g, "").split("\n")[0])}</span><span class="mk ${x.mark ? MK[x.mark] : ""}">${x.mark || "·"}</span></button>`).join("")).join("")}</div></section>`;
+  const ta = document.getElementById("svar");
+  // "Sikker" og "Usikker" kræver et svar; "Gætter / kan ikke" gør ikke
+  if (ta) { const opd = () => { kladde.gem(k, ta.value); document.querySelectorAll("[data-krav]").forEach(b => b.disabled = !ta.value.trim()); }; ta.oninput = opd; opd(); if (!gVist) ta.focus(); }
+}
+async function gVisFacit(sik) {
+  gSik = sik || null;
+  const r = await hent(`/facit?fag=${gCur.fag}&fil=${encodeURIComponent(gCur.fil)}&nr=${gCur.nr}`);
+  gFacit = r.facit; gVist = true; renderGenkald();
+}
+async function gMarker(mark) {
+  const k = `${gCur.fag}/${gCur.fil}#${gCur.nr}`, svar = document.getElementById("svar").value;
+  try {
+    await post("/genkald", { fag: gCur.fag, fil: gCur.fil, nr: gCur.nr, svar, mark, sikkerhed: gSik });
+    R = null;
+    kladde.gem(k, "");
+    const forrige = gCur; G = await hent("/genkald");
+    gCur = gNaeste(forrige); gVist = false; gFacit = null; renderGenkald();
+    toast(`Gemt i ${forrige.fil}`);
+  } catch (e) { toast(`Kunne ikke gemme: ${e.message}`); }
+}
+
+// ── Begreber ───────────────────────────────────────────────────────
+function renderBegreber() {
+  const alle = (B[bFag]?.begreber || []), tomme = alle.filter(b => !b.definition), fyldte = alle.filter(b => b.definition);
+  const kandidater = bTilstand === "udfyld" ? [...alle.filter(b => b.begreb === bRet), ...tomme] : [...fyldte].sort((a, b) => String(a.sidst || "").localeCompare(String(b.sidst || "")));
+  if (!bCur || !kandidater.find(b => b.begreb === bCur)) { bCur = kandidater[0]?.begreb || null; bVist = false; }
+  const b = alle.find(x => x.begreb === bCur), se = B[bFag]?.hoved_se, k = `begreb:${bFag}:${bCur}`;
+  root().innerHTML = `
+    <div class="bar"><div class="seg" role="group" aria-label="Fag">${["alfa", "beta"].map(f => `<button type="button" data-bfag="${f}" aria-pressed="${f === bFag}">${FAGNAVN[f]}</button>`).join("")}</div>
+      <div class="seg" role="group" aria-label="Tilstand"><button type="button" data-btil="udfyld" aria-pressed="${bTilstand === "udfyld"}">Udfyld (${tomme.length})</button><button type="button" data-btil="overhoer" aria-pressed="${bTilstand === "overhoer"}">Overhør (${fyldte.length})</button></div>
+      <span class="spacer"></span><span class="meta">${fyldte.length} af ${alle.length} skrevet i dine egne ord</span></div>
+    ${b ? `<section class="card q">
+      <div class="kicker"><span>${esc(b.afsnit)}</span>${b.kilde ? `<span>${/^\d/.test(b.kilde) ? "s. " : ""}${esc(b.kilde)}</span>` : ""}</div>
+      <div class="begreb">${esc(b.begreb)}</div>
+      ${bTilstand === "udfyld" ? `
+        <p class="hint" style="margin:0">Slå det gerne op først, men luk bogen, før du skriver. Én til tre sætninger med dine egne ord${se ? ", og hvad begrebet får dig til at se i en konkret organisation" : " og hvor det gør en forskel"}.</p>
+        <textarea id="def" placeholder="Din definition …" style="min-height:100px">${esc(kladde.hent(k + ":def"))}</textarea>
+        ${se ? `<textarea id="se" placeholder="Hvad det får dig til at se …" style="min-height:80px">${esc(kladde.hent(k + ":se"))}</textarea>` : ""}
+        <div class="row"><button type="button" class="btn" id="gem-b">${icon("check", 14)}Gem i begreber.md</button><span class="spacer"></span><button type="button" class="btn quiet" id="spring-b">Spring over</button></div>`
+      : `
+        <p class="hint" style="margin:0">Forklar begrebet for dig selv, højt eller på papir. Så se, hvad du skrev.</p>
+        ${bVist ? `<div class="facit"><div class="lbl">Din definition</div><div>${esc(b.definition)}</div>${b.se ? `<div class="lbl" style="margin-top:10px">Hvad det får dig til at se</div><div>${esc(b.se)}</div>` : ""}</div>
+          <div class="row"><button type="button" class="btn" id="naeste-b">Næste begreb</button><button type="button" class="btn quiet" id="ret-b">${icon("pencil", 14)}Ret definitionen</button></div>`
+        : `<div class="row"><button type="button" class="btn" id="vis-b">Vis min definition</button><span class="spacer"></span><button type="button" class="btn quiet" id="spring-b">Spring over</button></div>`}`}
+    </section>` : `<div class="card empty">${bTilstand === "udfyld" ? "Alle begreber er skrevet. Skift til Overhør." : "Du har ikke skrevet nogen definitioner endnu. Start i Udfyld."}</div>`}
+    <section class="card panel"><details><summary>Alle begreber i ${FAGNAVN[bFag]}</summary>
+      <div class="liste">${alle.map(x => `<button type="button" class="li" data-begreb="${esc(x.begreb)}" aria-current="${x.begreb === bCur}"><span class="mk ${x.definition ? "sad" : ""}">${x.definition ? "✓" : "·"}</span><span class="t">${esc(x.begreb)}${x.definition ? ` — ${esc(x.definition)}` : ""}</span><span class="n">${esc(x.kilde)}</span></button>`).join("")}</div></details></section>`;
+  const def = document.getElementById("def"), seEl = document.getElementById("se");
+  if (def) { def.oninput = () => kladde.gem(k + ":def", def.value); def.focus(); }
+  if (seEl) seEl.oninput = () => kladde.gem(k + ":se", seEl.value);
+}
+function bSpring() {
+  const alle = B[bFag].begreber, kand = bTilstand === "udfyld" ? alle.filter(b => !b.definition) : alle.filter(b => b.definition);
+  const i = kand.findIndex(b => b.begreb === bCur); bCur = kand[(i + 1) % kand.length]?.begreb; bVist = false; renderBegreber();
+}
+async function bGem() {
+  const def = document.getElementById("def").value.trim(), se = document.getElementById("se")?.value.trim();
+  if (!def) return toast("Skriv en definition først");
+  try {
+    await post("/begreb", { fag: bFag, begreb: bCur, definition: def, se: se ?? null });
+    const k = `begreb:${bFag}:${bCur}`; kladde.gem(k + ":def", ""); kladde.gem(k + ":se", "");
+    B = await hent("/begreber"); bCur = null; bRet = null; renderBegreber(); toast("Gemt i begreber.md");
+  } catch (e) { toast(`Kunne ikke gemme: ${e.message}`); }
+}
+
+// ── Drills ─────────────────────────────────────────────────────────
+function renderDrills() {
+  if (!D.length) { root().innerHTML = `<div class="card empty">Ingen drills fundet.</div>`; return; }
+  dKap = Math.min(dKap, D.length - 1);
+  const k = D[dKap], vs = t => `vscode://file${encodeURI(k.sti)}:${t}`;
+  const rækker = k.tjek.filter(t => !dKunTomme || t.status === "tom" || t.status === "forkert");
+  let sidst = null, sidstKontekst = null;
+  root().innerHTML = `
+    <div class="bar"><div class="seg" role="group" aria-label="Kapitel">${D.map((x, i) => `<button type="button" data-kap="${i}" aria-pressed="${i === dKap}">Kap. ${(x.fil.match(/kap0?(\d+)/) || [])[1]}</button>`).join("")}</div>
+      <label class="meta" style="display:inline-flex;gap:6px;align-items:center"><input type="checkbox" id="kun-tomme"${dKunTomme ? " checked" : ""}> kun ugættede og forkerte</label>
+      <span class="spacer"></span><span class="meta">${esc(k.opsum || "")}</span></div>
+    <section class="card panel"><div class="panel-head"><h2>${esc(k.titel)}</h2><a class="link" href="${vs(1)}">Åbn i VS Code ${icon("external-link", 13)}</a></div>
+      <p class="hint" style="margin:-4px 0 10px">Gæt først, hvad udtrykket giver, og skriv det som JavaScript: tekst i anførselstegn (<code>"number"</code>), tal som tal (<code>0.3</code>), og <code>NaN</code>, <code>undefined</code>, <code>true</code>, <code>[1, 2]</code> eller <code>{"a": 1}</code>. En fejl skrives som fejltypen, fx <code>TypeError</code>; beskeden behøver du ikke. Dit gæt skrives ind i filen i stedet for TOM, og så afgør JavaScript, om du havde ret.</p>
+      ${k.crash ? `<div class="banner warn" style="padding:0 0 12px"><span class="bi">${icon("activity", 16)}</span><div><div class="bl">Filen kan ikke køres lige nu</div><p class="res">${esc(k.crash)}</p></div></div>` : ""}
+      <div>${rækker.map(t => {
+        let grp = t.afsnit !== sidst ? `<div class="grp" style="margin-left:0">${esc(t.afsnit || "")}</div>` : ""; sidst = t.afsnit;
+        // Koden fra filen, udtrykket bruger (fx en funktion længere oppe); kun når den skifter fra tjekket før
+        if (t.kontekst && t.kontekst !== sidstKontekst) grp += `<div class="drill" style="grid-template-columns:minmax(0,1fr)"><div><div class="hint" style="margin-bottom:6px">Fra filen</div><pre>${esc(t.kontekst)}</pre></div></div>`;
+        sidstKontekst = t.kontekst || null;
+        if (t.status === "vscode") return grp + `<div class="drill"><div><div class="d">${esc(t.beskrivelse)}</div></div><div><a class="btn ghost" href="${vs(t.linje)}">Løs i VS Code</a></div></div>`;
+        const res = (t.status === "rigtig" ? `<div class="res ok">✓ rigtigt: ${esc(t.gaet)}</div>`
+          : t.status === "forkert" ? `<div class="res nej">✗ du gættede ${esc(t.gaet)}\n  JavaScript: ${esc(t.javascript)}</div>` : t.status === "ukendt" ? `<div class="res">gættet: ${esc(t.gaet)}</div>` : "")
+          + (t.forklaring ? `<div class="hvorfor md">${md(t.forklaring)}</div>` : "");
+        return grp + `<div class="drill" id="d-${t.linje}"><div><div class="d">${esc(t.beskrivelse)}</div><pre>${esc(t.udtryk)}</pre></div>
+          <form data-linje="${t.linje}">${res}${t.status === "rigtig" ? "" : `<div class="row" style="flex-wrap:nowrap"><input class="gaet" name="g" placeholder="${t.status === "forkert" ? "Prøv igen …" : "Dit gæt …"}" autocomplete="off" spellcheck="false"><button class="btn" type="submit">Tjek</button></div><div class="res nej" data-fejl></div>`}</form></div>`;
+      }).join("")}</div></section>
+    ${k.stubbe.length ? `<section class="card panel"><div class="panel-head"><h2>Skriv selv koden</h2><span class="meta">de her løses i VS Code</span></div>
+      <div class="liste">${k.stubbe.map(s => `<a class="li" href="${vs(s.linje)}" style="text-decoration:none"><span class="n">${icon("pencil", 14)}</span><span class="t" style="color:var(--text-primary)">${esc(s.navn)}()</span><span class="meta">linje ${s.linje}</span></a>`).join("")}</div></section>` : ""}`;
+}
+async function dTjek(form) {
+  const k = D[dKap], t = k.tjek.find(x => x.linje === +form.dataset.linje), g = form.g.value.trim(), f = form.querySelector("[data-fejl]");
+  if (!g) return;
+  form.querySelector("button").disabled = true;
+  try {
+    const r = await post("/drill", { fil: k.fil, linje: t.linje, beskrivelse: t.beskrivelse, gaet: g });
+    if (r.status === "ukendt") { f.textContent = r.fejl; form.querySelector("button").disabled = false; return; }
+    D = await hent("/drills"); renderDrills();
+    document.getElementById(`d-${t.linje}`)?.scrollIntoView({ block: "nearest" });
+    toast(r.status === "rigtig" ? "✓ Rigtigt" : `✗ JavaScript giver ${r.javascript}`);
+  } catch (e) { f.textContent = e.message; form.querySelector("button").disabled = false; }
+}
+
+// ── Øvelser fra ugeplanerne ────────────────────────────────────────
+function renderOevelser() {
+  const planer = S.planer.filter(p => Object.values(p.fag).some(f => f.oevelse) || p.genkaldelse?.svar);
+  if (!planer.length) { root().innerHTML = `<div class="card empty">Ugeplanerne har ingen øvelsesspørgsmål endnu.</div>`; return; }
+  const p = planer.find(x => x.uge === oUge) || planer.find(x => x.uge === S.aktuel_uge) || planer[planer.length - 1]; oUge = p.uge;
+  const blok = (titel, q, a, id) => `<section class="card panel"><div class="panel-head"><h2>${titel}</h2></div><div class="md">${q}</div>
+    <details style="margin-top:14px" data-svar="${id}"><summary>Vis svar – når du har svaret selv</summary><div class="md" style="margin-top:8px">${a}</div></details></section>`;
+  root().innerHTML = `
+    <div class="bar"><select id="ouge" aria-label="Uge">${planer.map(x => `<option value="${x.uge}"${x.uge === p.uge ? " selected" : ""}>Uge ${x.uge}</option>`).join("")}</select>
+      <span class="meta">Fra køreplanen. Svarene står også i ugeplanen; her er de skjult, til du beder om dem.</span></div>
+    ${Object.entries(p.fag).filter(([, f]) => f.oevelse).map(([id, f]) => blok(`${FAGNAVN[id]} · uge ${p.uge}`, f.oevelse.spoergsmaal, f.oevelse.svar, id)).join("")}
+    ${p.genkaldelse?.svar ? blok(esc(p.genkaldelse.titel), p.genkaldelse.spoergsmaal, p.genkaldelse.svar, "genkald") : ""}`;
+}
+
+// ── fælles ─────────────────────────────────────────────────────────
+async function vis() {
+  document.querySelectorAll("#faner button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.fane === fane)));
+  try {
+    if (fane === "idag") { root().innerHTML = R ? root().innerHTML : `<div class="card empty">Finder dagens kort …</div>`; R = R || await hent("/repetition"); renderIdag(); }
+    else if (fane === "genkald") { G = G || await hent("/genkald"); renderGenkald(); }
+    else if (fane === "begreber") { B = B || await hent("/begreber"); renderBegreber(); }
+    else if (fane === "drills") { root().innerHTML = D ? root().innerHTML : `<div class="card empty">Kører drills …</div>`; D = D || await hent("/drills"); renderDrills(); }
+    else { S = S || await loadStudie(); renderOevelser(); }
+  } catch (e) { root().innerHTML = fejlkort(e); }
+}
+document.getElementById("faner").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  fane = b.dataset.fane; history.replaceState(null, "", "#" + fane); vis();
+});
+root().addEventListener("click", e => {
+  const t = e.target.closest("button, [data-fil]"); if (!t) return;
+  if (t.dataset.gfag) { gFag = t.dataset.gfag; gFil = "alle"; gCur = null; huskValg(); renderGenkald(); }
+  else if (t.dataset.fil) { gCur = { fil: t.dataset.fil, nr: +t.dataset.nr }; gVist = false; gFacit = null; renderGenkald(); window.scrollTo({ top: 0, behavior: "smooth" }); }
+  else if (t.dataset.sik && fane === "genkald") gVisFacit(t.dataset.sik);
+  else if (t.dataset.sik && fane === "idag") rVisSvar(t.dataset.sik);
+  else if (t.dataset.rmark) rMarker(t.dataset.rmark);
+  else if (t.id === "r-spring") { R.kort.push(R.kort.shift()); rNulstil(); renderIdag(); }
+  else if (t.id === "spring") { gCur = gNaeste(gCur); gVist = false; gFacit = null; renderGenkald(); }
+  else if (t.dataset.mark) gMarker(t.dataset.mark);
+  else if (t.dataset.bfag) { bFag = t.dataset.bfag; bCur = null; huskValg(); renderBegreber(); }
+  else if (t.dataset.btil) { bTilstand = t.dataset.btil; bCur = null; bRet = null; renderBegreber(); }
+  else if (t.dataset.begreb != null) { const x = B[bFag].begreber.find(y => y.begreb === t.dataset.begreb); bTilstand = x.definition ? "overhoer" : "udfyld"; bCur = x.begreb; bVist = false; renderBegreber(); window.scrollTo({ top: 0, behavior: "smooth" }); }
+  else if (t.id === "gem-b") bGem();
+  else if (t.id === "spring-b" || t.id === "naeste-b") bSpring();
+  else if (t.id === "vis-b") { bVist = true; renderBegreber(); }
+  else if (t.id === "ret-b") { const x = B[bFag].begreber.find(y => y.begreb === bCur); kladde.gem(`begreb:${bFag}:${bCur}:def`, x.definition); if (x.se) kladde.gem(`begreb:${bFag}:${bCur}:se`, x.se); bRet = bCur; bTilstand = "udfyld"; renderBegreber(); }
+  else if (t.dataset.kap != null) { dKap = +t.dataset.kap; huskValg(); renderDrills(); }
+});
+root().addEventListener("change", e => {
+  if (e.target.id === "gfil") { gFil = e.target.value; gCur = null; renderGenkald(); }
+  if (e.target.id === "kun-tomme") { dKunTomme = e.target.checked; renderDrills(); }
+  if (e.target.id === "ouge") { oUge = +e.target.value; renderOevelser(); }
+});
+root().addEventListener("submit", e => { e.preventDefault(); dTjek(e.target); });
+root().addEventListener("keydown", e => {
+
+});
+window.addEventListener("hashchange", () => { fane = location.hash.slice(1) || "idag"; vis(); });
+vis();
+</script>
+</body>
+</html>

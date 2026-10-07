@@ -1,0 +1,14 @@
+# Demodata genereres af demo/lav.py ved hver start
+demo/ud/
+
+# Lokale ting, der aldrig skal med
+.env
+*.db
+*.pem
+*.log
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+node_modules/
+.DS_Store

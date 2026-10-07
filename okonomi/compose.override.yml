@@ -1,0 +1,10 @@
+# Local additions on top of compose.yml (Docker Compose merges this file automatically).
+services:
+  web:
+    volumes:
+      # "Forbrug", "Scenarier" and "SU-vagt" in Sure's left menu -> the /forbrug/ dashboard pages inside Sure's layout
+      - ./custom/dashboard_tabs.rb:/rails/config/initializers/zz_dashboard_tabs.rb:ro
+      # Settings those pages save (payslips, scenario inputs); Caddy serves them read-only at /forbrug/state/
+      - ./dashboard/public/state:/rails/custom_state
+      # Budget "over budget" noise on empty subcategories + Sankey node order (see the file header)
+      - ./custom/sure_tweaks.rb:/rails/config/initializers/zz_sure_tweaks.rb:ro
