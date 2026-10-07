@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Studie · Ugeoverblik</title>
 <!-- Studieprojektets side i Kompas (https://kompas.localhost/studie/). Kilde: Scripts/kompas/ i semestermappen,
-     kopieres af Scripts/kompas-eksport.js. Kalenderen kommer fra /form/liv.json (garmin-coach via livsoverblik),
+     kopieres af Scripts/kompas-eksport.js. Kalenderen kommer fra /form/liv.json (garmin-coach via overblik),
      ugeplanen og deadlines fra studie.json (køreplan-rutinen). -->
 <link rel="stylesheet" href="/kompas/assets/tokens.css">
 <link rel="stylesheet" href="/kompas/assets/page.css">
@@ -89,7 +89,7 @@ function render() {
   document.querySelector('.seg button[data-w="forrige"]').textContent = `Uge ${isoWeek(addDays(parseDate(thisMon), -7))}`;
   document.getElementById("sub").textContent = `Uge ${isoWeek(parseDate(monday))} · ${range(monday)}`;
   const kal = kalenderFor(monday);
-  if (!kal) { root.innerHTML = `<div class="card empty">Ingen kalender for uge ${isoWeek(parseDate(monday))} endnu. Kør <code>liv eksport</code> i livsoverblik.</div>`; return; }
+  if (!kal) { root.innerHTML = `<div class="card empty">Ingen kalender for uge ${isoWeek(parseDate(monday))} endnu. Kør <code>liv eksport</code> i overblik.</div>`; return; }
   const events = kal.map(parseEvent);
 
   // same colour for a course across all weeks

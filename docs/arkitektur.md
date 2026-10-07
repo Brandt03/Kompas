@@ -14,7 +14,7 @@ I dag           dagen på tværs: kalender, frister, form, fokus, Genkald og job
 Økonomi         Oversigt, Transaktioner, Rapporter, Plan (Sure)                       Sure (ikke i repoet)
                 Forbrug, Scenarier, SU-vagt                                           okonomi/
 Studie          Ugeoverblik, Fag, Deadlines, Genkald, Eksamen, På farten (telefon)    studie/
-Form & fokus    14-dages perioder, Ugen i tal, Søvn & restitution, Coach             coach/ + livsoverblik/
+Form & fokus    14-dages perioder, Ugen i tal, Søvn & restitution, Coach             coach/ + overblik/
 Karriere        Nye match, Ansøgninger, Profil                                        karriere/
 ```
 
@@ -61,7 +61,7 @@ Projekternes sider linker til `/kompas/assets/`. Så ser de ens ud og følger ly
 | `page.css` | kort, fliser, lister, badges, segmenter, grafer og markdown |
 | `icons.js` | `icon(navn)` |
 | `chart.js` | `barChart` og `lineChart` med hover. Én serie pr. graf |
-| `liv.js` | datoformater, `daysUntil` og `loadLiv()` til livsoverbliks `liv.json` |
+| `liv.js` | datoformater, `daysUntil` og `loadLiv()` til overbliks `liv.json` |
 | `md.js` | `md(tekst)`: markdown til HTML, escapet (ugeplaner, jobopslag, profiler) |
 
 ## Rammen og adresserne
@@ -113,14 +113,14 @@ Garmin med det samme og åbner siden (`okonomi/bin/kompas-start.sh` og `kompas-s
 | Opdatering hvert 30. min (`bin/opdater.sh`) | LaunchAgent `local.kompas.opdater` |
 | Sure + forbrugssiden | Kompas-appen |
 
-`bin/opdater.sh` henter kalenderen og bygger Form & fokus-siderne, livsoverblikkets `liv.json` og
+`bin/opdater.sh` henter kalenderen og bygger Form & fokus-siderne, overblikkets `liv.json` og
 studie-eksporten hver gang, Garmin højst hver 3. time, og tager dagens backup ved første kørsel.
 
 Planlagte Claude-rutiner står for det, der kræver vurdering: køreplanen for studieugen (søndag), 14-dages
 rapporten i Form & fokus (hver anden fredag), ugereviewet (mandag) og jobagenten (dagligt). De skriver filer,
 som projekterne viser; de sender eller indsender aldrig noget.
 
-**Backup:** `bin/backup-data.sh` gemmer `~/.garmin-coach/coach.db` og `~/.livsoverblik/liv.db` gzippet i
+**Backup:** `bin/backup-data.sh` gemmer `~/.garmin-coach/coach.db` og `~/.overblik/liv.db` gzippet i
 `$KOMPAS_BACKUP` (14 dage tilbage), én gang om dagen og igen ved "Luk Kompas".
 
 ## Opsætning

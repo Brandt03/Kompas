@@ -534,7 +534,7 @@ DIAGRAM_SVG = """<svg xmlns="http://www.w3.org/2000/svg" width="720" height="190
 </svg>
 """
 
-# ── kalenderen (livsoverbliks kalender; eksporten skriver kun den del i kalender.json) ──
+# ── kalenderen (overbliks kalender; eksporten skriver kun den del i kalender.json) ──
 # Bruges kun, når form-modulet ikke har skrevet ud/form/liv.json. Undervisningen ligger i de faste moduler
 # 08:15–10:00, 10:15–12:00, 13:00–14:45 og 15:00–16:45.
 
@@ -555,7 +555,7 @@ ANDET = [  # (ugedag, start, slut, titel, hvilke uger: offset fra denne uge, ell
     (6, "11:00", "13:00", "Tempor incididunt", (-1,)),
     (4, "09:00", "09:30", "Ut labore", (1,)),
 ]
-SELVSTUDIE = [  # (ugedag, start, slut, titel); "Selvstudie · " er præfikset, livsoverblik kender selvstudie på
+SELVSTUDIE = [  # (ugedag, start, slut, titel); "Selvstudie · " er præfikset, overblik kender selvstudie på
     (0, "13:00", "14:00", "Selvstudie · Alfa"),
     (1, "15:00", "16:30", "Selvstudie · Gamma"),
     (3, "10:00", "11:30", "Selvstudie · Gamma"),
@@ -585,7 +585,7 @@ def _ugens_kalender(m: date, offset: int, idag: date) -> list:
 
 
 def kalender(idag: date) -> dict:
-    """Kalenderen, som kalender.json har den (samme form som "kalender" og "reviews" i livsoverbliks liv.json).
+    """Kalenderen, som kalender.json har den (samme form som "kalender" og "reviews" i overbliks liv.json).
 
     Bruges kun, når form-modulet ikke har skrevet ud/form/liv.json."""
     m0 = mandag(idag)
@@ -1082,7 +1082,7 @@ def lav(ud: Path, idag: date) -> None:
                                 for k in (3, 4, 5)}}
     _skriv(rod / "fagnoter.json", fn)
     _skriv(rod / "fagnoter" / "alfa" / "lorem-ipsum.svg", DIAGRAM_SVG)
-    # Som eksporten: kun kalenderdelen af livsoverbliks liv.json (form-modulet skriver den først). Uden den bruges
+    # Som eksporten: kun kalenderdelen af overbliks liv.json (form-modulet skriver den først). Uden den bruges
     # demoens egen kalender.
     try:
         liv = json.loads((ud / "form" / "liv.json").read_text(encoding="utf-8"))

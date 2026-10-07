@@ -16,7 +16,7 @@ if (paaTelefon) {
   document.body ? tilbage() : document.addEventListener("DOMContentLoaded", tilbage);
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("/studie/mobil-sw.js", { scope: "/studie/" }).catch(() => {});
 }
-// Ugeoverbliks kalender: på Mac'en fra livsoverblik (loadLiv i liv.js), på telefonen kun kalenderdelen (kalender.json)
+// Ugeoverbliks kalender: på Mac'en fra overblik (loadLiv i liv.js), på telefonen kun kalenderdelen (kalender.json)
 async function loadKalender() {
   if (!paaTelefon) return loadLiv();
   const r = await fetch("/studie/kalender.json", { cache: "no-store" });

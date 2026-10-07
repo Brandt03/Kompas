@@ -2,7 +2,7 @@
 # Turns off everything Kompas runs in the background: Sure and the Docker VM, the update every 30 minutes,
 # the Karriere and Genkald servers, Sure's export and Caddy. The jobs are disabled, so they stay off after
 # a restart until Kompas.app (kompas-start.sh) is opened again. Data stays in the Docker volumes,
-# ~/.garmin-coach and ~/.livsoverblik. The scheduled Claude routines are not affected.
+# ~/.garmin-coach and ~/.overblik. The scheduled Claude routines are not affected.
 # Used by /Applications/Luk Kompas.app.
 set -eu
 export PATH=/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin
@@ -17,7 +17,7 @@ colima stop >/dev/null 2>&1 || true
 # so stopping midway loses nothing). The garmin_coach.server processes belong to Claude and are left alone.
 pkill -f 'garmin_coach\.(ingest_garmin|ingest_calendar|site)' >/dev/null 2>&1 || true
 
-# Backup of the local databases that aren't in OneDrive or git (garmin-coach, livsoverblik)
+# Backup of the local databases that aren't in OneDrive or git (garmin-coach, overblik)
 "$KOMPAS_HOME/bin/backup-data.sh" --tving >> dashboard/backup.log 2>&1 || true
 
 # Kompas' background jobs. disable keeps them off after a restart; bootout stops them now.

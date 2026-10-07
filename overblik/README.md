@@ -1,4 +1,4 @@
-# livsoverblik
+# overblik
 
 Én række pr. uge på tværs af træning, økonomi og studie, så en ugentlig
 gennemgang kan lede efter sammenhænge på faste tal i stedet for gæt.
@@ -51,11 +51,11 @@ begivenheder der er slut tæller, og de skal være synket ind i garmin-coach.
 - **belastning**: sum af Garmins træningsbelastning. Styrkepas har intet tal.
 - Uger er ISO-uger, mandag til søndag.
 
-Stier, datoer og titelmønstre kan overstyres med miljøvariabler (se `livsoverblik/config.py`):
+Stier, datoer og titelmønstre kan overstyres med miljøvariabler (se `overblik/config.py`):
 
 | Variabel | Standard | Hvad |
 |---|---|---|
-| `LIV_DB` | `~/.livsoverblik/liv.db` | egen database med én række pr. uge og de gemte reviews |
+| `LIV_DB` | `~/.overblik/liv.db` | egen database med én række pr. uge og de gemte reviews |
 | `LIV_GARMIN_DB` | `~/.garmin-coach/coach.db` | garmin-coach's database (læses kun) |
 | `LIV_SURE_JSON` | `~/kompas/okonomi/dashboard/public/data.json` | Sures eksport |
 | `LIV_SITE` | `~/.garmin-coach/site` | hvor `liv eksport` lægger `liv.json` |
@@ -78,7 +78,7 @@ Stier, datoer og titelmønstre kan overstyres med miljøvariabler (se `livsoverb
 Faste hypoteser frem for alle par mod alle, fordi 153 par ville give ca. 8
 falske fund ved rent tilfælde.
 
-Den planlagte opgave "Ugentligt livsoverblik" kører mandag kl. 7 i
+Den planlagte opgave "Ugentligt overblik" kører mandag kl. 7 i
 Claude-appen. Den synker Garmin og kalenderen, kører `liv rapport --opdater`,
 læser næste uges kalender og skriver reviewet til `reviews/<uge>.md`.
 

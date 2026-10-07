@@ -54,7 +54,7 @@ KOMPAS = {
 
 def _kompas(conn: sqlite3.Connection, out: Path) -> dict:
     """Manifestet med "nyt" pr. side: en nøgle for sidens nyeste indhold. Skifter den, viser
-    menuen i Kompas en prik, til siden er åbnet. Ugen i tal viser livsoverbliks review fra
+    menuen i Kompas en prik, til siden er åbnet. Ugen i tal viser overbliks review fra
     liv.json, som `liv` skriver i samme mappe."""
     nyt = {}
     endelige = [p for p in perioder(conn) if p.get("status") == "endelig"]

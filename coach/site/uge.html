@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ugen i tal</title>
 <!-- Vises i Kompas (https://kompas.localhost/form/uge.html), som leverer designkittet under /kompas/assets/.
-     Data: liv.json, som livsoverblik skriver med `liv eksport` (mandagsreviewet). Afvigelser, normalområder
+     Data: liv.json, som overblik skriver med `liv eksport` (mandagsreviewet). Afvigelser, normalområder
      og sammenhænge er regnet dér; siden viser dem kun. -->
 <link rel="stylesheet" href="/kompas/assets/tokens.css">
 <link rel="stylesheet" href="/kompas/assets/page.css">
@@ -250,7 +250,7 @@ fetch("liv.json", { cache: "no-store" }).then(r => { if (!r.ok) throw new Error(
   L = d; L.reviews = [...(L.reviews || [])].sort((a, b) => a.uge.localeCompare(b.uge)); sel = L.reviews.length - 1;
   if (!L.reviews.length) { $("root").innerHTML = `<div class="card empty">Ingen uger endnu. Kør <code>liv opdater</code> og <code>liv eksport</code>.</div>`; return; }
   render();
-}, e => { $("root").innerHTML = `<div class="card empty">${esc(e.message)}. Skriv den med <code>~/kompas/livsoverblik/.venv/bin/liv eksport</code>.</div>`; });
+}, e => { $("root").innerHTML = `<div class="card empty">${esc(e.message)}. Skriv den med <code>~/kompas/overblik/.venv/bin/liv eksport</code>.</div>`; });
 </script>
 </body>
 </html>

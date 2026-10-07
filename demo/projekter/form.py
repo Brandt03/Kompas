@@ -1,9 +1,9 @@
-"""Demodata til Form & fokus (/form/): garmin-coach og livsoverblik.
+"""Demodata til Form & fokus (/form/): garmin-coach og overblik.
 
 Modulet laver en opdigtet garmin-coach-database for "Alex" i en midlertidig mappe og kører projekternes egne
 byg på den, så tallene på siderne er regnet af den rigtige kode:
 
-- livsoverblik (`opdater`, `gem-review`, `eksport`) skriver liv.json,
+- overblik (`opdater`, `gem-review`, `eksport`) skriver liv.json,
 - garmin-coach (`site.byg`) skriver coach.json, soevn.json, perioder.json, maaneder.json, oversigt.json og
   kompas.json.
 
@@ -28,7 +28,7 @@ from unittest import mock
 
 ROD = Path(__file__).resolve().parents[2]
 COACH = ROD / "coach"
-LIV = ROD / "livsoverblik"
+LIV = ROD / "overblik"
 KL = time(7, 0)  # siderne er "bygget" kl. 7, når Kompas-appen åbnes om morgenen
 
 UGEDAGE = ["mandag", "tirsdag", "onsdag", "torsdag", "fredag", "lørdag", "søndag"]
@@ -37,7 +37,7 @@ UGEDAGE = ["mandag", "tirsdag", "onsdag", "torsdag", "fredag", "lørdag", "sønd
 ZONER = {1: 124, 2: 138, 3: 153, 4: 167, 5: 182}
 
 # Pladsholderfag i samme form som titlerne fra universitetets skema: "Alfa – lorem ipsum (A) - KURS101.A -
-# Lecture (On Campus)". Første ord bestemmer faget i Kompas, og "KURS" gør det til undervisning i livsoverblik.
+# Lecture (On Campus)". Første ord bestemmer faget i Kompas, og "KURS" gør det til undervisning i overblik.
 # (navn, kode, hold, kort navn i CalTask)
 FAG = [
     ("Alfa – lorem ipsum", "KURS101", "A", "Alfa"),
@@ -103,7 +103,7 @@ def _importer() -> SimpleNamespace:
     sys.path[:0] = stier
     try:
         from garmin_coach import config as gc_config, db as gc_db, metrics, site
-        from livsoverblik import cli, config as liv_config, db as liv_db, kilder, rapport, side
+        from overblik import cli, config as liv_config, db as liv_db, kilder, rapport, side
     finally:
         for s in stier:
             sys.path.remove(s)
@@ -197,7 +197,7 @@ class Tidslinje:
         if m >= self.semester:  # undervisningen koster lidt søvn og giver lidt mere stress
             f["soevn"] -= 0.15
             f["stress"] += 3
-        # Kortere nætter går sammen med mere take-away og mere stress, så livsoverblik har noget at finde
+        # Kortere nætter går sammen med mere take-away og mere stress, så overblik har noget at finde
         f["takeaway"] = _klem(1.0 - 3.5 * f["soevn"] + rng.gauss(0, 0.15), 0.3, 2.0)
         f["stress"] += -6 * f["soevn"]
         return f
@@ -432,7 +432,7 @@ def _gem_hevy(conn, aid: str, program: str, start: datetime, minutter: float, p:
 
 
 def _sure_udtraek(sti: Path, tl: Tidslinje, rng: random.Random) -> None:
-    """Et lille Sure-udtræk med de felter livsoverblik læser (date, amount, group, category)."""
+    """Et lille Sure-udtræk med de felter overblik læser (date, amount, group, category)."""
     tx = []
 
     def koeb(d: date, beloeb: float, kategori: str, gruppe: str = "Variable udgifter"):
@@ -616,7 +616,7 @@ def _perioder(m, conn: sqlite3.Connection, tl: Tidslinje) -> None:
 
 
 # --------------------------------------------------------------------------------------------------------------
-# Ugereviews (det, rutinen "livsoverblik-ugereview" ellers skriver)
+# Ugereviews (det, rutinen "overblik-ugereview" ellers skriver)
 # --------------------------------------------------------------------------------------------------------------
 
 NAVN = {  # kolonne -> (navn, enhed, decimaler), i den rækkefølge reviewet nævner dem
@@ -779,7 +779,7 @@ def lav(ud: Path, idag: date) -> None:
             _byg_coach_db(conn, tl, rng)
             _perioder(m, conn, tl)
 
-            # livsoverblik: ugetabel, tre reviews og liv.json, læst fra den opdigtede database
+            # overblik: ugetabel, tre reviews og liv.json, læst fra den opdigtede database
             sure = tmp / "sure.json"
             _sure_udtraek(sure, tl, rng)
             for mod, felt, v in ((m.liv_config, "GARMIN_DB", coach_db), (m.liv_config, "SURE_JSON", sure),

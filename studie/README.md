@@ -34,7 +34,7 @@ KOMPAS_SEMESTER=/tmp/kopi STUDIE_PORT=18767 STUDIE_EKSPORT_UD=/tmp/studie-ud nod
 |---|---|---|
 | `KOMPAS_SEMESTER` | mappen over `Scripts/` | alle scripts: semestermappen, der læses og skrives i |
 | `STUDIE_EKSPORT_UD` | `~/.kompas/studie` | eksporten (`--ud <mappe>` vinder); serveren sender den videre, når den kører eksporten efter en gemning |
-| `LIV_SITE` | `~/.garmin-coach/site` | eksporten: mappen, livsoverblik skriver `liv.json` i (kalenderen til telefonen) |
+| `LIV_SITE` | `~/.garmin-coach/site` | eksporten: mappen, overblik skriver `liv.json` i (kalenderen til telefonen) |
 | `STUDIE_PORT` | `8767` | serveren |
 | `STUDIE_ORIGINS` | tom | serveren: ekstra adresser, der må skrive, fx telefonens Tailscale-adresse (kommasepareret) |
 | `CANVAS_VAERT` | `canvas.instructure.com` | `canvas-sortering.js` |

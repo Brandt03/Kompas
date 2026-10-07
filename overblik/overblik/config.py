@@ -12,7 +12,7 @@ def _path(env: str, default: str) -> Path:
 
 
 # Egen database med én række pr. uge.
-DB_PATH = _path("LIV_DB", "~/.livsoverblik/liv.db")
+DB_PATH = _path("LIV_DB", "~/.overblik/liv.db")
 
 # garmin-coach's SQLite. Læses kun, skrives aldrig.
 GARMIN_DB = _path("LIV_GARMIN_DB", "~/.garmin-coach/coach.db")
