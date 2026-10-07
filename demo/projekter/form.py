@@ -218,7 +218,7 @@ def _undervisning_og_kalender(tl: Tidslinje, rng: random.Random) -> list[tuple]:
         for i, (fag, a, b, art, form) in enumerate(skema):
             navn, kode, hold, _ = FAG[fag]
             titel = f"{navn} ({hold}) - {kode}.{hold} - {art} ({form})"
-            tilfoej(f"cbs-{d}-{i}", _hm(d, a), _hm(d, b), titel)
+            tilfoej(f"skema-{d}-{i}", _hm(d, a), _hm(d, b), titel)
         d += timedelta(days=1)
 
     # Selvstudie logget i CalTask: kun sessioner, der er slut, når siden bygges
