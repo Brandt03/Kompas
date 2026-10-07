@@ -37,7 +37,7 @@ docker compose exec -T web bin/rails runner 'Family.first.sync_later' >/dev/null
 dashboard/export.sh || true
 ( sleep 120; dashboard/export.sh; bin/refresh-excel.sh >> dashboard/excel.log 2>&1 ) >/dev/null 2>&1 &!
 
-# Form & Fokus, livsoverblik and Studie are refreshed by the update started above (~/.kompas/opdater.log).
+# Form & Fokus, overblik and Studie are refreshed by the update started above (~/.kompas/opdater.log).
 
 # Kompas (~/kompas, https://kompas.localhost): økonomi, studie og form samlet bag én menu
 open "https://kompas.localhost/"

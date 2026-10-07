@@ -687,8 +687,8 @@ function wireCharts(){
     svg.addEventListener("pointermove", move); svg.addEventListener("pointerleave", leave);
   });
 }
-// ---------- Ugen: livsoverblikkets ugereview ----------
-// liv.json skrives af livsoverblik (`liv eksport` / `liv gem-review`). Tallene
+// ---------- Ugen: overblikkets ugereview ----------
+// liv.json skrives af overblik (`liv eksport` / `liv gem-review`). Tallene
 // er regnet i Python; siden tegner dem og viser reviewets tekst.
 const LIV = {
   soevn_timer_snit:{l:"Søvn pr. nat", u:"t", d:2, g:"Søvn og restitution"},
@@ -986,7 +986,7 @@ function renderSources(r){
 
 function renderUge(){
   const el = $("uge");
-  if (livErr){ el.innerHTML = `<p class="state">Kunne ikke hente ugedata (${esc(livErr)}). Skriv dem med: ~/kompas/livsoverblik/.venv/bin/liv eksport</p>`; return; }
+  if (livErr){ el.innerHTML = `<p class="state">Kunne ikke hente ugedata (${esc(livErr)}). Skriv dem med: ~/kompas/overblik/.venv/bin/liv eksport</p>`; return; }
   if (!liv){ el.innerHTML = `<p class="state">Henter ugen…</p>`; return; }
   if (!liv.reviews.length){ el.innerHTML = `<p class="state">Ingen uger endnu. Kør liv opdater og liv eksport.</p>`; return; }
   if (wsel == null) wsel = liv.reviews.length - 1;

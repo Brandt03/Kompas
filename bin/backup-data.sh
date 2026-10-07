@@ -1,7 +1,7 @@
 #!/bin/zsh
 # Backup af de lokale databaser, der hverken ligger i skyen eller git:
 #   garmin-coach  ~/.garmin-coach/coach.db  Garmin-historik, kalender og 14-dages rapporter med vurderinger
-#   livsoverblik  ~/.livsoverblik/liv.db    ugetabellen og ugereviewene
+#   overblik      ~/.overblik/liv.db        ugetabellen og ugereviewene
 # Én pr. dag, gzippet, i $KOMPAS_BACKUP (gerne en mappe, der synkes til OneDrive/iCloud). De nyeste 14 pr.
 # database beholdes.
 # Køres af opdater.sh (første gang hver dag) og af kompas-stop.sh. --tving laver en ny, selv om dagens findes.
@@ -13,7 +13,7 @@ DEST="${KOMPAS_BACKUP:-$HOME/Backup/kompas}"
 KEEP=14
 mkdir -p "$DEST"
 d=$(date +%F)
-for navn src in garmin-coach "$HOME/.garmin-coach/coach.db" livsoverblik "$HOME/.livsoverblik/liv.db"; do
+for navn src in garmin-coach "$HOME/.garmin-coach/coach.db" overblik "$HOME/.overblik/liv.db"; do
   [[ -f $src ]] || continue
   ud="$DEST/$navn-$d.db.gz"
   [[ -f $ud && ${1:-} != --tving ]] && continue

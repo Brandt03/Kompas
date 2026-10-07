@@ -155,9 +155,9 @@ Perioderne skrives af den planlagte opgave "Form & Fokus" hver anden fredag
 med `gem-periode`, som selv regner tallene, så kun vurderingen kommer fra
 modellen.
 
-Visningen "Ugen" (`/form/#ugen`) viser mandagsreviewet fra ~/kompas/livsoverblik:
+Visningen "Ugen" (`/form/#ugen`) viser mandagsreviewet fra ~/kompas/overblik:
 afvigelser fra det normale, dag for dag, ugekalenderen, sammenhænge og
-udviklingen uge for uge. Den henter `liv.json`, som livsoverblik skriver i
+udviklingen uge for uge. Den henter `liv.json`, som overblik skriver i
 samme mappe med `liv eksport` eller `liv gem-review`; `byg` rører ikke filen.
 
 ## Verificér uden Garmin-adgang

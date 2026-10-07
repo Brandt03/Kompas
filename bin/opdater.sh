@@ -6,7 +6,7 @@
 #   Garmin                            højst hver 3. time (logger ind hos Garmin; tokens caches), og med det
 #                                     samme, når Kompas-appen åbnes (~/.kompas/hent-garmin-nu). Henter fra
 #                                     sidste vellykkede hentning, så en periode med Kompas lukket ikke giver hul
-#   livsoverblik (liv.json)           hver gang
+#   overblik (liv.json)               hver gang
 #   Studie-eksporten                  hver gang
 #   backup af databaserne             første kørsel hver dag
 # Sure og forbrugssiden opdateres ikke her; de kræver Docker og hører til Kompas-appen.
@@ -35,7 +35,7 @@ if [[ -f $STATE/hent-garmin-nu || ! -f $STATE/garmin-sidst ]] || (( $(date +%s) 
 fi
 ( cd $GC && .venv/bin/python -m garmin_coach.ingest_calendar >/dev/null ) || log "kalenderen fejlede"
 ( cd $GC && .venv/bin/python -m garmin_coach.site byg >/dev/null ) || log "Form & Fokus-byg fejlede"
-$HOME/kompas/livsoverblik/.venv/bin/liv opdater >/dev/null && $HOME/kompas/livsoverblik/.venv/bin/liv eksport >/dev/null || log "livsoverblik fejlede"
+$HOME/kompas/overblik/.venv/bin/liv opdater >/dev/null && $HOME/kompas/overblik/.venv/bin/liv eksport >/dev/null || log "overblik fejlede"
 /usr/local/bin/node "$SEM/Scripts/kompas-eksport.js" >/dev/null || log "studie-eksporten fejlede"
 $HOME/kompas/bin/backup-data.sh | while read -r l; do log "backup: $l"; done
 log "ok"

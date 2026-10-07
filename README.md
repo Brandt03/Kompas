@@ -20,7 +20,7 @@ one design system, and a front page that pulls the day together across all of th
 | **I dag** (Today) | My day across everything: calendar with free gaps, deadlines, readiness from my watch, this week's focus, flashcards due, new job matches | `public/` |
 | **Økonomi** (Money) | Spending by month, "what if" scenarios, and a guard that warns before I earn too much to keep my student grant (SU) | `okonomi/` + [Sure](https://github.com/we-promise/sure) |
 | **Studie** (Study) | Week plan, courses, deadlines, spaced-repetition flashcards, exam practice, and an offline phone app | `studie/` |
-| **Form & fokus** (Health) | 14-day training periods, sleep and recovery, a daily recommendation, and a weekly review | `coach/` + `livsoverblik/` |
+| **Form & fokus** (Health) | 14-day training periods, sleep and recovery, a daily recommendation, and a weekly review | `coach/` + `overblik/` |
 | **Karriere** (Career) | A job agent that finds student jobs every morning and scores them against my profile, with the reasons and gaps for each | `karriere/` |
 
 | | |
@@ -48,7 +48,7 @@ flowchart LR
   end
   subgraph Projects["Projects (each its own repo)"]
     coach[coach<br/>Python]
-    liv[livsoverblik<br/>Python]
+    liv[overblik<br/>Python]
     okonomi[okonomi<br/>shell + JS]
     karriere[karriere<br/>Python]
     studie[studie<br/>Node.js]
@@ -107,7 +107,7 @@ the demo (its menu items show a short explanation instead).
   instead of doing arithmetic on raw series. Its SQL lookup is read-only, enforced by SQLite itself.
 - `site byg` writes the pages' JSON atomically, plus the daily recommendation shown on the front page.
 
-### [livsoverblik/](livsoverblik/): the weekly review (Python)
+### [overblik/](overblik/): the weekly review (Python)
 
 - One row per ISO week across training, money and study, built from Garmin data, the Sure extract and the
   calendar.

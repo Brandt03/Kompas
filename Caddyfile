@@ -71,7 +71,7 @@ kompas.localhost {
 			file_server
 		}
 
-		# Form & Fokus (bygges af garmin-coach; liv.json skrives af livsoverblik)
+		# Form & Fokus (bygges af garmin-coach; liv.json skrives af overblik)
 		redir /form /form/
 		handle_path /form/* {
 			root * {$HOME}/.garmin-coach/site

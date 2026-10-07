@@ -15,7 +15,7 @@
 // Stier (env-variabler, alle valgfrie):
 //   KOMPAS_SEMESTER     semestermappen; standard er mappen over Scripts/
 //   STUDIE_EKSPORT_UD   hvor eksporten skriver; standard ~/.kompas/studie (--ud vinder)
-//   LIV_SITE            mappen, livsoverblik skriver liv.json i; standard ~/.garmin-coach/site
+//   LIV_SITE            mappen, overblik skriver liv.json i; standard ~/.garmin-coach/site
 //
 // Køres af Kompas-appen, når den åbner, og af køreplan-rutinen søndag efter en ny ugeplan.
 
@@ -583,7 +583,7 @@ function main() {
   const skriv = (navn, indhold) => { const tmp = path.join(UD, navn + ".tmp"); fs.writeFileSync(tmp, indhold); fs.renameSync(tmp, path.join(UD, navn)); };
   for (const n of ls(SIDER).filter(n => /\.(html|js|css|webmanifest|png)$/.test(n))) skriv(n, fs.readFileSync(path.join(SIDER, n)));
   skriv("studie.json", JSON.stringify(data));
-  // Kalenderen til Ugeoverblik på telefonen. På Mac'en læser siden livsoverbliks liv.json (/form/liv.json), men den
+  // Kalenderen til Ugeoverblik på telefonen. På Mac'en læser siden overbliks liv.json (/form/liv.json), men den
   // har også søvn, træning, forbrug og ugereviews og kommer derfor ikke med på telefonen. Her er kun kalenderen.
   const liv = (() => { try { return JSON.parse(læs(path.join(LIV_SITE, "liv.json"))); } catch { return null; } })();
   if (liv) skriv("kalender.json", JSON.stringify({ genereret: liv.genereret, selvstudie_fra: liv.selvstudie_fra || null, kalender: liv.kalender || {},

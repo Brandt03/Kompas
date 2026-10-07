@@ -1,4 +1,4 @@
-// Shared helpers for the portal's own pages. The data is livsoverblik's liv.json, which `liv eksport` writes
+// Shared helpers for the portal's own pages. The data is overblik's liv.json, which `liv eksport` writes
 // next to Form & Fokus (served at /form/liv.json). Nothing is calculated here beyond formatting.
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 const nf = d => new Intl.NumberFormat("da-DK", { minimumFractionDigits: d, maximumFractionDigits: d });
