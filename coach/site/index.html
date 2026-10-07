@@ -1,0 +1,1071 @@
+<!doctype html><html lang="da"><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Form &amp; Fokus</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+:root{
+  --bg:#f3f6f5; --surface:#ffffff; --surface-2:#eaf0ee;
+  --ink:#13201b; --ink-2:#48564f; --muted:#75837c; --line:#d9e2de;
+  --accent:#2a78d6; --accent-soft:#cde2fb; --accent-ink:#1c5cab;
+  --good:#0a7d0a; --good-bg:#e3f4e3; --bad:#c23333; --bad-bg:#fbe7e7; --warn:#9a6700; --warn-bg:#fcf1d9;
+  --z-low:#86b6ef; --z-mid:#2a78d6; --z-high:#104281;
+  --display:"Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+  --sans:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono:"IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#0f1513; --surface:#161e1b; --surface-2:#1d2723;
+    --ink:#eaf1ee; --ink-2:#b3c0ba; --muted:#86948d; --line:#28332f;
+    --accent:#3987e5; --accent-soft:#1d3552; --accent-ink:#86b6ef;
+    --good:#4cc24c; --good-bg:#15301a; --bad:#ef7676; --bad-bg:#3a1c1c; --warn:#e0a526; --warn-bg:#352a12;
+    --z-low:#1c5cab; --z-mid:#3987e5; --z-high:#9ec5f4;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#0f1513; --surface:#161e1b; --surface-2:#1d2723;
+  --ink:#eaf1ee; --ink-2:#b3c0ba; --muted:#86948d; --line:#28332f;
+  --accent:#3987e5; --accent-soft:#1d3552; --accent-ink:#86b6ef;
+  --good:#4cc24c; --good-bg:#15301a; --bad:#ef7676; --bad-bg:#3a1c1c; --warn:#e0a526; --warn-bg:#352a12;
+  --z-low:#1c5cab; --z-mid:#3987e5; --z-high:#9ec5f4;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.5}
+.wrap{max-width:1080px;margin:0 auto;padding-inline:20px;padding-block:28px 64px;display:grid;gap:36px}
+@media (max-width:520px){.wrap{padding-inline:16px}}
+h1,h2,h3{font-family:var(--display);text-wrap:balance;margin:0}
+h1{font-size:clamp(30px,5vw,44px);font-weight:700;letter-spacing:-.02em;line-height:1.05}
+h2{font-size:20px;font-weight:700;letter-spacing:-.01em}
+h3{font-size:13px;font-family:var(--sans);font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}
+
+/* header */
+header{display:grid;gap:18px}
+.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px}
+.sub{color:var(--ink-2);max-width:60ch;margin:6px 0 0}
+.periods{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;scrollbar-width:thin}
+.chip{flex:none;border:1px solid var(--line);background:var(--surface);color:var(--ink-2);font:500 13px/1 var(--sans);padding:9px 12px;border-radius:999px;cursor:pointer;display:flex;gap:6px;align-items:center}
+.chip:hover{border-color:var(--accent)}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.chip:focus-visible,button:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--warn)}
+.pill{display:inline-flex;align-items:center;gap:6px;font:600 12px/1 var(--sans);padding:6px 10px;border-radius:999px;letter-spacing:.02em}
+.pill.prelim{background:var(--warn-bg);color:var(--warn)}
+.pill.final{background:var(--good-bg);color:var(--good)}
+.pill.backfill{background:var(--surface-2);color:var(--ink-2)}
+.meta{display:flex;flex-wrap:wrap;gap:10px;align-items:center;color:var(--muted);font-size:13px}
+
+/* verdict */
+.verdict{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:22px;display:grid;gap:20px}
+.summary{font-size:18px;line-height:1.45;max-width:70ch;margin:0}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:20px}
+.col{display:grid;gap:10px;align-content:start}
+.col h3{display:flex;gap:8px;align-items:center}
+.ico{width:20px;height:20px;border-radius:6px;display:inline-grid;place-items:center;font:700 12px/1 var(--sans)}
+.ico.g{background:var(--good-bg);color:var(--good)}
+.ico.b{background:var(--bad-bg);color:var(--bad)}
+.ico.i{background:var(--accent-soft);color:var(--accent-ink)}
+.col ul{margin:0;padding-left:18px;display:grid;gap:8px;color:var(--ink-2)}
+.focus{border-top:1px solid var(--line);padding-top:18px;display:grid;gap:12px}
+.focus ol{margin:0;padding-left:22px;display:grid;gap:8px}
+.focus li::marker{font-family:var(--mono);color:var(--accent)}
+.follow{display:grid;gap:8px}
+.follow-row{display:flex;gap:10px;align-items:flex-start}
+.st{flex:none;font:600 11px/1 var(--sans);text-transform:uppercase;letter-spacing:.06em;padding:5px 8px;border-radius:6px;margin-top:2px}
+.st.naaet{background:var(--good-bg);color:var(--good)}
+.st.delvist{background:var(--warn-bg);color:var(--warn)}
+.st.ikke{background:var(--bad-bg);color:var(--bad)}
+.empty{color:var(--muted);font-style:italic;margin:0}
+.caveats{border-left:3px solid var(--warn);background:var(--warn-bg);border-radius:0 10px 10px 0;padding:12px 14px;display:grid;gap:6px}
+.caveats h3{color:var(--warn)}
+.caveats ul{margin:0;padding-left:18px;display:grid;gap:4px;color:var(--ink);font-size:14px}
+
+/* metrics */
+.group{display:grid;gap:14px}
+.group-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 14px 10px;display:grid;gap:4px;position:relative}
+.tile .lbl{font-size:13px;color:var(--ink-2)}
+.tile .val{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:24px;font-weight:500;letter-spacing:-.02em;line-height:1.2}
+.tile .val small{font-size:13px;color:var(--muted);font-weight:400;margin-left:3px;letter-spacing:0}
+.delta{font-size:12px;display:flex;gap:5px;align-items:center;min-height:18px;color:var(--muted)}
+.delta.good{color:var(--good)} .delta.bad{color:var(--bad)}
+.tile .sub{font-size:12px;color:var(--muted)}
+.spark{width:100%;height:auto;display:block;margin-top:4px;overflow:visible;touch-action:none}
+.spark .ln{fill:none;stroke:var(--accent);stroke-width:2;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+.spark .ar{fill:var(--accent);opacity:.10}
+.spark .gr{stroke:var(--line);stroke-width:1;vector-effect:non-scaling-stroke}
+.spark .pt{fill:var(--accent)}
+.spark .sel{fill:var(--surface);stroke:var(--accent);stroke-width:2.5;vector-effect:non-scaling-stroke}
+.spark .hov{stroke:var(--muted);stroke-width:1;stroke-dasharray:2 2;vector-effect:non-scaling-stroke}
+.tip{position:fixed;pointer-events:none;background:var(--ink);color:var(--bg);font:500 12px/1.35 var(--sans);padding:7px 9px;border-radius:8px;white-space:nowrap;z-index:10;transform:translate(-50%,-110%)}
+.tip b{font-family:var(--mono);font-weight:500}
+
+/* distributions */
+.dist{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;display:grid;gap:12px;align-content:start}
+.bars{display:grid;gap:8px}
+.bar-row{display:grid;grid-template-columns:96px 1fr 64px;gap:10px;align-items:center;font-size:13px}
+.bar-row .t{height:10px;background:var(--surface-2);border-radius:5px;overflow:hidden}
+.bar-row .f{height:100%;background:var(--accent);border-radius:0 4px 4px 0}
+.bar-row .v{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--ink-2)}
+.stack{display:flex;height:14px;border-radius:7px;overflow:hidden;gap:2px;background:var(--surface)}
+.stack span{height:100%}
+.legend{display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--ink-2)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.note{font-size:12px;color:var(--muted);margin:0}
+
+/* table */
+details{background:var(--surface);border:1px solid var(--line);border-radius:12px}
+summary{cursor:pointer;padding:14px 16px;font-weight:600}
+.tbl-wrap{overflow-x:auto;padding:0 16px 16px}
+table{border-collapse:collapse;font-size:13px;min-width:640px;width:100%}
+th,td{padding:7px 10px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+thead th{color:var(--muted);font-weight:500;font-size:12px}
+td{font-family:var(--mono);font-variant-numeric:tabular-nums}
+td:first-child{font-family:var(--sans);color:var(--ink-2)}
+tr.sec td{font-family:var(--sans);font-weight:600;color:var(--ink);padding-top:14px;text-align:left}
+
+/* visninger */
+.views{display:flex;gap:4px;padding:4px;background:var(--surface-2);border-radius:999px;width:max-content;max-width:100%}
+.view-btn{border:0;background:transparent;color:var(--ink-2);font:600 13px/1 var(--sans);padding:9px 14px;border-radius:999px;cursor:pointer}
+.view-btn:hover{color:var(--ink)}
+.view-btn[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(19,32,27,.12)}
+.view-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* store billede */
+.big{display:grid;gap:36px}
+.intro{color:var(--ink-2);max-width:68ch;margin:0}
+.cmp-wrap{overflow-x:auto}
+table.cmp{min-width:0;width:100%}
+table.cmp th:not(:first-child),table.cmp td:not(:first-child){text-align:right}
+table.cmp .delta{justify-content:flex-end;font-family:var(--sans);min-height:0}
+.charts{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
+.chart{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 14px 10px;display:grid;gap:4px;align-content:start}
+.chart .head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
+.chart .head span{font-size:12px}
+.chart .val{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:24px;font-weight:500;letter-spacing:-.02em;line-height:1.2}
+.chart .val small{font-size:13px;color:var(--muted);font-weight:400;margin-left:3px;letter-spacing:0}
+.chart svg{width:100%;height:auto;display:block;margin-top:6px;overflow:visible;touch-action:none}
+.chart .ax{fill:var(--muted);font:10px var(--mono)}
+.chart .gl{stroke:var(--line);stroke-width:1;vector-effect:non-scaling-stroke}
+.chart .bar{fill:var(--accent)}
+.chart .bar.now{fill:var(--accent-soft);stroke:var(--accent);stroke-width:1;stroke-dasharray:3 2;vector-effect:non-scaling-stroke}
+.chart .mline{fill:none;stroke:var(--accent);stroke-width:2;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+.chart .mline.now{stroke-dasharray:4 3}
+.chart .mpt{fill:var(--accent);stroke:var(--surface);stroke-width:1.5;vector-effect:non-scaling-stroke}
+.chart .mpt.now{fill:var(--surface);stroke:var(--accent)}
+.chart .hl{fill:var(--ink);opacity:.07}
+
+/* ugen */
+.uge{display:grid;gap:36px}
+.hero{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:22px;display:grid;gap:18px}
+.hero .summary{font-family:var(--display);font-size:clamp(20px,3vw,26px);font-weight:500;letter-spacing:-.01em;line-height:1.3}
+.onething{border-left:3px solid var(--accent);background:var(--accent-soft);border-radius:0 10px 10px 0;padding:14px 16px;display:grid;gap:6px}
+.onething h3{color:var(--accent-ink)}
+.onething p{margin:0;font-size:16px;color:var(--ink)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:12px}
+.kpi{border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:grid;gap:2px}
+.kpi.good{border-color:var(--good);background:var(--good-bg)} .kpi.bad{border-color:var(--bad);background:var(--bad-bg)}
+.kpi .lbl{font-size:12px;color:var(--ink-2)}
+.kpi .val{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:20px;font-weight:500}
+.kpi .val small{font-size:12px;color:var(--muted);margin-left:3px}
+.kpi .sub{font-size:12px;color:var(--muted)}
+.dev{display:grid;gap:4px}
+.dev-group{font:600 12px/1 var(--sans);text-transform:uppercase;letter-spacing:.08em;color:var(--muted);padding:14px 0 6px}
+.dev-group:first-child{padding-top:0}
+.dev-row{display:grid;grid-template-columns:minmax(120px,190px) 1fr minmax(110px,150px);gap:14px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)}
+.dev-row:last-child{border-bottom:0}
+.dev-row .n{font-size:14px}
+.dev-row .n small{display:block;font-size:12px;color:var(--muted)}
+.dev-row .r{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:14px}
+.dev-row .r small{display:block;font-family:var(--sans);font-size:12px;color:var(--muted)}
+.dev-row.tydelig .n{font-weight:600}
+.strip{position:relative;height:22px}
+.strip .axis{position:absolute;left:0;right:0;top:10px;height:2px;background:var(--surface-2);border-radius:1px}
+.strip .band{position:absolute;top:5px;height:12px;background:var(--accent-soft);border-radius:6px;opacity:.8}
+.strip .med{position:absolute;top:2px;width:2px;height:18px;background:var(--muted);border-radius:1px;transform:translateX(-1px)}
+.strip .pt{position:absolute;top:4px;width:14px;height:14px;border-radius:50%;background:var(--ink-2);border:2px solid var(--surface);transform:translateX(-7px);box-shadow:0 0 0 1px var(--ink-2)}
+.strip .pt.good{background:var(--good);box-shadow:0 0 0 1px var(--good)}
+.strip .pt.bad{background:var(--bad);box-shadow:0 0 0 1px var(--bad)}
+.strip .pt.neu{background:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.z{display:inline-block;font:600 11px/1 var(--sans);padding:3px 6px;border-radius:5px;margin-left:6px;vertical-align:1px}
+.z.good{background:var(--good-bg);color:var(--good)} .z.bad{background:var(--bad-bg);color:var(--bad)} .z.neu{background:var(--accent-soft);color:var(--accent-ink)}
+@media (max-width:620px){.dev-row{grid-template-columns:1fr auto}.dev-row .strip{grid-column:1/-1;grid-row:2}}
+.days{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
+.wk{display:grid;grid-template-columns:34px repeat(7,1fr);gap:0 4px;font-size:11px}
+.wk .hd{text-align:center;font-weight:600;color:var(--ink-2);padding-bottom:6px;font-size:12px}
+.wk .hd small{display:block;font-weight:400;color:var(--muted)}
+.wk .hrs{position:relative}
+.wk .hrs span{position:absolute;right:4px;transform:translateY(-50%);color:var(--muted);font-family:var(--mono);font-size:10px}
+.wk .wcol{position:relative;background:var(--surface-2);border-radius:6px;overflow:hidden;padding:0}
+.wk .wcol.today{box-shadow:inset 0 0 0 2px var(--accent)}
+.wk .hline{position:absolute;left:0;right:0;border-top:1px dashed var(--line)}
+.blk{position:absolute;left:2px;right:2px;border-radius:4px;padding:2px 4px;overflow:hidden;line-height:1.2;font-size:11px;color:#fff;cursor:default}
+.blk.undervisning{background:var(--accent)}
+.blk.selvstudie{background:var(--good)}
+.blk.andet{background:var(--warn)}
+.blk.traening{background:var(--ink);color:var(--bg)}
+.blk.fri{background:transparent;border:1.5px dashed var(--good);color:var(--good);font-weight:600}
+.blk.overlap{outline:2px solid var(--bad);outline-offset:-1px}
+.allday{position:relative;font-size:10px;background:var(--warn-bg);color:var(--warn);border-radius:4px;padding:2px 4px;margin:0 0 4px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.wk-legend i{border-radius:3px}
+.wk-wrap{overflow-x:auto}
+.wk-wrap .wk{min-width:560px}
+.hyp{display:grid;gap:4px}
+.hyp-row{display:grid;grid-template-columns:1fr minmax(140px,220px) 120px;gap:14px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
+.hyp-row:last-child{border-bottom:0}
+.hyp-row .q{font-size:14px}
+.hyp-row .q small{display:block;color:var(--muted);font-size:12px}
+.rho{position:relative;height:12px;background:var(--surface-2);border-radius:6px}
+.rho .mid{position:absolute;left:50%;top:-3px;width:1px;height:18px;background:var(--muted)}
+.rho .f{position:absolute;top:0;height:100%;border-radius:6px;background:var(--muted)}
+.rho .f.staerk{background:var(--accent)} .rho .f.antydning{background:var(--warn)}
+.prog{height:12px;background:var(--surface-2);border-radius:6px;overflow:hidden}
+.prog .f{height:100%;background:var(--line)}
+.st.staerk{background:var(--accent-soft);color:var(--accent-ink)} .st.antydning{background:var(--warn-bg);color:var(--warn)}
+.st.ingen,.st.faa{background:var(--surface-2);color:var(--muted)}
+.hyp-row .s{text-align:right}
+@media (max-width:620px){.hyp-row{grid-template-columns:1fr auto}.hyp-row .rho,.hyp-row .prog{grid-column:1/-1;grid-row:2}}
+.twocol{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}
+.card ul{margin:0;padding-left:18px;display:grid;gap:8px;color:var(--ink-2)}
+.srcs{display:flex;flex-wrap:wrap;gap:8px}
+.chart .bar.sel{fill:var(--ink)}
+.chart .mpt.sel{fill:var(--ink);stroke:var(--surface)}
+.chart .ref{stroke:var(--muted);stroke-width:1;stroke-dasharray:3 3;vector-effect:non-scaling-stroke}
+.chart .b-dyb{fill:var(--z-high)} .chart .b-rem{fill:var(--z-mid)} .chart .b-let{fill:var(--z-low)}
+
+footer{font-size:12px;color:var(--muted);display:grid;gap:6px;max-width:80ch}
+footer p{margin:0}
+.state{padding:40px 0;color:var(--ink-2)}
+@media (prefers-reduced-motion:no-preference){.chip{transition:background .15s,border-color .15s}}
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="top">
+      <div>
+        <h1>Form &amp; Fokus</h1>
+        <p class="sub">Træning, søvn og studie i perioder af 14 dage ud fra Garmin, Hevy og kalenderen. Perioderne skrives hver anden fredag; tallene opdateres hvert 30. minut og når du åbner Kompas-appen.</p>
+      </div>
+      <div class="meta" id="meta"></div>
+    </div>
+    <div class="views" role="tablist" aria-label="Visning">
+      <button class="view-btn" role="tab" id="tab-perioder" aria-controls="main" aria-selected="true">14-dages perioder</button>
+      <button class="view-btn" role="tab" id="tab-maaneder" aria-controls="big" aria-selected="false">Store billede</button>
+      <button class="view-btn" role="tab" id="tab-uge" aria-controls="uge" aria-selected="false">Ugen</button>
+    </div>
+    <div class="periods" id="weeks" role="group" aria-label="Vælg uge" hidden></div>
+    <div class="periods" id="periods" role="group" aria-label="Vælg periode"></div>
+  </header>
+  <main id="main" style="display:grid;gap:36px">
+    <p class="state" id="state">Henter perioder…</p>
+  </main>
+  <section class="big" id="big" aria-labelledby="tab-maaneder" hidden>
+    <p class="state">Henter måneder…</p>
+  </section>
+  <section class="uge" id="uge" aria-labelledby="tab-uge" hidden>
+    <p class="state">Henter ugen…</p>
+  </section>
+  <footer id="foot">
+    <p><b>Sådan læses tallene.</b> Pilene sammenligner med perioden før. Grøn betyder bedre, rød betyder dårligere, grå betyder at retningen ikke i sig selv er god eller dårlig. I en foreløbig periode er summer som pas og timer ikke farvet, fordi perioden ikke er slut.</p>
+    <p>Intensitet er tid i pulszoner fra løb, cykling, roning, boldspil og klatring. Svømning er udeladt, fordi pulsen fra håndleddet i vand er upålidelig, og styrkepas er udeladt, fordi pulsen der ikke siger noget om indsatsen. Zonegrænserne er ændret over sommeren, så ældre perioder viser lidt for meget Z3.</p>
+    <p>Belastning er i TRIMP-enheder for alle pas: pulsbaseret for kondition, og for styrkepas beregnet ud fra arbejdssæt i Hevy med tillæg for sæt med RPE, omregnet til samme skala. Sæt uden RPE får intet tillæg, så en periode med få RPE-registreringer viser snarere for lav end for høj belastning. Alle perioder er regnet om efter samme metode.</p>
+    <p>e1RM er estimeret 1RM efter Epley ud fra dit bedste sæt med højst 12 gentagelser i Hevy. Siden viser øvelser med stang eller håndvægt, som du har lavet i mindst 3 af de seneste 6 perioder; maskiner og kabler er udeladt, fordi vægten ikke kan sammenlignes på tværs af maskiner og centre. Står der "uden RPE" ved bedste sæt, ved vi ikke hvor tæt på max det var, så e1RM kan være for lav.</p>
+    <p>Selvstudie tæller sessioner fra CalTask på mindst 5 minutter i kalenderen Selvstudie; før første logning står selvstudie som ingen data, ikke 0. Undervisning er begivenheder fra universitetets skema (titler med hold og kursuskode).</p>
+  </footer>
+</div>
+<div class="tip" id="tip" hidden></div>
+
+<script>
+const GROUPS = [
+  { title: "Søvn og restitution", metrics: [
+    { k:"sundhed.sovn_t", l:"Søvn pr. nat", u:"t", d:2, b:"up" },
+    { k:"sundhed.naetter_u7", l:"Nætter under 7 t", u:"", d:0, b:"down", s:1 },
+    { k:"sundhed.sovn_score", l:"Søvnscore", u:"", d:0, b:"up" },
+    { k:"sundhed.hrv", l:"HRV om natten", u:"ms", d:0, b:"up" },
+    { k:"sundhed.hvilepuls", l:"Hvilepuls", u:"bpm", d:1, b:"down" },
+    { k:"sundhed.readiness", l:"Training readiness", u:"", d:0, b:"up" },
+    { k:"sundhed.stress", l:"Stress", u:"", d:0, b:"down" },
+  ]},
+  { title: "Træning", metrics: [
+    { k:"traening.pas", l:"Pas", u:"", d:0, b:"up", s:1 },
+    { k:"traening.timer", l:"Træningstid", u:"t", d:1, b:null, s:1 },
+    { k:"traening.belastning", l:"Belastning (TRIMP)", u:"", d:0, b:null, s:1 },
+    { k:"_lavpct", l:"Andel lav intensitet (Z1–2)", u:"%", d:0, b:"up",
+      none: p => p.traening?.pas ? "Ingen konditionspas med pulszoner i perioden" : null },
+    { k:"sundhed.skridt", l:"Skridt pr. dag", u:"", d:0, b:"up" },
+  ]},
+  { title: "Styrke", lifts: true, metrics: [
+    { k:"styrke.haarde_saet", l:"Arbejdssæt", u:"", d:0, b:"up", s:1 },
+    { k:"styrke.rpe_daekning_pct", l:"Arbejdssæt med RPE", u:"%", d:0, b:"up" },
+  ]},
+  { title: "Studie",
+    empty: p => p.studie == null ? "Kalenderen dækker ikke denne periode, så der er ingen studietal." : null,
+    metrics: [
+    { k:"studie.selvstudie_t", l:"Selvstudie", u:"t", d:1, b:"up", s:1, none: noStudy },
+    { k:"studie.sessioner", l:"Studiesessioner", u:"", d:0, b:"up", s:1, none: noStudy },
+    { k:"studie.undervisning_t", l:"Undervisning", u:"t", d:1, b:null, s:1 },
+  ]},
+  { title: "Krop", metrics: [
+    { k:"sundhed.vaegt", l:"Vægt (seneste)", u:"kg", d:1, b:null },
+    { k:"sundhed.vo2max", l:"VO2max", u:"", d:1, b:"up" },
+  ]},
+];
+
+function noStudy(p){ return p.studie ? "Selvstudie blev ikke logget i perioden" : null; }
+
+// Løft: estimeret 1RM for øvelser med stang eller håndvægt, som er lavet i
+// mindst 3 af de seneste 6 perioder — altså det aktuelle program. Tungeste først.
+function liftMetrics(){
+  const count = {}, latest = {};
+  periods.slice(-6).forEach(q => Object.entries(q?.styrke?.e1rm || {}).forEach(([k,v]) => {
+    if (v != null){ count[k] = (count[k]||0) + 1; latest[k] = v; }
+  }));
+  return Object.keys(count).filter(k => count[k] >= 3)
+    .sort((a,b) => latest[b] - latest[a])
+    .map(k => ({ k:"styrke.e1rm."+k, l: liftName(k)+" e1RM", u:"kg", d:1, b:"up",
+                 none: () => "Ikke lavet i perioden", sub: p => liftSub(p, k),
+                 // Et fald fra et sæt uden RPE kan bare være et lettere sæt
+                 unsure: p => p?.styrke?.loeft?.[k]?.rpe == null }));
+}
+function liftName(k){
+  for (let j = periods.length-1; j >= 0; j--){ const n = periods[j]?.styrke?.loeft?.[k]?.navn; if (n) return n; }
+  return k.replace(/_/g, " ");
+}
+function liftSub(p, k){
+  const x = p?.styrke?.loeft?.[k]; if (!x) return "";
+  const rpe = x.rpe == null ? "uden RPE" : "RPE " + fmt(x.rpe, Number.isInteger(x.rpe) ? 0 : 1);
+  return `Bedste sæt ${x.bedste_saet} · ${rpe}`;
+}
+let groups = GROUPS;
+function buildGroups(){ groups = GROUPS.map(g => g.lifts ? {...g, metrics: [...g.metrics, ...liftMetrics()]} : g); }
+
+const MON = ["jan","feb","mar","apr","maj","jun","jul","aug","sep","okt","nov","dec"];
+const pd = s => { const [y,m,d] = s.split("-").map(Number); return {y,m,d}; };
+function range(s,e){
+  const a = pd(s), b = pd(e);
+  return a.m === b.m ? `${a.d}.–${b.d}. ${MON[b.m-1]}` : `${a.d}. ${MON[a.m-1]} – ${b.d}. ${MON[b.m-1]}`;
+}
+function get(o, path){
+  if (path === "_lavpct"){
+    const z = o?.traening?.intensitet_min; if (!z) return null;
+    const t = (z.lav||0)+(z.mellem||0)+(z.hoj||0); return t > 0 ? 100*(z.lav||0)/t : null;
+  }
+  return path.split(".").reduce((x,k)=> (x==null ? null : x[k]), o) ?? null;
+}
+const fmt = (v,d) => v==null ? "–" : Number(v).toLocaleString("da-DK",{minimumFractionDigits:d,maximumFractionDigits:d});
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+let periods = [], sel = null;
+const $ = id => document.getElementById(id);
+
+function statusPill(p){
+  if (p.status === "foreløbig") return `<span class="pill prelim">Foreløbig · ${p.dage_med_data ?? "?"} af 14 dage</span>`;
+  if (p.kilde === "tilbagefyldt") return `<span class="pill backfill">Beregnet bagud</span>`;
+  return `<span class="pill final">Endelig</span>`;
+}
+
+function renderChips(){
+  $("periods").innerHTML = periods.map((p,i)=>
+    `<button class="chip" id="chip-${esc(p.id)}" aria-pressed="${i===sel}" data-i="${i}">${p.status==="foreløbig"?'<span class="dot" aria-hidden="true"></span>':""}${esc(range(p.start,p.slut))}</button>`
+  ).join("");
+  $("periods").querySelectorAll(".chip").forEach(b => b.onclick = () => { sel = +b.dataset.i; render(); });
+  const active = $("periods").querySelector('[aria-pressed="true"]');
+  if (active) active.scrollIntoView({block:"nearest", inline:"nearest"});
+}
+
+function renderVerdict(p){
+  const v = p.vurdering || {};
+  const list = (arr) => arr && arr.length ? `<ul>${arr.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>` : `<p class="empty">Intet noteret.</p>`;
+  const hasCols = (v.gaar_godt?.length || v.gaar_daarligt?.length || v.forbedring?.length);
+  const follow = v.opfoelgning?.length ? `
+    <div class="follow"><h3>Opfølgning på sidste periodes fokus</h3>
+      ${v.opfoelgning.map(f=>`<div class="follow-row"><span class="st ${esc(f.status)}">${f.status==="naaet"?"Nået":f.status==="delvist"?"Delvist":"Ikke nået"}</span><div><b>${esc(f.fokus)}</b>${f.note?` <span class="muted">– ${esc(f.note)}</span>`:""}</div></div>`).join("")}
+    </div>` : "";
+  const focus = v.fokus?.length ? `
+    <div class="focus"><h3>${p.status==="foreløbig" ? "Foreslået fokus til næste periode" : "Fokus til næste periode"}</h3>
+      <ol>${v.fokus.map(x=>`<li>${esc(x)}</li>`).join("")}</ol>${follow}
+    </div>` : (follow ? `<div class="focus">${follow}</div>` : "");
+  const caveats = p.forbehold?.length ? `<div class="caveats"><h3>Forbehold ved tallene</h3>
+      <ul>${p.forbehold.map(x=>`<li>${esc(x)}</li>`).join("")}</ul></div>` : "";
+  return `<section class="verdict" aria-labelledby="vh">
+    <div class="group-head"><h2 id="vh">${esc(range(p.start,p.slut))}</h2>${statusPill(p)}</div>
+    ${v.resume ? `<p class="summary">${esc(v.resume)}</p>` : `<p class="empty">Ingen vurdering for denne periode.</p>`}
+    ${caveats}
+    ${hasCols ? `<div class="cols">
+      <div class="col"><h3><span class="ico g" aria-hidden="true">▲</span>Går godt</h3>${list(v.gaar_godt)}</div>
+      <div class="col"><h3><span class="ico b" aria-hidden="true">▼</span>Går dårligt</h3>${list(v.gaar_daarligt)}</div>
+      <div class="col"><h3><span class="ico i" aria-hidden="true">→</span>Kan forbedres</h3>${list(v.forbedring)}</div>
+    </div>` : ""}
+    ${focus}
+  </section>`;
+}
+
+function sparkSVG(vals, idx){
+  const W = 200, H = 44, P = 5;
+  const nn = vals.filter(v=>v!=null);
+  if (nn.length < 2) return "";
+  let mn = Math.min(...nn), mx = Math.max(...nn);
+  if (mn === mx){ mn -= 1; mx += 1; }
+  const x = i => vals.length === 1 ? W/2 : P + i*(W-2*P)/(vals.length-1);
+  const y = v => H-P - (v-mn)/(mx-mn)*(H-2*P);
+  let segs = [], cur = [];
+  vals.forEach((v,i)=>{ if (v==null){ if (cur.length) segs.push(cur); cur=[]; } else cur.push([x(i),y(v)]); });
+  if (cur.length) segs.push(cur);
+  let out = `<line class="gr" x1="0" x2="${W}" y1="${H-P}" y2="${H-P}"/>`;
+  segs.forEach(s=>{
+    if (s.length > 1){
+      const d = s.map((p,j)=>(j?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" ");
+      out += `<path class="ar" d="${d} L${s[s.length-1][0].toFixed(1)} ${H-P} L${s[0][0].toFixed(1)} ${H-P} Z"/><path class="ln" d="${d}"/>`;
+    } else out += `<circle class="pt" cx="${s[0][0]}" cy="${s[0][1]}" r="2.5"/>`;
+  });
+  if (vals[idx] != null) out += `<circle class="sel" cx="${x(idx)}" cy="${y(vals[idx])}" r="4"/>`;
+  out += `<line class="hov" x1="0" x2="0" y1="0" y2="${H}" hidden/>`;
+  return `<svg class="spark" viewBox="0 0 ${W} ${H}" role="img" aria-label="Udvikling over ${vals.length} perioder">${out}</svg>`;
+}
+
+function renderGroups(p){
+  return groups.map(g=>{
+    const hasAny = g.metrics.some(m => periods.some(q => get(q,m.k) != null));
+    if (!hasAny) return "";
+    const emptyMsg = g.empty?.(p);
+    if (emptyMsg) return `<section class="group"><div class="group-head"><h2>${g.title}</h2></div><p class="empty">${esc(emptyMsg)}</p></section>`;
+    const tiles = g.metrics.map(m=>{
+      const vals = periods.map(q=>get(q,m.k));
+      if (vals.every(v=>v==null)) return "";
+      const v = vals[sel], sub = m.sub ? m.sub(p) : "";
+      let prev = null; for (let j = sel-1; j >= 0; j--){ if (vals[j]!=null){ prev = vals[j]; break; } }
+      if (v!=null && prev!=null){
+        const diff = v - prev, same = Math.abs(diff) < Math.pow(10,-m.d)/2;
+        // En sum i en foreløbig periode er lav fordi perioden ikke er slut
+        const partial = m.s && p.status === "foreløbig";
+        const unsure = diff < 0 && m.unsure?.(p);
+        const cls = same || !m.b || partial || unsure ? "" : ((diff>0) === (m.b==="up") ? "good" : "bad");
+        const arrow = same ? "=" : diff > 0 ? "▲" : "▼";
+        const word = partial ? "perioden er ikke slut" : unsure ? "sættet er uden RPE"
+          : cls==="good" ? "bedre" : cls==="bad" ? "dårligere" : "";
+        const delta = `<span aria-hidden="true">${arrow}</span><span>${same ? "Uændret" : (diff>0?"+":"−")+fmt(Math.abs(diff),m.d)+(m.u?" "+m.u:"")} ${word ? "· "+word : ""}</span>`;
+        return tile(m, v, `<div class="delta ${cls}">${delta}</div>`, vals, sub);
+      }
+      const msg = v==null ? ((m.none && m.none(p)) || "Ingen data i perioden") : "Første periode med data";
+      return tile(m, v, `<div class="delta">${esc(msg)}</div>`, vals, sub);
+    }).join("");
+    if (!tiles) return "";
+    return `<section class="group"><div class="group-head"><h2>${g.title}</h2></div><div class="tiles">${tiles}</div></section>`;
+  }).join("");
+}
+function tile(m, v, deltaHtml, vals, sub){
+  return `<div class="tile" data-k="${esc(m.k)}" data-u="${esc(m.u)}" data-d="${m.d}">
+    <div class="lbl">${esc(m.l)}</div>
+    <div class="val">${fmt(v,m.d)}${v!=null && m.u ? `<small>${esc(m.u)}</small>` : ""}</div>
+    ${deltaHtml}
+    ${sub ? `<div class="sub">${esc(sub)}</div>` : ""}
+    ${sparkSVG(vals, sel)}
+  </div>`;
+}
+
+function barCard(title, rows, unit, note){
+  if (!rows || !rows.length) return "";
+  const mx = Math.max(...rows.map(r=>r.v), 0.0001);
+  return `<div class="card"><h3>${title}</h3><div class="bars">${rows.map(r=>`
+    <div class="bar-row"><span>${esc(r.n)}</span><div class="t"><div class="f" style="width:${(100*r.v/mx).toFixed(1)}%"></div></div><span class="v">${fmt(r.v,1)} ${unit}</span></div>`).join("")}
+  </div>${note?`<p class="note">${note}</p>`:""}</div>`;
+}
+function renderDist(p){
+  const t = p.traening || {}, s = p.studie;
+  let html = "";
+  html += barCard("Træningstid pr. sport", (t.sport||[]).map(r=>({n:`${r.navn} (${r.pas})`, v:r.timer})), "t");
+  const z = t.intensitet_min;
+  if (z && (z.lav+z.mellem+z.hoj) > 0){
+    const tot = z.lav+z.mellem+z.hoj, pc = x => 100*x/tot;
+    html += `<div class="card"><h3>Intensitet</h3>
+      <div class="stack" role="img" aria-label="Lav ${Math.round(pc(z.lav))} procent, mellem ${Math.round(pc(z.mellem))} procent, høj ${Math.round(pc(z.hoj))} procent">
+        <span style="width:${pc(z.lav)}%;background:var(--z-low)"></span><span style="width:${pc(z.mellem)}%;background:var(--z-mid)"></span><span style="width:${pc(z.hoj)}%;background:var(--z-high)"></span>
+      </div>
+      <div class="legend"><span><i style="background:var(--z-low)"></i>Lav Z1–2 · <span class="num">${Math.round(pc(z.lav))} % (${Math.round(z.lav)} min)</span></span>
+      <span><i style="background:var(--z-mid)"></i>Mellem Z3 · <span class="num">${Math.round(pc(z.mellem))} % (${Math.round(z.mellem)} min)</span></span>
+      <span><i style="background:var(--z-high)"></i>Høj Z4–5 · <span class="num">${Math.round(pc(z.hoj))} % (${Math.round(z.hoj)} min)</span></span></div>
+      <p class="note">Uden svømning og styrke.</p></div>`;
+  } else if (t.pas) {
+    html += `<div class="card"><h3>Intensitet</h3><p class="empty">Ingen pas med brugbar pulszonedata i perioden.</p></div>`;
+  }
+  if (s){
+    html += s.pr_fag == null ? `<div class="card"><h3>Selvstudie pr. fag</h3><p class="empty">Selvstudie blev ikke logget i perioden.</p></div>`
+      : s.pr_fag.length ? barCard("Selvstudie pr. fag", s.pr_fag.map(r=>({n:r.fag, v:r.timer})), "t")
+      : `<div class="card"><h3>Selvstudie pr. fag</h3><p class="empty">Ingen studiesessioner logget i perioden.</p></div>`;
+    if (s.andre_begivenheder?.length) html += `<div class="card"><h3>Andet i kalenderen</h3><div class="bars">${s.andre_begivenheder.map(x=>`<div>${esc(x)}</div>`).join("")}</div><p class="note">Sociale arrangementer og andet uden kursuskode. Gode at kende, når en nat skal forklares.</p></div>`;
+  }
+  return html ? `<section class="group"><div class="group-head"><h2>Fordeling i perioden</h2></div><div class="dist">${html}</div></section>` : "";
+}
+
+function renderTable(){
+  const head = `<tr><th>Nøgletal</th>${periods.map(p=>`<th>${esc(range(p.start,p.slut))}</th>`).join("")}</tr>`;
+  const body = groups.map(g => `<tr class="sec"><td colspan="${periods.length+1}">${g.title}</td></tr>` +
+    g.metrics.map(m=>`<tr><td>${esc(m.l)}${m.u?` (${esc(m.u)})`:""}</td>${periods.map(p=>`<td>${fmt(get(p,m.k),m.d)}</td>`).join("")}</tr>`).join("")).join("");
+  return `<details id="tbl"><summary>Alle tal i en tabel</summary><div class="tbl-wrap"><table><thead>${head}</thead><tbody>${body}</tbody></table></div></details>`;
+}
+
+function render(){
+  if (!periods.length){ $("main").innerHTML = `<p class="state">Ingen perioder endnu. Den første rapport skrives fredag.</p>`; return; }
+  buildGroups();
+  const p = periods[sel];
+  const wasOpen = $("tbl")?.open;
+  renderChips();
+  const upd = p.genereret ? new Date(p.genereret).toLocaleString("da-DK",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}) : null;
+  if (view === "perioder") $("meta").innerHTML = upd ? `Opdateret ${esc(upd)}` : "";
+  $("main").innerHTML = renderVerdict(p) + renderGroups(p) + renderDist(p) + renderTable();
+  if (wasOpen) $("tbl").open = true;
+  wireSparks();
+}
+
+function wireSparks(){
+  const tip = $("tip");
+  document.querySelectorAll(".tile").forEach(t=>{
+    const svg = t.querySelector("svg"); if (!svg) return;
+    const k = t.dataset.k, u = t.dataset.u, d = +t.dataset.d;
+    const hov = svg.querySelector(".hov");
+    // Kun perioder med en værdi kan vælges, så tomme perioder ikke vises
+    const withData = periods.map((q,j) => get(q,k) != null ? j : -1).filter(j => j >= 0);
+    const n = periods.length;
+    const pick = e => {
+      const r = svg.getBoundingClientRect();
+      const raw = n === 1 ? 0 : ((e.clientX - r.left)/r.width*200 - 5)/(190/(n-1));
+      return withData.reduce((best,j) => Math.abs(j-raw) < Math.abs(best-raw) ? j : best, withData[0]);
+    };
+    const move = e => {
+      const r = svg.getBoundingClientRect(), i = pick(e);
+      const px = n === 1 ? 100 : 5 + i*190/(n-1);
+      hov.setAttribute("x1",px); hov.setAttribute("x2",px); hov.removeAttribute("hidden");
+      const q = periods[i], v = get(q,k);
+      tip.innerHTML = `${esc(range(q.start,q.slut))}: <b>${fmt(v,d)}${v!=null&&u?" "+esc(u):""}</b>`;
+      tip.style.left = (r.left + px/200*r.width) + "px"; tip.style.top = (r.top) + "px"; tip.hidden = false;
+    };
+    const leave = () => { hov.setAttribute("hidden", ""); tip.hidden = true; };
+    svg.addEventListener("pointermove", move); svg.addEventListener("pointerleave", leave);
+    svg.addEventListener("click", e => { const i = pick(e); if (i !== sel){ sel = i; leave(); render(); } });
+  });
+}
+
+// ---------- Store billede: måned for måned ----------
+// Én serie pr. graf, så grafens titel navngiver den; søjler for mængder,
+// linjer for niveauer. Den igangværende måned tegnes stiplet/åben.
+const BIG = [
+  { g:"Træning", k:"timer_pr_uge", l:"Træning pr. uge", u:"t", d:1, kind:"bar", b:null },
+  { g:"Træning", k:"belastning_pr_uge", l:"Belastning pr. uge", u:"TRIMP", d:0, kind:"bar", b:null },
+  { g:"Træning", k:"styrke_arbejdssaet_pr_uge", l:"Arbejdssæt pr. uge", u:"sæt", d:1, kind:"bar", b:"up",
+    note:"Styrkesæt fra Hevy, som er brugt siden april 2026." },
+  { g:"Søvn og restitution", k:"sovn_t", l:"Søvn pr. nat", u:"t", d:2, kind:"line", b:"up" },
+  { g:"Søvn og restitution", k:"hrv", l:"HRV om natten", u:"ms", d:0, kind:"line", b:"up" },
+  { g:"Søvn og restitution", k:"hvilepuls", l:"Hvilepuls", u:"bpm", d:1, kind:"line", b:"down" },
+  { g:"Hverdag og krop", k:"skridt", l:"Skridt pr. dag", u:"", d:0, kind:"line", b:"up" },
+  { g:"Hverdag og krop", k:"vo2max", l:"VO2max", u:"", d:1, kind:"line", b:"up",
+    note:"Garmin opdaterer kun VO2max efter løb og cykling udendørs, derfor hullerne." },
+  { g:"Hverdag og krop", k:"vaegt", l:"Vægt", u:"kg", d:1, kind:"line", b:null,
+    note:"Seneste vejning i måneden." },
+];
+const CH = { W:300, H:128, L:40, R:6, T:8, B:20 };
+let months = [], ov = null, monthsLoaded = false, view = "perioder";
+const ym = s => s.split("-").map(Number);
+const monLabel = s => { const [y,m] = ym(s); return `${MON[m-1]} ${y}`; };
+function monRange(a, b){
+  const [ya,ma] = ym(a), [yb,mb] = ym(b);
+  return ya === yb ? `${MON[ma-1]}–${MON[mb-1]} ${yb}` : `${MON[ma-1]} ${ya} – ${MON[mb-1]} ${yb}`;
+}
+function barPath(x, y, w, h, r){
+  if (h <= 0) return "";
+  r = Math.min(r, w/2, h);
+  return `M${x} ${y+h}V${y+r}Q${x} ${y} ${x+r} ${y}H${x+w-r}Q${x+w} ${y} ${x+w} ${y+r}V${y+h}Z`;
+}
+function monthSVG(m, vals){
+  const {W,H,L,R,T,B} = CH, n = vals.length, cw = (W-L-R)/n;
+  const nn = vals.filter(v => v != null), bar = m.kind === "bar";
+  const lo = bar ? 0 : Math.min(...nn), hi = Math.max(...nn);
+  const span = (hi - lo) || Math.abs(hi) || 1;
+  const ylo = bar ? 0 : lo - span*.15, yhi = hi + span*.12;
+  const y = v => T + (H-T-B) * (1 - (v-ylo)/(yhi-ylo));
+  const xc = i => L + cw*i + cw/2;
+  let g = "";
+  [...new Set([lo, hi])].forEach(t => {
+    const ty = y(t).toFixed(1);
+    g += `<line class="gl" x1="${L}" x2="${W-R}" y1="${ty}" y2="${ty}"/>`
+       + `<text class="ax" x="${L-6}" y="${(+ty+3.5).toFixed(1)}" text-anchor="end">${fmt(t, t === 0 ? 0 : m.d)}</text>`;
+  });
+  let firstLabel = true;
+  months.forEach((r, i) => {
+    const [yy, mm] = ym(r.maaned);
+    if ((mm-1) % 3 !== 0) return;
+    const txt = MON[mm-1] + (mm === 1 || firstLabel ? " " + String(yy).slice(2) : "");
+    firstLabel = false;
+    g += `<text class="ax" x="${xc(i).toFixed(1)}" y="${H-5}" text-anchor="middle">${txt}</text>`;
+  });
+  if (bar){
+    vals.forEach((v, i) => {
+      if (v == null) return;
+      const w = Math.max(1, cw - 2), y0 = y(v);
+      g += `<path class="bar${months[i].igangvaerende ? " now" : ""}" d="${barPath(+(xc(i)-w/2).toFixed(2), +y0.toFixed(2), +w.toFixed(2), +(y(0)-y0).toFixed(2), 2)}"/>`;
+    });
+  } else {
+    let d = "", dNow = "";
+    for (let i = 1; i < n; i++){
+      if (vals[i] == null || vals[i-1] == null) continue;
+      const seg = `M${xc(i-1).toFixed(1)} ${y(vals[i-1]).toFixed(1)}L${xc(i).toFixed(1)} ${y(vals[i]).toFixed(1)}`;
+      if (months[i].igangvaerende) dNow += seg; else d += seg;
+    }
+    if (d) g += `<path class="mline" d="${d}"/>`;
+    if (dNow) g += `<path class="mline now" d="${dNow}"/>`;
+    vals.forEach((v, i) => {
+      if (v != null) g += `<circle class="mpt${months[i].igangvaerende ? " now" : ""}" cx="${xc(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="3"/>`;
+    });
+  }
+  g += `<rect class="hl" x="0" y="${T}" width="${cw.toFixed(1)}" height="${H-T-B}" hidden/>`;
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(m.l)} måned for måned">${g}</svg>`;
+}
+function deltaText(m, a, b){
+  if (a == null || b == null) return `<span class="muted">–</span>`;
+  // Over et år er under 2 % forskel støj, ikke en retning
+  const diff = b - a, same = Math.abs(diff) < Math.max(Math.pow(10,-m.d)/2, Math.abs(a)*.02);
+  const cls = same || !m.b ? "" : ((diff>0) === (m.b==="up") ? "good" : "bad");
+  const word = cls === "good" ? " · bedre" : cls === "bad" ? " · dårligere" : "";
+  return `<span class="delta ${cls}">${same ? "≈ Uændret" : (diff>0 ? "▲ +" : "▼ −") + fmt(Math.abs(diff),m.d) + (m.u ? " " + esc(m.u) : "")}${word}</span>`;
+}
+function renderBig(){
+  const el = $("big");
+  if (!monthsLoaded){ el.innerHTML = `<p class="state">Henter måneder…</p>`; return; }
+  if (!months.length){ el.innerHTML = `<p class="state">Ingen månedsdata endnu. De skrives sammen med næste rapport.</p>`; return; }
+  const u = ov?.udvikling;
+  let html = `<p class="intro">Måned for måned fra ${esc(monLabel(months[0].maaned))}. Mængder er pr. uge, så korte måneder og den igangværende kan sammenlignes. Stiplede søjler og åbne prikker er måneden, der er i gang.</p>`;
+  if (u){
+    const rows = BIG.filter(m => u[m.k]).map(m => `<tr><td>${esc(m.l)}${m.u ? ` (${esc(m.u)})` : ""}</td><td>${fmt(u[m.k].tidlig,m.d)}</td><td>${fmt(u[m.k].seneste,m.d)}</td><td>${deltaText(m, u[m.k].tidlig, u[m.k].seneste)}</td></tr>`).join("");
+    html += `<section class="group"><div class="group-head"><h2>Dengang og nu</h2><span class="muted">De første tre fulde måneder mod de seneste tre</span></div>
+      <div class="card"><div class="cmp-wrap"><table class="cmp"><thead><tr><th>Nøgletal</th><th>${esc(monRange(...u.tidlig.split("–")))}</th><th>${esc(monRange(...u.seneste.split("–")))}</th><th>Ændring</th></tr></thead><tbody>${rows}</tbody></table></div></div></section>`;
+  }
+  if (ov?.forbehold?.length) html += `<div class="caveats"><h3>Forbehold ved tallene</h3><ul>${ov.forbehold.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>`;
+  [...new Set(BIG.map(m => m.g))].forEach(group => {
+    const charts = BIG.filter(m => m.g === group).map(m => {
+      const vals = months.map(r => r[m.k] ?? null);
+      if (vals.every(v => v == null)) return "";
+      let li = vals.length - 1; while (vals[li] == null) li--;
+      const cur = months[li];
+      return `<div class="chart" data-k="${m.k}"><div class="head"><h3>${esc(m.l)}</h3><span class="muted">${esc(monLabel(cur.maaned))}${cur.igangvaerende ? " · indtil nu" : ""}</span></div>
+        <div class="val">${fmt(vals[li], m.d)}${m.u ? `<small>${esc(m.u)}</small>` : ""}</div>
+        ${monthSVG(m, vals)}${m.note ? `<p class="note">${esc(m.note)}</p>` : ""}</div>`;
+    }).join("");
+    if (charts) html += `<section class="group"><div class="group-head"><h2>${group}</h2></div><div class="charts">${charts}</div></section>`;
+  });
+  const wasOpen = $("mtbl")?.open;
+  html += `<details id="mtbl"><summary>Alle måneder i en tabel</summary><div class="tbl-wrap"><table><thead><tr><th>Måned</th>${BIG.map(m => `<th>${esc(m.l)}${m.u ? ` (${esc(m.u)})` : ""}</th>`).join("")}<th>Dage med data</th><th>Mest træning</th></tr></thead><tbody>`
+    + months.map(r => `<tr><td>${esc(monLabel(r.maaned))}${r.igangvaerende ? " (i gang)" : ""}</td>${BIG.map(m => `<td>${fmt(r[m.k],m.d)}</td>`).join("")}<td>${r.dage_med_data}</td><td>${esc((r.sport || []).join(", ")) || "–"}</td></tr>`).join("")
+    + `</tbody></table></div></details>`;
+  el.innerHTML = html;
+  if (wasOpen) $("mtbl").open = true;
+  if (ov?.genereret) $("meta").innerHTML = `Opdateret ${esc(new Date(ov.genereret).toLocaleString("da-DK",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}))}`;
+  wireCharts();
+}
+function wireCharts(){
+  const tip = $("tip"), {W,L,R} = CH, n = months.length, cw = (W-L-R)/n;
+  $("big").querySelectorAll(".chart").forEach(c => {
+    const svg = c.querySelector("svg"); if (!svg) return;
+    const m = BIG.find(x => x.k === c.dataset.k), hl = svg.querySelector(".hl");
+    // Kun måneder med en værdi kan vælges, så tomme måneder ikke vises
+    const withData = months.map((r,j) => r[m.k] != null ? j : -1).filter(j => j >= 0);
+    const move = e => {
+      const r = svg.getBoundingClientRect();
+      const raw = ((e.clientX - r.left)/r.width*W - L)/cw - .5;
+      const i = withData.reduce((best,j) => Math.abs(j-raw) < Math.abs(best-raw) ? j : best, withData[0]);
+      const row = months[i];
+      hl.setAttribute("x", (L + cw*i).toFixed(1)); hl.removeAttribute("hidden");
+      tip.innerHTML = `${esc(monLabel(row.maaned))}${row.igangvaerende ? " (indtil nu)" : ""}: <b>${fmt(row[m.k],m.d)}${m.u ? " " + esc(m.u) : ""}</b>`;
+      tip.style.left = (r.left + (L + cw*i + cw/2)/W*r.width) + "px"; tip.style.top = r.top + "px"; tip.hidden = false;
+    };
+    const leave = () => { hl.setAttribute("hidden", ""); tip.hidden = true; };
+    svg.addEventListener("pointermove", move); svg.addEventListener("pointerleave", leave);
+  });
+}
+// ---------- Ugen: livsoverblikkets ugereview ----------
+// liv.json skrives af livsoverblik (`liv eksport` / `liv gem-review`). Tallene
+// er regnet i Python; siden tegner dem og viser reviewets tekst.
+const LIV = {
+  soevn_timer_snit:{l:"Søvn pr. nat", u:"t", d:2, g:"Søvn og restitution"},
+  soevnscore_snit:{l:"Søvnscore", u:"", d:0, g:"Søvn og restitution"},
+  hrv_snit:{l:"HRV om natten", u:"ms", d:0, g:"Søvn og restitution"},
+  hvilepuls_snit:{l:"Hvilepuls", u:"bpm", d:1, g:"Søvn og restitution"},
+  stress_snit:{l:"Stress", u:"", d:0, g:"Søvn og restitution"},
+  traening_timer:{l:"Træningstid", u:"t", d:1, g:"Træning og bevægelse", bar:1},
+  traening_pas:{l:"Træningspas", u:"", d:0, g:"Træning og bevægelse", bar:1},
+  belastning:{l:"Belastning", u:"", d:0, g:"Træning og bevægelse", bar:1, note:"Garmins tal; styrkepas tæller ikke med."},
+  skridt_snit:{l:"Skridt pr. dag", u:"", d:0, g:"Træning og bevægelse"},
+  variabelt_kr:{l:"Variable køb", u:"kr", d:0, g:"Økonomi", bar:1},
+  takeaway_kr:{l:"Take-away", u:"kr", d:0, g:"Økonomi", bar:1},
+  takeaway_koeb:{l:"Take-away-køb", u:"", d:0, g:"Økonomi", bar:1},
+  cafe_bar_kr:{l:"Café og bar", u:"kr", d:0, g:"Økonomi", bar:1},
+  dagligvarer_kr:{l:"Dagligvarer", u:"kr", d:0, g:"Økonomi", bar:1},
+  undervisning_timer:{l:"Undervisning", u:"t", d:1, g:"Studie", bar:1},
+  selvstudie_timer:{l:"Selvstudie", u:"t", d:1, g:"Studie", bar:1},
+  selvstudie_dage:{l:"Dage med selvstudie", u:"", d:0, g:"Studie", bar:1},
+};
+const KPI = ["soevn_timer_snit","hrv_snit","stress_snit","skridt_snit","traening_timer","variabelt_kr"];
+const TREND = ["soevn_timer_snit","hrv_snit","hvilepuls_snit","stress_snit","skridt_snit","traening_timer",
+               "variabelt_kr","takeaway_kr","cafe_bar_kr","undervisning_timer","selvstudie_timer"];
+const DAYS = ["man","tir","ons","tor","fre","lør","søn"];
+let liv = null, livErr = null, wsel = null;
+const uv = (k, v) => v == null ? "–" : fmt(v, LIV[k]?.d ?? 1) + (LIV[k]?.u ? " " + LIV[k].u : "");
+const ugeNr = s => +s.split("-W")[1];
+const dm = s => { const {m,d} = pd(s); return `${d}. ${MON[m-1]}`; };
+const addDays = (s, n) => { const {y,m,d} = pd(s); const t = new Date(Date.UTC(y, m-1, d+n)); return t.toISOString().slice(0,10); };
+const dayIdx = (a, b) => Math.round((Date.parse(a) - Date.parse(b)) / 864e5);
+const hm = s => { const [h,m] = s.split(":").map(Number); return h + m/60; };
+const shortTitle = t => { const p = t.split(" - "); return p.length >= 3 ? p[0].replace(/\s*\([A-Z]+\)$/,"") + " · " + p[p.length-1] : t; };
+const SPORT = {strength_training:"Styrke", lap_swimming:"Svømning", running:"Løb", cycling:"Cykling", e_bike_fitness:"Elcykel-pas",
+               indoor_rowing:"Roning", walking:"Gåtur", bouldering:"Klatring", indoor_climbing:"Klatring", soccer:"Fodbold", hiking:"Vandring"};
+const sportName = s => SPORT[s] || (s || "Træning").replace(/_/g, " ");
+
+function vcls(a){
+  if (!a?.tydelig) return "";
+  return a.vurdering === "godt" ? "good" : a.vurdering === "skidt" ? "bad" : "neu";
+}
+
+function renderWeekChips(){
+  const rs = liv.reviews;
+  $("weeks").innerHTML = rs.map((r,i) =>
+    `<button class="chip" aria-pressed="${i===wsel}" data-i="${i}">${r.tekst ? "" : '<span class="dot" aria-hidden="true"></span>'}Uge ${ugeNr(r.uge)} · ${esc(range(r.mandag, addDays(r.mandag, 6)))}</button>`).join("");
+  $("weeks").querySelectorAll(".chip").forEach(b => b.onclick = () => { wsel = +b.dataset.i; renderUge(); });
+  $("weeks").querySelector('[aria-pressed="true"]')?.scrollIntoView({block:"nearest", inline:"nearest"});
+}
+
+function kpiTile(k, a){
+  const c = vcls(a);
+  const sub = a ? `normalt ${uv(k, a.normal)}` : "ingen sammenligning";
+  const word = c === "good" ? " · bedre end normalt" : c === "bad" ? " · dårligere end normalt" : c === "neu" ? " · usædvanligt" : "";
+  return `<div class="kpi ${c === "neu" ? "" : c}"><span class="lbl">${esc(LIV[k].l)}</span>
+    <span class="val">${a?.vaerdi == null ? "–" : fmt(a.vaerdi, LIV[k].d)}${a?.vaerdi != null && LIV[k].u ? `<small>${esc(LIV[k].u)}</small>` : ""}</span>
+    <span class="sub">${esc(sub + word)}</span></div>`;
+}
+
+function renderHero(r){
+  const t = r.tekst, af = r.rapport.afvigelser;
+  const kpis = `<div class="kpis">${KPI.map(k => kpiTile(k, af[k])).join("")}</div>`;
+  if (!t) return `<section class="hero"><div class="group-head"><h2>Uge ${ugeNr(r.uge)} · ${esc(range(r.mandag, addDays(r.mandag,6)))}</h2><span class="pill prelim">Kun tal · review ikke skrevet</span></div>
+    <p class="empty">Mandagsreviewet er ikke skrevet for denne uge endnu. Tallene nedenfor er regnet, men der er ingen tekst.</p>${kpis}</section>`;
+  const list = (h, arr, ico, cls) => arr?.length ? `<div class="col"><h3><span class="ico ${cls}" aria-hidden="true">${ico}</span>${h}</h3><ul>${arr.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>` : "";
+  const cav = t.forbehold?.length ? `<div class="caveats"><h3>Manglede i data</h3><ul>${t.forbehold.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>` : "";
+  return `<section class="hero" aria-labelledby="uh">
+    <div class="group-head"><h2 id="uh">Uge ${ugeNr(r.uge)} · ${esc(range(r.mandag, addDays(r.mandag,6)))}</h2><span class="pill final">Review ${esc(dm(r.genereret.slice(0,10)))}</span></div>
+    <p class="summary">${esc(t.saetning)}</p>
+    ${cav}
+    ${t.en_ting ? `<div class="onething"><h3>Én ting at gøre anderledes</h3><p>${esc(t.en_ting)}</p></div>` : ""}
+    ${kpis}
+    <div class="cols">${list("Det der skilte sig ud", t.udskilte, "!", "i")}${list("Sammenhænge", t.sammenhaenge, "~", "i")}</div>
+  </section>`;
+}
+
+// Hver række: normalområdet (min–max over baseline) som bånd, medianen som
+// streg og ugen som prik. Kun tydelige afvigelser får farve.
+function renderDev(r){
+  const af = r.rapport.afvigelser;
+  let html = "", last = null;
+  Object.keys(LIV).forEach(k => {
+    const a = af[k]; if (!a) return;
+    if (LIV[k].g !== last){ last = LIV[k].g; html += `<div class="dev-group">${esc(last)}</div>`; }
+    const [lo, hi] = a.normal_interval, v = a.vaerdi;
+    let mn = Math.min(lo, v), mx = Math.max(hi, v);
+    const pad = (mx - mn) * .08 || Math.abs(mx) * .1 || 1; mn -= pad; mx += pad;
+    const x = q => (100 * (q - mn) / (mx - mn)).toFixed(1) + "%";
+    const c = vcls(a) || "";
+    const zt = a.tydelig ? `<span class="z ${c}">${a.vurdering === "godt" ? "godt" : a.vurdering === "skidt" ? "skidt" : "usædvanligt"}</span>` : "";
+    html += `<div class="dev-row${a.tydelig ? " tydelig" : ""}">
+      <div class="n">${esc(LIV[k].l)}${zt}<small>${esc(a.forklaring)}</small></div>
+      <div class="strip" role="img" aria-label="${esc(LIV[k].l)}: ${esc(uv(k,v))}, normalt ${esc(uv(k,a.normal))}, normalområde ${esc(uv(k,lo))} til ${esc(uv(k,hi))}">
+        <div class="axis"></div><div class="band" style="left:${x(lo)};width:calc(${x(hi)} - ${x(lo)})"></div>
+        <div class="med" style="left:${x(a.normal)}"></div><div class="pt ${c}" style="left:${x(v)}"></div></div>
+      <div class="r">${esc(uv(k, v))}<small>normalt ${esc(uv(k, a.normal))}</small></div></div>`;
+  });
+  if (!html) return "";
+  return `<section class="group"><div class="group-head"><h2>Mod dit normale</h2><span class="muted">${esc(r.rapport.baseline)}</span></div>
+    <div class="card"><div class="dev">${html}</div>
+    <div class="legend"><span><i style="background:var(--accent-soft)"></i>Normalområde (laveste–højeste uge)</span><span><i style="background:var(--muted);width:2px"></i>Median</span><span><i style="background:var(--good);border-radius:50%"></i>Tydeligt bedre</span><span><i style="background:var(--bad);border-radius:50%"></i>Tydeligt dårligere</span><span><i style="background:var(--ink-2);border-radius:50%"></i>Inden for det normale</span></div>
+    <p class="note">Tydelig betyder at ugen ligger mindst ${fmt(liv.z_graense,1)} robuste standardafvigelser fra medianen. En prik uden for båndet kan stadig være inden for det normale, hvis de andre uger har svinget meget.</p></div></section>`;
+}
+
+// Dag for dag: syv søjler/punkter med ugens normale snit som stiplet linje.
+const DC = { W:300, H:130, L:34, R:6, T:10, B:20 };
+function daySVG(vals, opt){
+  const {W,H,L,R,T,B} = DC, cw = (W-L-R)/7;
+  const nn = vals.flat().filter(v => v != null);
+  if (!nn.length) return `<p class="empty">Ingen data.</p>`;
+  const tot = opt.stack ? vals.map(s => s.every(v => v == null) ? null : s.reduce((a,b) => a + (b||0), 0)) : vals;
+  const all = tot.filter(v => v != null).concat(opt.ref != null ? [opt.ref] : []);
+  const lo = opt.bar ? 0 : Math.min(...all), hi = Math.max(...all), span = (hi - lo) || 1;
+  const ylo = opt.bar ? 0 : lo - span*.2, yhi = hi + span*.1;
+  const y = v => T + (H-T-B) * (1 - (v-ylo)/(yhi-ylo)), xc = i => L + cw*i + cw/2;
+  let g = "";
+  [...new Set([opt.bar ? 0 : lo, hi])].forEach(t => {
+    g += `<line class="gl" x1="${L}" x2="${W-R}" y1="${y(t).toFixed(1)}" y2="${y(t).toFixed(1)}"/><text class="ax" x="${L-5}" y="${(y(t)+3.5).toFixed(1)}" text-anchor="end">${fmt(t, t === 0 ? 0 : opt.d)}</text>`;
+  });
+  DAYS.forEach((dn, i) => g += `<text class="ax" x="${xc(i).toFixed(1)}" y="${H-5}" text-anchor="middle">${dn}</text>`);
+  const w = Math.max(2, cw - 8);
+  if (opt.stack){
+    vals.forEach((s, i) => { let acc = 0; s.forEach((v, j) => { if (v == null || v <= 0) return;
+      const y0 = y(acc + v), y1 = y(acc); acc += v;
+      g += `<rect class="${opt.cls[j]}" x="${(xc(i)-w/2).toFixed(1)}" y="${y0.toFixed(1)}" width="${w.toFixed(1)}" height="${(y1-y0).toFixed(1)}"/>`; }); });
+  } else if (opt.bar){
+    vals.forEach((v, i) => { if (v == null) return; const y0 = y(v);
+      g += `<path class="bar" d="${barPath(+(xc(i)-w/2).toFixed(1), +y0.toFixed(1), +w.toFixed(1), +(y(0)-y0).toFixed(1), 2)}"/>`; });
+  } else {
+    let d = ""; vals.forEach((v, i) => { if (v != null) d += (d && vals[i-1] != null ? "L" : "M") + xc(i).toFixed(1) + " " + y(v).toFixed(1); });
+    g += `<path class="mline" d="${d}"/>` + vals.map((v, i) => v == null ? "" : `<circle class="mpt" cx="${xc(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="3"/>`).join("");
+  }
+  if (opt.ref != null) g += `<line class="ref" x1="${L}" x2="${W-R}" y1="${y(opt.ref).toFixed(1)}" y2="${y(opt.ref).toFixed(1)}"/>`;
+  g += `<rect class="hl" x="0" y="${T}" width="${cw.toFixed(1)}" height="${H-T-B}" hidden/>`;
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(opt.l)} dag for dag">${g}</svg>`;
+}
+function renderDays(r){
+  if (!r.dage) return "";
+  const D = r.dage, af = r.rapport.afvigelser, col = f => D.map(f);
+  const card = (key, l, u, v, vals, opt) => `<div class="chart day" data-key="${key}"><div class="head"><h3>${esc(l)}</h3><span class="muted">${opt.ref != null ? "stiplet = dit normale snit" : ""}</span></div>
+    <div class="val">${v}${u ? `<small>${esc(u)}</small>` : ""}</div>${daySVG(vals, {l, ...opt})}${opt.note ? `<p class="note">${esc(opt.note)}</p>` : ""}</div>`;
+  const a = k => af[k] || {};
+  let html = card("soevn", "Søvn", "t snit", fmt(a("soevn_timer_snit").vaerdi, 1),
+      col(x => [x.dyb_t ?? null, x.rem_t ?? null, x.let_t ?? null]),
+      {stack:1, bar:1, d:0, ref:a("soevn_timer_snit").normal, cls:["b-dyb","b-rem","b-let"], note:"Mørk = dyb, mellem = REM, lys = let søvn. Natten står på dagen du vågnede."});
+  html += card("hrv", "HRV om natten", "ms snit", fmt(a("hrv_snit").vaerdi, 0), col(x => x.hrv ?? null), {d:0, ref:a("hrv_snit").normal});
+  html += card("hvilepuls", "Hvilepuls", "bpm snit", fmt(a("hvilepuls_snit").vaerdi, 1), col(x => x.hvilepuls ?? null), {d:0, ref:a("hvilepuls_snit").normal});
+  html += card("skridt", "Skridt", "snit", fmt(a("skridt_snit").vaerdi, 0), col(x => x.skridt ?? null), {bar:1, d:0, ref:a("skridt_snit").normal});
+  html += card("stress", "Stress", "snit", fmt(a("stress_snit").vaerdi, 0), col(x => x.stress ?? null), {bar:1, d:0, ref:a("stress_snit").normal});
+  html += card("score", "Søvnscore", "snit", fmt(a("soevnscore_snit").vaerdi, 0), col(x => x.soevnscore ?? null), {bar:1, d:0, ref:a("soevnscore_snit").normal});
+  return `<section class="group"><div class="group-head"><h2>Dag for dag</h2></div><div class="days">${html}</div></section>`;
+}
+
+// Ugekalender 6–22: undervisning, selvstudie og andet fra kalenderen, og for
+// den gennemgåede uge også træningspas. For den kommende uge vises frie
+// vinduer på mindst 1½ time, som er der hvor træning og selvstudie kan ligge.
+const WK0 = 6, WK1 = 22, PX = 26;
+function weekGrid(m, events, pas, visFri){
+  const today = new Date(); const tIso = new Date(today.getTime() - today.getTimezoneOffset()*6e4).toISOString().slice(0,10);
+  const H = (WK1-WK0)*PX;
+  let hrs = ""; for (let h = WK0; h <= WK1; h += 2) hrs += `<span style="top:${(h-WK0)*PX}px">${h}</span>`;
+  let head = `<div></div>`, allday = `<div></div>`, cols = `<div class="hrs" style="height:${H}px">${hrs}</div>`;
+  let anyAll = false;
+  for (let i = 0; i < 7; i++){
+    const d = addDays(m, i), {d:dd} = pd(d);
+    head += `<div class="hd">${DAYS[i]}<small>${dd}.</small></div>`;
+    const ev = events.filter(e => e.dato === d);
+    const ad = ev.filter(e => e.heldag);
+    if (ad.length) anyAll = true;
+    allday += `<div>${ad.map(e => `<div class="allday" title="${esc(e.titel)}">${esc(e.titel)}</div>`).join("")}</div>`;
+    const timed = ev.filter(e => !e.heldag && e.start && e.slut).map(e => ({...e, a:hm(e.start), b:hm(e.slut)}));
+    const blocks = timed.concat((pas || []).filter(p => p.dato === d).map(p => ({type:"traening", a:hm(p.start), b:hm(p.start) + p.minutter/60,
+      titel:`${sportName(p.sport)} · ${p.minutter} min`, start:p.start, slut:null})));
+    let inner = "";
+    for (let h = WK0 + 2; h < WK1; h += 2) inner += `<div class="hline" style="top:${(h-WK0)*PX}px"></div>`;
+    if (visFri){
+      const busy = timed.map(e => [Math.max(WK0, e.a), Math.min(WK1, e.b)]).filter(([a,b]) => b > a).sort((p,q) => p[0]-q[0]);
+      let cur = WK0;
+      const now = d === tIso ? today.getHours() + today.getMinutes()/60 : WK0;
+      busy.concat([[WK1, WK1]]).forEach(([a,b]) => {
+        const s = Math.max(cur, now);
+        if (a - s >= 1.5) inner += `<div class="blk fri" style="top:${((s-WK0)*PX).toFixed(0)}px;height:${((a-s)*PX-2).toFixed(0)}px" title="Fri ${fmtH(s)}–${fmtH(a)}">fri ${fmt(a-s, (a-s) % 1 ? 1 : 0)} t</div>`;
+        cur = Math.max(cur, b);
+      });
+    }
+    // Overlappende blokke deler bredden i spor, så ingen gemmer sig bag en anden
+    blocks.sort((p, q) => p.a - q.a);
+    let cluster = [], cEnd = -1;
+    const flush = () => { const lanes = []; cluster.forEach(e => { let l = lanes.findIndex(end => end <= e.a); if (l < 0) l = lanes.length; lanes[l] = e.b; e.lane = l; });
+      cluster.forEach(e => e.lanes = lanes.length); cluster = []; };
+    blocks.forEach(e => { if (e.a >= cEnd) flush(); cluster.push(e); cEnd = Math.max(cEnd, e.b); }); flush();
+    blocks.forEach(e => {
+      const a = Math.max(WK0, e.a), b = Math.min(WK1, e.b); if (b <= a) return;
+      const ov = e.type !== "traening" && timed.some(o => o !== e && o.a < e.b && e.a < o.b);
+      const pos = e.lanes > 1 ? `left:calc(${(100*e.lane/e.lanes).toFixed(1)}% + 2px);right:auto;width:calc(${(100/e.lanes).toFixed(1)}% - 4px);` : "";
+      inner += `<div class="blk ${e.type}${ov ? " overlap" : ""}" style="${pos}top:${((a-WK0)*PX).toFixed(0)}px;height:${Math.max(12, (b-a)*PX-2).toFixed(0)}px" title="${esc((e.start || "") + (e.slut ? "–" + e.slut : "") + " " + shortTitle(e.titel))}${ov ? " (overlapper)" : ""}">${esc(shortTitle(e.titel))}</div>`;
+    });
+    cols += `<div class="wcol${d === tIso ? " today" : ""}" style="height:${H}px">${inner}</div>`;
+  }
+  return `<div class="wk-wrap"><div class="wk">${head}${anyAll ? allday : ""}${cols}</div></div>`;
+}
+const fmtH = h => `${Math.floor(h)}:${String(Math.round((h % 1) * 60)).padStart(2, "0")}`;
+function wkLegend(fri, trn){
+  return `<div class="legend wk-legend"><span><i style="background:var(--accent)"></i>Undervisning</span><span><i style="background:var(--good)"></i>Selvstudie</span><span><i style="background:var(--warn)"></i>Andet</span>${trn ? `<span><i style="background:var(--ink)"></i>Træning</span>` : ""}${fri ? `<span><i style="border:1.5px dashed var(--good)"></i>Fri ≥ 1½ t</span>` : ""}<span><i style="outline:2px solid var(--bad);outline-offset:-1px;background:var(--surface-2)"></i>Overlapper</span></div>`;
+}
+function hoursBy(events, type){
+  return events.filter(e => e.type === type && e.start && e.slut).reduce((s, e) => s + hm(e.slut) - hm(e.start), 0);
+}
+function renderCal(r){
+  if (!r.kalender) return "";
+  const next = addDays(r.mandag, 7);
+  const t = r.tekst;
+  const pasTxt = r.pas?.length ? r.pas.map(p => `${DAYS[dayIdx(p.dato, r.mandag)]} ${sportName(p.sport)} ${p.minutter} min`).join(" · ") : "ingen pas";
+  let html = `<section class="group"><div class="group-head"><h2>Ugen der gik</h2><span class="muted">Undervisning ${fmt(hoursBy(r.kalender,"undervisning"),1)} t · selvstudie ${addDays(r.mandag,6) < liv.selvstudie_fra ? "ikke logget endnu" : fmt(hoursBy(r.kalender,"selvstudie"),1) + " t"} · ${esc(pasTxt)}</span></div>
+    <div class="card">${weekGrid(r.mandag, r.kalender, r.pas, false)}${wkLegend(false, true)}</div></section>`;
+  const tungest = [...Array(7).keys()].map(i => { const d = addDays(next, i); return {i, t: r.kommende.filter(e => e.dato === d && e.start && e.slut).reduce((s,e) => s + hm(e.slut) - hm(e.start), 0)}; })
+    .sort((a,b) => b.t - a.t)[0];
+  html += `<section class="group"><div class="group-head"><h2>Den kommende uge</h2><span class="muted">${esc(range(next, addDays(next,6)))} · undervisning ${fmt(hoursBy(r.kommende,"undervisning"),1)} t${tungest?.t ? ` · tungest: ${DAYS[tungest.i]} (${fmt(tungest.t,1)} t)` : ""}</span></div>
+    <div class="twocol" style="grid-template-columns:1fr">${t?.kommende_uge?.length ? `<div class="card"><h3>Plan ud fra kalender og restitution</h3><ul>${t.kommende_uge.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}
+    <div class="card">${weekGrid(next, r.kommende, null, true)}${wkLegend(true, false)}<p class="note">Kalenderen som den så ud, da reviewet blev skrevet. Heldagsbegivenheder står øverst og blokerer ikke de frie vinduer.</p></div></div></section>`;
+  return html;
+}
+
+function renderHyp(r){
+  const X = k => (LIV[k]?.l || k).toLowerCase();
+  const rows = r.rapport.sammenhaenge.map(h => {
+    let bar, st, cls;
+    if (h.rho == null){
+      const n = h.n_uger, need = liv.min_uger_korrelation;
+      bar = `<div class="prog" role="img" aria-label="${n} af ${need} uger"><div class="f" style="width:${(100*n/need).toFixed(0)}%"></div></div>`;
+      st = `<span class="st faa">${need - n} uger mangler</span>`;
+    } else {
+      cls = h.status === "stærk" ? "staerk" : h.status === "antydning" ? "antydning" : "ingen";
+      const w = Math.abs(h.rho) * 50, left = h.rho < 0 ? 50 - w : 50;
+      bar = `<div class="rho" role="img" aria-label="rho ${fmt(h.rho,2)}"><div class="f ${cls}" style="left:${left}%;width:${w}%"></div><div class="mid"></div></div>`;
+      st = `<span class="st ${cls}">${h.status === "ingen sammenhæng" ? "Ingen" : h.status === "stærk" ? "Stærk" : "Antydning"}</span>`;
+    }
+    const dir = h.rho != null && cls !== "ingen" ? (h.rho < 0 ? `Når ${X(h.x)} er høj, er ${X(h.y)} typisk lavere` : `Når ${X(h.x)} er høj, er ${X(h.y)} typisk også højere`) + ` · rho ${fmt(h.rho,2)}, ${h.n_uger} uger`
+      : h.rho != null ? `rho ${fmt(h.rho,2)}, p ${fmt(h.p,2)}, ${h.n_uger} uger` : `${h.n_uger} af ${liv.min_uger_korrelation} uger med data`;
+    return `<div class="hyp-row"><div class="q">${esc(h.spoergsmaal)}<small>${esc(dir)}</small></div>${bar}<div class="s">${st}</div></div>`;
+  }).join("");
+  return `<section class="group"><div class="group-head"><h2>Sammenhænge</h2><span class="muted">${r.rapport.sammenhaenge.length} faste hypoteser</span></div>
+    <div class="card"><div class="hyp">${rows}</div>
+    <div class="legend"><span>Søjlen er rho fra −1 (venstre) til +1 (højre).</span><span><i style="background:var(--accent)"></i>Stærk</span><span><i style="background:var(--warn)"></i>Antydning</span><span><i style="background:var(--muted)"></i>Ingen sammenhæng</span></div>
+    <p class="note">Spearman-korrelation med permutationstest. Stærk kræver p under 0,05 delt på antal hypoteser og |rho| ≥ 0,3. Korrelation er ikke årsag.</p></div></section>`;
+}
+
+// Uge for uge: de seneste 16 uger frem til den valgte, valgt uge i mørkt.
+function weekSVG(k, rows, si){
+  const m = {...LIV[k], kind: LIV[k].bar ? "bar" : "line"}, {W,H,L,R,T,B} = CH, n = rows.length, cw = (W-L-R)/n;
+  const vals = rows.map(u => u[k]), nn = vals.filter(v => v != null);
+  if (nn.length < 2) return "";
+  const bar = m.kind === "bar", lo = bar ? 0 : Math.min(...nn), hi = Math.max(...nn), span = (hi-lo) || Math.abs(hi) || 1;
+  const ylo = bar ? 0 : lo - span*.15, yhi = hi + span*.12;
+  const y = v => T + (H-T-B) * (1 - (v-ylo)/(yhi-ylo)), xc = i => L + cw*i + cw/2;
+  let g = "";
+  [...new Set([lo, hi])].forEach(t => g += `<line class="gl" x1="${L}" x2="${W-R}" y1="${y(t).toFixed(1)}" y2="${y(t).toFixed(1)}"/><text class="ax" x="${L-6}" y="${(y(t)+3.5).toFixed(1)}" text-anchor="end">${fmt(t, t === 0 ? 0 : m.d)}</text>`);
+  rows.forEach((u, i) => { if (i % 4 === (n-1) % 4) g += `<text class="ax" x="${xc(i).toFixed(1)}" y="${H-5}" text-anchor="middle">u${ugeNr(u.uge)}</text>`; });
+  if (bar) vals.forEach((v, i) => { if (v == null) return; const w = Math.max(1, cw-2), y0 = y(v);
+    g += `<path class="bar${i === si ? " sel" : ""}" d="${barPath(+(xc(i)-w/2).toFixed(2), +y0.toFixed(2), +w.toFixed(2), +(y(0)-y0).toFixed(2), 2)}"/>`; });
+  else {
+    let d = ""; vals.forEach((v, i) => { if (v != null) d += (d && vals[i-1] != null ? "L" : "M") + xc(i).toFixed(1) + " " + y(v).toFixed(1); });
+    g += `<path class="mline" d="${d}"/>` + vals.map((v, i) => v == null ? "" : `<circle class="mpt${i === si ? " sel" : ""}" cx="${xc(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="${i === si ? 4 : 2.5}"/>`).join("");
+  }
+  g += `<rect class="hl" x="0" y="${T}" width="${cw.toFixed(1)}" height="${H-T-B}" hidden/>`;
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(m.l)} uge for uge">${g}</svg>`;
+}
+function trendRows(r){
+  const i = liv.uger.findIndex(u => u.uge === r.uge);
+  return liv.uger.slice(Math.max(0, i - 15), i + 1);
+}
+function renderTrend(r){
+  const rows = trendRows(r), si = rows.length - 1;
+  const charts = TREND.map(k => {
+    const svg = weekSVG(k, rows, si); if (!svg) return "";
+    return `<div class="chart wkc" data-k="${k}"><div class="head"><h3>${esc(LIV[k].l)}</h3><span class="muted">uge ${ugeNr(r.uge)}</span></div>
+      <div class="val">${fmt(rows[si][k], LIV[k].d)}${rows[si][k] != null && LIV[k].u ? `<small>${esc(LIV[k].u)}</small>` : ""}</div>${svg}${LIV[k].note ? `<p class="note">${esc(LIV[k].note)}</p>` : ""}</div>`;
+  }).join("");
+  return `<section class="group"><div class="group-head"><h2>Uge for uge</h2><span class="muted">De seneste ${rows.length} uger · valgt uge er mørk</span></div><div class="charts">${charts}</div></section>`;
+}
+
+function renderSources(r){
+  const sun = addDays(r.mandag, 6);
+  const pills = liv.kilder.map(k => {
+    const old = k.data_til && k.data_til.slice(0,10) < addDays(sun, -3);
+    return `<span class="pill ${old ? "prelim" : "backfill"}">${esc(k.kilde)} · data til ${esc(k.data_til ? dm(k.data_til.slice(0,10)) : "–")}${old ? " · for gammel til ugen" : ""}</span>`;
+  }).join("");
+  const wasOpen = $("utbl")?.open, rows = trendRows(r);
+  const tbl = `<details id="utbl"><summary>Alle ugetal i en tabel</summary><div class="tbl-wrap"><table><thead><tr><th>Nøgletal</th>${rows.map(u => `<th>u${ugeNr(u.uge)}</th>`).join("")}</tr></thead><tbody>`
+    + liv.kolonner.map(c => `<tr><td title="${esc(c.forklaring)}">${esc(LIV[c.k]?.l || c.forklaring)}</td>${rows.map(u => `<td>${fmt(u[c.k], LIV[c.k]?.d ?? 0)}</td>`).join("")}</tr>`).join("")
+    + `</tbody></table></div></details>`;
+  setTimeout(() => { if (wasOpen && $("utbl")) $("utbl").open = true; });
+  return `${tbl}<section class="group"><div class="group-head"><h2>Kilder</h2><span class="muted">– betyder ukendt, ikke 0</span></div><div class="srcs">${pills}</div>
+    <p class="note">${esc(r.rapport.metode)}</p></section>`;
+}
+
+function renderUge(){
+  const el = $("uge");
+  if (livErr){ el.innerHTML = `<p class="state">Kunne ikke hente ugedata (${esc(livErr)}). Skriv dem med: ~/kompas/livsoverblik/.venv/bin/liv eksport</p>`; return; }
+  if (!liv){ el.innerHTML = `<p class="state">Henter ugen…</p>`; return; }
+  if (!liv.reviews.length){ el.innerHTML = `<p class="state">Ingen uger endnu. Kør liv opdater og liv eksport.</p>`; return; }
+  if (wsel == null) wsel = liv.reviews.length - 1;
+  renderWeekChips();
+  const r = liv.reviews[wsel];
+  el.innerHTML = renderHero(r) + renderDev(r) + renderDays(r) + renderCal(r) + renderHyp(r) + renderTrend(r) + renderSources(r);
+  $("meta").innerHTML = `Opdateret ${esc(new Date(liv.genereret).toLocaleString("da-DK",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}))}`;
+  wireUge(r);
+}
+function wireUge(r){
+  const tip = $("tip");
+  const hover = (svg, n, W, L, R, label) => {
+    const hl = svg.querySelector(".hl"), cw = (W-L-R)/n;
+    svg.addEventListener("pointermove", e => {
+      const b = svg.getBoundingClientRect(), i = Math.max(0, Math.min(n-1, Math.floor(((e.clientX-b.left)/b.width*W - L)/cw)));
+      const txt = label(i); if (txt == null){ hl.setAttribute("hidden",""); tip.hidden = true; return; }
+      hl.setAttribute("x", (L + cw*i).toFixed(1)); hl.removeAttribute("hidden");
+      tip.innerHTML = txt; tip.style.left = (b.left + (L + cw*i + cw/2)/W*b.width) + "px"; tip.style.top = b.top + "px"; tip.hidden = false;
+    });
+    svg.addEventListener("pointerleave", () => { hl.setAttribute("hidden",""); tip.hidden = true; });
+  };
+  const rows = trendRows(r);
+  document.querySelectorAll("#uge .wkc").forEach(c => {
+    const k = c.dataset.k, svg = c.querySelector("svg"); if (!svg) return;
+    hover(svg, rows.length, CH.W, CH.L, CH.R, i => `Uge ${ugeNr(rows[i].uge)} (${esc(dm(rows[i].mandag))}): <b>${esc(uv(k, rows[i][k]))}</b>`);
+  });
+  const DK = { soevn: x => x.soevn_t == null ? null : `${fmt(x.soevn_t,1)} t · dyb ${fmt(x.dyb_t,1)} · REM ${fmt(x.rem_t,1)}`,
+    hrv: x => x.hrv == null ? null : `${fmt(x.hrv,0)} ms`, hvilepuls: x => x.hvilepuls == null ? null : `${fmt(x.hvilepuls,0)} bpm`,
+    skridt: x => x.skridt == null ? null : `${fmt(x.skridt,0)} skridt`, stress: x => x.stress == null ? null : `stress ${fmt(x.stress,0)}`,
+    score: x => x.soevnscore == null ? null : `søvnscore ${fmt(x.soevnscore,0)}` };
+  document.querySelectorAll("#uge .day").forEach(c => {
+    const svg = c.querySelector("svg"); if (!svg) return; const f = DK[c.dataset.key];
+    hover(svg, 7, DC.W, DC.L, DC.R, i => { const v = f(r.dage[i]); return `${DAYS[i]} ${esc(dm(r.dage[i].dato))}: <b>${esc(v ?? "ingen data")}</b>`; });
+  });
+}
+
+const VIEWS = { perioder:"tab-perioder", maaneder:"tab-maaneder", uge:"tab-uge" };
+function setView(v){
+  view = v;
+  Object.entries(VIEWS).forEach(([k, id]) => $(id).setAttribute("aria-selected", String(v === k)));
+  $("main").hidden = $("periods").hidden = $("foot").hidden = v !== "perioder";
+  $("big").hidden = v !== "maaneder";
+  $("uge").hidden = $("weeks").hidden = v !== "uge";
+  try { localStorage.setItem("ff-view", v); } catch(e) {}
+  if (v === "maaneder") renderBig(); else if (v === "uge") renderUge(); else if (periods.length) render();
+}
+Object.entries(VIEWS).forEach(([k, id]) => $(id).onclick = () => setView(k));
+{
+  let start = "perioder";
+  try { start = localStorage.getItem("ff-view") || start; } catch(e) {}
+  if (location.hash === "#store-billede") start = "maaneder";
+  if (location.hash === "#ugen") start = "uge";
+  setView(VIEWS[start] ? start : "perioder");
+}
+// Ugedata hentes for sig, så en manglende liv.json ikke vælter de andre visninger.
+fetch("liv.json", {cache: "no-store"})
+  .then(r => { if (!r.ok) throw new Error(`liv.json svarede ${r.status}`); return r.json(); })
+  .then(d => { liv = d; }, e => { livErr = e.message; })
+  .then(() => { if (view === "uge") renderUge(); });
+
+// Data ligger som JSON ved siden af siden og bygges af
+// `python -m garmin_coach.site byg` (kører når Kompas-appen åbnes).
+(async () => {
+  const load = f => fetch(f, {cache: "no-store"}).then(r => {
+    if (!r.ok) throw new Error(`${f} svarede ${r.status}`);
+    return r.json();
+  });
+  try {
+    const [p, m, o] = await Promise.all([load("perioder.json"), load("maaneder.json"), load("oversigt.json")]);
+    periods = p.map(d => ({id: d.start, ...d}));
+    sel = periods.length - 1;
+    render();
+    months = m; ov = o; monthsLoaded = true;
+    if (view === "maaneder") renderBig();
+  } catch (e) {
+    const msg = `<p class="state">Kunne ikke hente data (${esc(e.message)}). Byg siden med: .venv/bin/python -m garmin_coach.site byg</p>`;
+    $("main").innerHTML = msg; $("big").innerHTML = msg;
+  }
+})();
+</script>
+
+</body></html>

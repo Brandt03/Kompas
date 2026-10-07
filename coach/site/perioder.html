@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>14-dages perioder</title>
+<!-- Vises i Kompas (https://kompas.localhost/form/perioder.html), som leverer designkittet under /kompas/assets/.
+     Data: perioder.json og oversigt.json fra `python -m garmin_coach.site byg`. Vurderingerne skrives af
+     Form & Fokus-rutinen hver anden fredag. Siden regner kun forskelle mellem perioder ud. -->
+<link rel="stylesheet" href="/kompas/assets/tokens.css">
+<link rel="stylesheet" href="/kompas/assets/page.css">
+<link rel="stylesheet" href="form.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="page">
+    <div>
+      <h1>14-dages perioder</h1>
+      <p class="sub">Træning, søvn og studie. Rapporten skrives hver anden fredag.</p>
+    </div>
+    <div class="pnav" id="pnav"></div>
+  </header>
+  <div class="stack" id="root"><div class="card empty">Henter …</div></div>
+</div>
+
+<script src="/kompas/assets/icons.js"></script>
+<script src="/kompas/assets/liv.js"></script>
+<script src="/kompas/assets/chart.js"></script>
+<script>
+// b: hvilken retning er bedst ("up"/"down"/null). s: summen over perioden (søjler), ellers et snit (linje).
+const GROUPS = [
+  { title: "Søvn og restitution", metrics: [
+    { k: "sundhed.sovn_t", l: "Søvn pr. nat", u: "t", d: 2, b: "up" },
+    { k: "sundhed.naetter_u7", l: "Nætter under 7 t", u: "", d: 0, b: "down", s: 1 },
+    { k: "sundhed.sovn_score", l: "Søvnscore", u: "", d: 0, b: "up" },
+    { k: "sundhed.hrv", l: "HRV om natten", u: "ms", d: 0, b: "up" },
+    { k: "sundhed.hvilepuls", l: "Hvilepuls", u: "bpm", d: 1, b: "down" },
+    { k: "sundhed.readiness", l: "Readiness", u: "", d: 0, b: "up" },
+    { k: "sundhed.stress", l: "Stress", u: "", d: 0, b: "down" },
+  ]},
+  { title: "Træning", metrics: [
+    { k: "traening.pas", l: "Pas", u: "", d: 0, b: "up", s: 1 },
+    { k: "traening.timer", l: "Træningstid", u: "t", d: 1, b: null, s: 1 },
+    { k: "traening.belastning", l: "Belastning (TRIMP)", u: "", d: 0, b: null, s: 1 },
+    { k: "_lavpct", l: "Andel lav intensitet", u: "%", d: 0, b: "up", none: p => p.traening?.pas ? "ingen konditionspas med pulszoner" : null },
+    { k: "sundhed.skridt", l: "Skridt pr. dag", u: "", d: 0, b: "up" },
+  ]},
+  { title: "Styrke", lifts: true, metrics: [
+    { k: "styrke.haarde_saet", l: "Arbejdssæt", u: "", d: 0, b: "up", s: 1 },
+    { k: "styrke.rpe_daekning_pct", l: "Sæt med RPE", u: "%", d: 0, b: "up" },
+  ]},
+  { title: "Studie", empty: p => p.studie == null ? "Kalenderen dækker ikke denne periode." : null, metrics: [
+    { k: "studie.undervisning_t", l: "Undervisning", u: "t", d: 1, b: null, s: 1 },
+    { k: "studie.selvstudie_t", l: "Selvstudie", u: "t", d: 1, b: "up", s: 1, none: p => p.studie ? "selvstudie ikke logget" : null },
+    { k: "studie.sessioner", l: "Studiesessioner", u: "", d: 0, b: "up", s: 1, none: p => p.studie ? "selvstudie ikke logget" : null },
+  ]},
+  { title: "Krop", metrics: [
+    { k: "sundhed.vaegt", l: "Vægt (seneste)", u: "kg", d: 1, b: null },
+    { k: "sundhed.vo2max", l: "VO2max", u: "", d: 1, b: "up" },
+  ]},
+];
+const UDV = [["sovn_t", "Søvn pr. nat", "t", 1], ["hrv", "HRV", "ms", 0], ["hvilepuls", "Hvilepuls", "bpm", 1], ["vo2max", "VO2max", "", 1],
+  ["vaegt", "Vægt", "kg", 1], ["skridt", "Skridt pr. dag", "", 0], ["timer_pr_uge", "Træning pr. uge", "t", 1], ["belastning_pr_uge", "Belastning pr. uge", "", 0]];
+
+let P = [], O = null, sel = 0, metric = "sundhed.sovn_t";
+const prange = p => `${dayMonth(parseDate(p.start))} – ${dayMonth(parseDate(p.slut))}`;
+function get(o, path) {
+  if (path === "_lavpct") {
+    const z = o?.traening?.intensitet_min; if (!z) return null;
+    const t = (z.lav || 0) + (z.mellem || 0) + (z.hoj || 0); return t > 0 ? 100 * (z.lav || 0) / t : null;
+  }
+  return path.split(".").reduce((x, k) => (x == null ? null : x[k]), o) ?? null;
+}
+// Løft: e1RM for øvelser lavet i mindst 3 af de seneste 6 perioder (det aktuelle program), tungeste først
+function lifts() {
+  const count = {}, latest = {};
+  P.slice(-6).forEach(q => Object.entries(q?.styrke?.e1rm || {}).forEach(([k, v]) => { if (v != null) { count[k] = (count[k] || 0) + 1; latest[k] = v; } }));
+  const navn = k => { for (let j = P.length - 1; j >= 0; j--) { const n = P[j]?.styrke?.loeft?.[k]?.navn; if (n) return n; } return k.replace(/_/g, " "); };
+  return Object.keys(count).filter(k => count[k] >= 3).sort((a, b) => latest[b] - latest[a]).map(k => ({
+    k: "styrke.e1rm." + k, l: navn(k) + " e1RM", u: "kg", d: 1, b: "up", none: () => "ikke lavet i perioden",
+    sub: p => { const x = p?.styrke?.loeft?.[k]; return x ? `${x.bedste_saet} · ${x.rpe == null ? "uden RPE" : "RPE " + fmt(x.rpe, Number.isInteger(x.rpe) ? 0 : 1)}` : ""; },
+    // Et fald fra et sæt uden RPE kan bare være et lettere sæt
+    unsure: p => p?.styrke?.loeft?.[k]?.rpe == null }));
+}
+const allMetrics = () => GROUPS.flatMap(g => g.lifts ? [...g.metrics, ...lifts()] : g.metrics);
+
+function statusBadge(p) {
+  if (p.status === "foreløbig") return `<span class="badge">Foreløbig · ${p.dage_med_data ?? "?"} af 14 dage</span>`;
+  if (p.kilde === "tilbagefyldt") return `<span class="badge">Beregnet bagud</span>`;
+  return `<span class="badge good">Endelig</span>`;
+}
+
+function verdict(p) {
+  const v = p.vurdering || {};
+  const list = arr => arr?.length ? `<ul class="list">${arr.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : `<p class="meta">Intet noteret.</p>`;
+  const STATUS = { naaet: ["good", "Nået"], delvist: ["", "Delvist"], ikke: ["bad", "Ikke nået"] };
+  return `<section class="card panel stack" style="gap:14px">
+    <div class="panel-head" style="margin:0"><h2>${esc(prange(p))}</h2>${statusBadge(p)}</div>
+    ${v.resume ? `<p class="lead">${esc(v.resume)}</p>` : `<p class="meta">Ingen vurdering for denne periode.</p>`}
+    ${p.forbehold?.length ? `<div class="banner warn" style="padding:0"><span class="bi">${icon("activity", 16)}</span><div><div class="bl">Forbehold ved tallene</div>${p.forbehold.map(x => `<p>${esc(x)}</p>`).join("")}</div></div>` : ""}
+    ${(v.gaar_godt?.length || v.gaar_daarligt?.length || v.forbedring?.length) ? `<div class="cols3">
+      <div><h3><span class="i-good">${icon("arrow-up", 14)}</span>Går godt</h3>${list(v.gaar_godt)}</div>
+      <div><h3><span class="i-bad">${icon("arrow-down", 14)}</span>Går dårligt</h3>${list(v.gaar_daarligt)}</div>
+      <div><h3><span class="i-neu">${icon("arrow-right", 14)}</span>Kan forbedres</h3>${list(v.forbedring)}</div></div>` : ""}
+    ${v.fokus?.length ? `<div><h3 class="sub-h" style="margin-top:4px">${p.status === "foreløbig" ? "Foreslået fokus til næste periode" : "Fokus til næste periode"}</h3><ol class="fokus">${v.fokus.map(x => `<li><span>${esc(x)}</span></li>`).join("")}</ol></div>` : ""}
+    ${v.opfoelgning?.length ? `<details><summary>Opfølgning på perioden før (${v.opfoelgning.length})</summary><div class="fu">${v.opfoelgning.map(o => {
+      const [c, t] = STATUS[o.status] || ["", o.status]; return `<div><span class="badge ${c}">${esc(t)}</span><span><b>${esc(o.fokus)}</b> ${esc(o.note || "")}</span></div>`; }).join("")}</div></details>` : ""}
+  </section>`;
+}
+
+function tile(m, p, prev) {
+  const v = get(p, m.k), pv = prev ? get(prev, m.k) : null;
+  let badge = "";
+  if (v != null && pv != null) {
+    const d = v - pv, same = Math.abs(d) < Math.pow(10, -m.d) / 2;
+    const good = m.b && !same && ((m.b === "up") === (d > 0));
+    const cls = same || !m.b || (m.unsure && m.unsure(p) && d < 0) ? "" : good ? "good" : "bad";
+    badge = `<span class="badge ${cls}">${same ? icon("minus", 12) : icon(d > 0 ? "arrow-up" : "arrow-down", 12)}${same ? "uændret" : `${d > 0 ? "+" : "−"}${fmt(Math.abs(d), m.d)}`}</span>`;
+  }
+  const none = v == null ? (m.none && m.none(p)) || "ingen data" : "";
+  return `<button type="button" class="card tile" data-k="${m.k}" aria-pressed="${m.k === metric}">
+    <div class="label">${esc(m.l)}</div>
+    <div class="value">${fmt(v, m.d)}${v != null && m.u ? `<small>${esc(m.u)}</small>` : ""}</div>
+    <div class="foot">${badge}${pv != null ? `<span>forrige ${fmt(pv, m.d)}</span>` : ""}</div>
+    <div class="hint">${esc(none || (m.sub ? m.sub(p) : ""))}</div></button>`;
+}
+
+function groups(p, prev) {
+  return GROUPS.map(g => {
+    const empty = g.empty && g.empty(p);
+    const ms = g.lifts ? [...g.metrics, ...lifts()] : g.metrics;
+    return `<section><div class="panel-head" style="margin-bottom:10px"><h2>${esc(g.title)}</h2></div>
+      ${empty ? `<div class="card empty">${esc(empty)}</div>` : `<div class="tiles">${ms.map(m => tile(m, p, prev)).join("")}</div>`}</section>`;
+  }).join("");
+}
+
+function distribution(p) {
+  const sp = p.traening?.sport || [], maxT = Math.max(...sp.map(s => s.timer || 0), 0.1);
+  const z = p.traening?.intensitet_min, zt = z ? (z.lav || 0) + (z.mellem || 0) + (z.hoj || 0) : 0;
+  const st = p.studie;
+  const bar = (n, v, max, txt) => `<div class="hbar"><span>${esc(n)}</span><span class="t"><i style="width:${Math.round(100 * v / max)}%"></i></span><span class="v">${txt}</span></div>`;
+  return `<div class="cols">
+    <section class="card panel"><div class="panel-head"><h2>Træning fordelt på sport</h2></div>
+      ${sp.length ? `<div class="hbars">${sp.map(s => bar(s.navn, s.timer || 0, maxT, `${fmt(s.timer, 1)} t · ${s.pas} pas`)).join("")}</div>` : `<p class="meta">Ingen pas i perioden.</p>`}
+      ${zt ? `<h3 class="sub-h">Intensitet (minutter med puls)</h3><div class="hbars">${[["Lav (Z1–2)", z.lav], ["Moderat (Z3)", z.mellem], ["Hård (Z4–5)", z.hoj]].map(([n, v]) => bar(n, v || 0, zt, `${fmt(v)} min · ${fmt(100 * (v || 0) / zt)} %`)).join("")}</div>` : ""}
+    </section>
+    <section class="card panel"><div class="panel-head"><h2>Studie og kalender</h2></div>
+      ${st ? `<div class="hbars">${bar("Undervisning", st.undervisning_t || 0, Math.max(st.undervisning_t || 0, st.selvstudie_t || 0, 0.1), `${fmt(st.undervisning_t, 1)} t`)}
+        ${bar("Selvstudie", st.selvstudie_t || 0, Math.max(st.undervisning_t || 0, st.selvstudie_t || 0, 0.1), `${fmt(st.selvstudie_t, 1)} t · ${st.sessioner} sessioner`)}</div>
+        ${st.pr_fag?.length ? `<h3 class="sub-h">Selvstudie pr. fag</h3><div class="hbars">${st.pr_fag.map(f => bar(f.fag || f.navn, f.timer || 0, Math.max(...st.pr_fag.map(x => x.timer || 0), 0.1), `${fmt(f.timer, 1)} t`)).join("")}</div>` : ""}
+        ${st.andre_begivenheder?.length ? `<h3 class="sub-h">Andet i kalenderen</h3><ul class="list">${st.andre_begivenheder.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}`
+        : `<p class="meta">Kalenderen dækker ikke denne periode.</p>`}
+    </section></div>`;
+}
+
+function udvikling() {
+  if (!O?.udvikling) return "";
+  const u = O.udvikling;
+  return `<section class="card panel"><div class="panel-head"><h2>Det lange perspektiv</h2><span class="meta">${esc(u.tidlig)} mod ${esc(u.seneste)}</span></div>
+    <div class="scroll"><table class="plain"><thead><tr><th>Nøgletal</th><th class="num">Dengang</th><th class="num">Nu</th><th class="num">Ændring</th></tr></thead>
+    <tbody>${UDV.filter(([k]) => u[k]).map(([k, l, un, d]) => { const a = u[k].tidlig, b = u[k].seneste, ch = a != null && b != null ? b - a : null;
+      return `<tr><td>${esc(l)}</td><td class="num">${fmt(a, d)} ${esc(un)}</td><td class="num">${fmt(b, d)} ${esc(un)}</td><td class="num">${ch == null ? "–" : `${ch > 0 ? "+" : ch < 0 ? "−" : ""}${fmt(Math.abs(ch), d)}`}</td></tr>`; }).join("")}</tbody></table></div>
+    ${O.forbehold?.length ? `<p class="meta" style="margin:10px 0 0;line-height:1.5">${O.forbehold.map(esc).join(" ")}</p>` : ""}
+  </section>`;
+}
+
+function chart() {
+  const m = allMetrics().find(x => x.k === metric) || allMetrics()[0];
+  const el = document.getElementById("c-udv");
+  const pts = P.map((q, i) => ({ label: `${parseDate(q.start).getDate()}/${parseDate(q.start).getMonth() + 1}`, y: get(q, m.k), dim: m.s && i !== sel,
+    tip: `<div class="th">${esc(prange(q))}</div>${esc(m.l)} <b>${fmt(get(q, m.k), m.d)}${m.u ? " " + esc(m.u) : ""}</b>` }));
+  document.getElementById("c-title").textContent = m.l;
+  (m.s ? barChart : lineChart)(el, { points: pts, height: 200, fmt: v => fmt(v, m.d > 1 ? 1 : m.d), label: `${m.l} pr. periode` });
+}
+
+function render() {
+  const p = P[sel], prev = P[sel - 1] || null;
+  document.getElementById("pnav").innerHTML = `
+    <button type="button" class="nav-btn" data-step="-1" aria-label="Perioden før"${sel === 0 ? " disabled" : ""}>${icon("arrow-left", 14)}</button>
+    <select id="psel" aria-label="Vælg periode">${P.map((q, i) => `<option value="${i}"${i === sel ? " selected" : ""}>${esc(prange(q))}${q.status === "foreløbig" ? " (foreløbig)" : ""}</option>`).join("")}</select>
+    <button type="button" class="nav-btn" data-step="1" aria-label="Perioden efter"${sel === P.length - 1 ? " disabled" : ""}>${icon("arrow-right", 14)}</button>`;
+  document.getElementById("root").innerHTML = `
+    ${verdict(p)}
+    <section class="card panel"><div class="panel-head"><h2 id="c-title"></h2><span class="meta">alle perioder · klik på et tal nedenfor for at skifte</span></div><div id="c-udv"></div></section>
+    ${groups(p, prev)}
+    ${distribution(p)}
+    ${udvikling()}
+    <p class="meta">Tallene regnes af garmin-coach, når perioden gemmes. – betyder ingen data, ikke 0.</p>`;
+  chart();
+  document.getElementById("psel").onchange = e => { sel = +e.target.value; render(); };
+  document.querySelectorAll(".nav-btn").forEach(b => b.onclick = () => { sel = Math.max(0, Math.min(P.length - 1, sel + +b.dataset.step)); render(); });
+  document.querySelectorAll("button.tile").forEach(b => b.onclick = () => {
+    metric = b.dataset.k;
+    document.querySelectorAll("button.tile").forEach(x => x.setAttribute("aria-pressed", String(x.dataset.k === metric)));
+    chart();
+  });
+}
+
+const load = f => fetch(f, { cache: "no-store" }).then(r => { if (!r.ok) throw new Error(`${f} svarede ${r.status}`); return r.json(); });
+Promise.all([load("perioder.json"), load("oversigt.json").catch(() => null)]).then(([p, o]) => {
+  P = p; O = o; sel = P.length - 1;
+  if (!P.length) { document.getElementById("root").innerHTML = `<div class="card empty">Ingen perioder endnu.</div>`; return; }
+  render();
+}, e => { document.getElementById("root").innerHTML = `<div class="card empty">${esc(e.message)}. Byg med <code>python -m garmin_coach.site byg</code>.</div>`; });
+</script>
+</body>
+</html>

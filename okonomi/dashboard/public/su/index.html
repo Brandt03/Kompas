@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SU-vagt</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 5 2 12l14 7 14-7z' fill='%232a78d6'/%3E%3Cpath d='M8 16v6c0 2 4 4 8 4s8-2 8-4v-6l-8 4z' fill='%23eb6834'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="../common.css">
+<style>
+  .settings { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px 14px; }
+  #months input[type="number"] { width: 110px; text-align: right; }
+  #months select { width: auto; max-width: 210px; }
+  #months .src { color: var(--muted); font-size: 12px; }
+  #months tfoot td { font-weight: 650; border-bottom: 0; }
+  @media (max-width: 900px) { .settings { grid-template-columns: repeat(2, 1fr); } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1 id="title">SU-vagt</h1>
+    <div class="meta"><span id="meta"></span> <span class="save" id="save"></span></div>
+  </header>
+
+  <section class="card status" id="status" aria-live="polite"></section>
+  <section class="tiles" id="tiles"></section>
+
+  <section class="card panel">
+    <div class="panel-head">
+      <h2>Indkomst og fribeløb gennem året</h2>
+      <div class="legend" id="chartLegend"></div>
+    </div>
+    <p class="hint">Begge linjer lægger måned for måned sammen. Så længe den blå linje ender under den grå i december, skal du ikke betale noget tilbage. Den lyse del af den blå linje er det, du forventer at tjene.</p>
+    <svg class="chart" id="chart" role="img" aria-label="Akkumuleret indkomst og fribeløb pr. måned"></svg>
+  </section>
+
+  <section class="card panel">
+    <div class="panel-head"><h2>Forudsætninger</h2></div>
+    <div class="settings" id="settings"></div>
+  </section>
+
+  <section class="card panel">
+    <div class="panel-head">
+      <h2>Måned for måned</h2>
+    </div>
+    <p class="hint">Løn fra dine transaktioner er udbetalt efter skat. Siden regner den om til indkomst før skat (efter AM-bidrag) med din trækprocent. Skriv bruttolønnen fra lønsedlen, så bruger siden den i stedet. Kig også i minSU for at se, om hver måneds status passer.</p>
+    <div style="overflow-x:auto">
+      <table id="months">
+        <thead><tr>
+          <th>Måned</th><th>Status</th><th class="num hide-sm">SU modtaget</th><th class="num hide-sm">Løn udbetalt</th>
+          <th class="num">Bruttoløn (lønseddel)</th><th class="num">Indkomst til SU</th><th class="num">Fribeløb</th>
+        </tr></thead>
+        <tbody></tbody>
+        <tfoot></tfoot>
+      </table>
+    </div>
+  </section>
+
+  <section class="card panel">
+    <div class="panel-head"><h2>Kan det betale sig at fravælge SU?</h2></div>
+    <div class="note" id="optoutNote"></div>
+    <div style="overflow-x:auto">
+      <table id="optout">
+        <thead><tr><th>Fravælg</th><th class="num">Årsfribeløb</th><th class="num">Tilbagebetaling</th><th class="num">SU du ikke får</th><th class="num">Samlet pris</th><th class="num hide-sm">Klip gemt</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card panel note">
+    <details class="more">
+      <summary>Sådan regner siden (satser for 2026)</summary>
+      <div style="margin-top:10px" id="rules"></div>
+    </details>
+  </section>
+</div>
+<div class="tip" id="tip" role="tooltip"></div>
+
+<script src="../common.js"></script>
+<script>
+(() => {
+  "use strict";
+  const { kr, num, pct, $, el, svgEl, addMonths, monthsBetween, monthName, MONTHS, TODAY_KEY, loadData, metaLine, store, showTip, hideTip, yAxis } = window.Dash;
+
+  // su.dk, satser for 2026. Fribeløb are "før skat, men efter AM-bidrag" per month.
+  const RATES = {
+    2026: {
+      su: 20749,        // SU-måned, videregående uddannelse
+      su_ung: 15297,    // SU-måned, ungdomsuddannelse
+      fravalgt: 23598,  // indskrevet, men uden SU (fravalgt / ikke søgt)
+      ingen: 45420,     // ikke i gang med en uddannelse (før start / efter slut)
+      sats: 7426,       // SU udeboende, før skat
+      laan: 3799,       // SU-lån pr. måned
+    },
+  };
+  const STATUSES = [
+    ["su", "SU-måned"],
+    ["su_ung", "SU-måned (ungdomsudd.)"],
+    ["fravalgt", "Uden SU (fravalgt)"],
+    ["ingen", "Ikke i uddannelse"],
+  ];
+  const AM = 0.08;          // arbejdsmarkedsbidrag
+  const TILLAEG = 0.07;     // fast tillæg på tilbagebetaling over grænsen
+
+  const YEAR = Number(TODAY_KEY.slice(0, 4));
+  const R = RATES[YEAR] || RATES[Math.max(...Object.keys(RATES).map(Number))];
+  const RATES_YEAR = RATES[YEAR] ? YEAR : Math.max(...Object.keys(RATES).map(Number));
+  const MONTH_KEYS = monthsBetween(`${YEAR}-01`, `${YEAR}-12`);
+
+  let DATA, S; // S = saved settings
+  const defaults = () => ({ trk: 37, fradrag: 0, forventet: 0, laan: 0, years: {} });
+  const saver = store("su", (msg, err) => { const s = $("save"); s.textContent = msg ? "· " + msg : ""; s.classList.toggle("err", err); });
+  const yearState = () => (S.years[YEAR] = S.years[YEAR] || { status: {}, brutto: {} });
+
+  // ---------- from transactions ----------
+  // SU is paid in advance: a payment from the 20th on is next month's SU.
+  function suByMonth() {
+    const m = new Map();
+    for (const t of DATA.transactions) {
+      if (t.category !== "SU" || t.amount >= 0) continue;
+      const day = Number(t.date.slice(8, 10));
+      const key = day >= 20 ? addMonths(t.ym, 1) : t.ym;
+      m.set(key, (m.get(key) || 0) - t.amount);
+    }
+    return m;
+  }
+  function wagesByMonth() {
+    const m = new Map();
+    for (const t of DATA.transactions) if (t.category === "Løn") m.set(t.ym, (m.get(t.ym) || 0) - t.amount);
+    return m;
+  }
+  // net pay -> personlig indkomst (after AM-bidrag, before A-skat): net = P - trk * (P - fradrag)
+  function grossFromNet(net) {
+    if (net <= 0) return net;
+    const t = S.trk / 100, F = S.fradrag;
+    return net <= F ? net : (net - t * F) / (1 - t);
+  }
+
+  // Default month status: SU paid -> SU-måned; before the first SU month -> not studying;
+  // later months without SU -> fravalgt; future months follow the latest known month.
+  function defaultStatus(su) {
+    const suMonths = MONTH_KEYS.filter((k) => su.get(k) > 0);
+    const first = suMonths[0], last = suMonths[suMonths.length - 1];
+    const out = {};
+    for (const k of MONTH_KEYS) {
+      if (su.get(k) > 0) out[k] = "su";
+      else if (!first || k < first) out[k] = k > TODAY_KEY && first ? "su" : "ingen";
+      else if (k > TODAY_KEY && last && last >= TODAY_KEY) out[k] = "su";
+      else out[k] = "fravalgt";
+    }
+    return out;
+  }
+
+  // ---------- model ----------
+  function model() {
+    const su = suByMonth(), wages = wagesByMonth(), ys = yearState(), def = defaultStatus(su);
+    const rows = MONTH_KEYS.map((k) => {
+      const status = ys.status[k] || def[k];
+      const brutto = ys.brutto[k];
+      const net = wages.get(k) || 0;
+      const future = k > TODAY_KEY || (k === TODAY_KEY && net === 0);
+      let income, source;
+      if (brutto != null && brutto !== "") { income = Number(brutto) * (1 - AM); source = "lønseddel"; }
+      else if (!future) { income = grossFromNet(net); source = net ? "anslået" : ""; }
+      else { income = S.forventet * (1 - AM); source = S.forventet ? "forventet" : ""; }
+      const isSu = status === "su" || status === "su_ung";
+      return { k, status, statusDefault: def[k], brutto, net, suNet: su.get(k) || 0, future, income, source, fribelob: R[status], isSu,
+               suGross: isSu ? (future ? R.sats : Math.max(su.get(k) || 0, 0)) : 0 };
+    });
+    const fribelob = rows.reduce((s, r) => s + r.fribelob, 0);
+    const income = rows.reduce((s, r) => s + r.income, 0);
+    const incomeSoFar = rows.filter((r) => !r.future).reduce((s, r) => s + r.income, 0);
+    const suReceived = rows.reduce((s, r) => s + r.suGross + (r.isSu ? S.laan : 0), 0);
+    const remaining = rows.filter((r) => r.future).length;
+    return { rows, fribelob, income, incomeSoFar, suReceived, remaining, headroom: fribelob - income };
+  }
+  function repayment(excess, cap) {
+    if (excess <= 0) return 0;
+    const base = Math.min(excess, cap);
+    return base + (base > R.sats + R.laan ? base * TILLAEG : 0);
+  }
+  // 15th of the month before: last day to opt out of a month
+  const deadline = (k) => { const [y, m] = addMonths(k, -1).split("-").map(Number); return new Date(y, m - 1, 15, 23, 59); };
+
+  // ---------- render ----------
+  function render() {
+    const M = model();
+    renderStatus(M);
+    renderTiles(M);
+    renderChart(M);
+    renderTable(M);
+    renderOptout(M);
+  }
+
+  function renderStatus(M) {
+    const box = $("status");
+    const share = M.income / M.fribelob;
+    const repay = repayment(-M.headroom, M.suReceived);
+    let cls, icon, label, big, sub;
+    const perMonth = M.remaining ? M.headroom / M.remaining / (1 - AM) : 0;
+    if (M.headroom < 0) {
+      cls = "critical"; icon = "!"; label = "Over fribeløbet";
+      big = `Du ser ud til at tjene ${kr.format(-M.headroom)} for meget i ${YEAR}`;
+      sub = `Det koster en tilbagebetaling på ca. ${kr.format(repay)} før skat. Se længere nede, om det kan betale sig at fravælge SU i nogle måneder.`;
+    } else if (share > 0.9) {
+      cls = "warning"; icon = "!"; label = "Tæt på grænsen";
+      big = `Der er kun ${kr.format(M.headroom)} tilbage af dit fribeløb i ${YEAR}`;
+      sub = M.remaining ? `Det svarer til ca. ${kr.format(perMonth)} i bruttoløn pr. måned ud over det, du allerede forventer, i de sidste ${M.remaining} måneder.` : "";
+    } else {
+      cls = "good"; icon = "✓"; label = "Under fribeløbet";
+      big = `Du kan tjene ${kr.format(M.headroom)} mere i ${YEAR}`;
+      sub = M.remaining ? `Det svarer til ca. ${kr.format(perMonth)} i bruttoløn pr. måned ud over det, du allerede forventer, i de sidste ${M.remaining} måneder, før du skal betale SU tilbage.` : "";
+    }
+    box.className = `card status ${cls}`;
+    box.replaceChildren(el("div", { class: "ic", "aria-hidden": "true", text: icon }),
+      el("div", {}, el("div", { class: "lbl", text: label }), el("div", { class: "big", text: big }), sub ? el("div", { class: "sub", text: sub }) : null));
+  }
+
+  function renderTiles(M) {
+    const tiles = $("tiles"); tiles.replaceChildren();
+    const tile = (label, value, sub) => tiles.append(el("div", { class: "card tile" },
+      el("div", { class: "label", text: label }), el("div", { class: "value", title: value, text: value }), el("div", { class: "sub", text: sub })));
+    tile("Indkomst indtil nu", kr.format(M.incomeSoFar), `før skat, efter AM-bidrag · til og med ${monthName(M.rows.filter((r) => !r.future).pop()?.k || `${YEAR}-01`)}`);
+    tile("Forventet årsindkomst", kr.format(M.income), `${pct.format(M.income / M.fribelob)} af fribeløbet`);
+    tile("Årsfribeløb", kr.format(M.fribelob), `${M.rows.filter((r) => r.isSu).length} SU-måneder i ${YEAR}`);
+    tile("Mulig tilbagebetaling", kr.format(repayment(-M.headroom, M.suReceived)), M.headroom < 0 ? "før skat, inkl. evt. 7 % tillæg" : "ingen, med de nuværende tal");
+  }
+
+  function renderChart(M) {
+    const svg = $("chart"); svg.replaceChildren();
+    const W = svg.clientWidth || 900, H = 300, padL = 64, padR = 16, padT = 14, padB = 28;
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+    let ci = 0, cf = 0;
+    const pts = M.rows.map((r) => { ci += r.income; cf += r.fribelob; return { ...r, ci, cf }; });
+    const y = yAxis(svg, { max: Math.max(cf, ci, 1), top: padT, bottom: H - padB, left: padL, right: W - padR });
+    const band = (W - padL - padR) / 12;
+    const x = (i) => padL + band * i + band / 2;
+    const path = (arr, key) => arr.map((p, i) => `${i ? "L" : "M"}${x(p.i)},${y(p[key])}`).join(" ");
+    const idx = pts.map((p, i) => ({ ...p, i }));
+    const lastActual = idx.filter((p) => !p.future).pop();
+    const actual = idx.filter((p) => !p.future), future = lastActual ? [lastActual, ...idx.filter((p) => p.future)] : idx;
+
+    svg.append(svgEl("path", { d: path(idx, "cf"), fill: "none", stroke: "var(--ink-2)", "stroke-width": 2, "stroke-linejoin": "round" }));
+    if (future.length > 1) svg.append(svgEl("path", { d: path(future, "ci"), fill: "none", stroke: "var(--s1)", "stroke-opacity": 0.4, "stroke-width": 2, "stroke-linejoin": "round" }));
+    if (actual.length) svg.append(svgEl("path", { d: path(actual, "ci"), fill: "none", stroke: "var(--s1)", "stroke-width": 2, "stroke-linejoin": "round" }));
+    // direct labels at the end
+    const end = idx[idx.length - 1];
+    const lab = (txt, yy) => { const t = svgEl("text", { x: x(11) - 6, y: yy, "text-anchor": "end", style: "fill:var(--ink-2)" }); t.textContent = txt; svg.append(t); };
+    lab("Fribeløb", y(end.cf) - 8);
+    // income usually ends below the fribeløb line; put its label underneath when the two ends are close
+    lab("Indkomst", Math.abs(y(end.ci) - y(end.cf)) < 18 && end.ci <= end.cf ? Math.min(y(end.ci) + 18, H - padB - 4) : y(end.ci) - 8);
+
+    idx.forEach((p) => {
+      svg.append(svgEl("circle", { cx: x(p.i), cy: y(p.ci), r: 4, fill: "var(--s1)", "fill-opacity": p.future ? 0.4 : 1, stroke: "var(--card)", "stroke-width": 2 }));
+      const t = svgEl("text", { x: x(p.i), y: H - 8, "text-anchor": "middle" }); t.textContent = MONTHS[p.i]; svg.append(t);
+      const hit = svgEl("rect", { x: padL + band * p.i, y: padT, width: band, height: H - padT - padB, fill: "transparent", tabindex: 0,
+        "aria-label": `${monthName(p.k, true)}: indkomst ${kr.format(p.ci)}, fribeløb ${kr.format(p.cf)}` });
+      const show = (ev) => showTip(ev, `${monthName(p.k, true)}${p.future ? " (forventet)" : ""}`, [
+        ["var(--s1)", "Indkomst i alt", kr.format(p.ci)], ["var(--ink-2)", "Fribeløb i alt", kr.format(p.cf)],
+        ["transparent", p.cf - p.ci >= 0 ? "Luft" : "Over", kr.format(Math.abs(p.cf - p.ci))]]);
+      hit.addEventListener("pointermove", show); hit.addEventListener("focus", show);
+      hit.addEventListener("pointerleave", hideTip); hit.addEventListener("blur", hideTip);
+      svg.append(hit);
+    });
+    $("chartLegend").replaceChildren(
+      el("span", {}, el("i", { class: "ln", style: "background:var(--s1)" }), "Indkomst"),
+      el("span", {}, el("i", { class: "ln", style: "background:var(--s1);opacity:.4" }), "Forventet"),
+      el("span", {}, el("i", { class: "ln", style: "background:var(--ink-2)" }), "Fribeløb"));
+  }
+
+  function numInput(value, placeholder, onchange, label) {
+    return el("input", { type: "number", inputmode: "numeric", min: 0, step: 100, value: value ?? "", placeholder, "aria-label": label,
+      onchange: (e) => onchange(e.target.value === "" ? null : Math.max(0, Number(e.target.value))) });
+  }
+
+  function renderTable(M) {
+    const body = $("months").querySelector("tbody"); body.replaceChildren();
+    const ys = yearState();
+    for (const r of M.rows) {
+      const sel = el("select", { "aria-label": `Status for ${monthName(r.k, true)}`, onchange: (e) => {
+        if (e.target.value === r.statusDefault) delete ys.status[r.k]; else ys.status[r.k] = e.target.value;
+        changed();
+      } }, STATUSES.map(([v, l]) => el("option", { value: v, text: l, selected: v === r.status })));
+      sel.value = r.status;
+      const placeholder = r.future ? (S.forventet ? num.format(S.forventet) : "forventet") : (r.net ? `≈ ${num.format(grossFromNet(r.net) / (1 - AM))}` : "");
+      body.append(el("tr", { class: r.future ? "future" : "" },
+        el("td", { text: monthName(r.k, true) + (r.k === TODAY_KEY ? " ·  nu" : "") }),
+        el("td", {}, sel),
+        el("td", { class: "num hide-sm", text: r.suNet ? kr.format(r.suNet) : "–" }),
+        el("td", { class: "num hide-sm", text: r.net ? kr.format(r.net) : "–" }),
+        el("td", { class: "num" }, numInput(r.brutto, placeholder, (v) => { if (v == null) delete ys.brutto[r.k]; else ys.brutto[r.k] = v; changed(); }, `Bruttoløn ${monthName(r.k, true)}`)),
+        el("td", { class: "num" }, kr.format(r.income), r.source ? el("div", { class: "src", text: r.source }) : null),
+        el("td", { class: "num", text: kr.format(r.fribelob) })));
+    }
+    $("months").querySelector("tfoot").replaceChildren(el("tr", {},
+      el("td", { text: `I alt ${YEAR}` }), el("td"), el("td", { class: "num hide-sm", text: kr.format(M.rows.reduce((s, r) => s + r.suNet, 0)) }),
+      el("td", { class: "num hide-sm", text: kr.format(M.rows.reduce((s, r) => s + r.net, 0)) }), el("td"),
+      el("td", { class: "num", text: kr.format(M.income) }), el("td", { class: "num", text: kr.format(M.fribelob) })));
+  }
+
+  function renderOptout(M) {
+    const today = new Date();
+    const eligible = M.rows.filter((r) => r.future && r.status === "su" && deadline(r.k) >= today);
+    const gain = R.fravalgt - R.su;
+    const lost = R.sats + S.laan;
+    const rows = [];
+    for (let n = 0; n <= Math.min(eligible.length, 6); n++) {
+      const fribelob = M.fribelob + n * gain;
+      const repay = repayment(M.income - fribelob, M.suReceived - n * lost);
+      rows.push({ n, fribelob, repay, lost: n * lost, total: repay + n * lost });
+    }
+    const best = rows.reduce((a, b) => (b.total < a.total - 1 ? b : a), rows[0]);
+    const body = $("optout").querySelector("tbody"); body.replaceChildren();
+    const months = eligible.slice(-6).map((r) => r.k).reverse(); // opting out the last months of the year first
+    rows.forEach((r) => body.append(el("tr", { class: r === best && rows.length > 1 ? "best" : "" },
+      el("td", { text: r.n === 0 ? "Ingen måneder" : `${r.n} ${r.n === 1 ? "måned" : "måneder"} (${months.slice(0, r.n).reverse().map((k) => MONTHS[Number(k.slice(5)) - 1]).join(", ")})` }),
+      el("td", { class: "num", text: kr.format(r.fribelob) }),
+      el("td", { class: "num", text: kr.format(r.repay) }),
+      el("td", { class: "num", text: kr.format(r.lost) }),
+      el("td", { class: "num", text: kr.format(r.total) }),
+      el("td", { class: "num hide-sm", text: String(r.n) }))));
+
+    const note = $("optoutNote"); note.replaceChildren();
+    const p = (...kids) => note.append(el("p", {}, ...kids));
+    p(`Hver måned du fravælger, hæver dit årsfribeløb med `, el("b", { text: kr.format(gain) }), `, men du går glip af `, el("b", { text: kr.format(lost) }),
+      ` i SU${S.laan ? " og SU-lån" : ""} den måned. Kontant kan det derfor kun betale sig, når du alligevel skulle betale det meste af månedens SU tilbage. Til gengæld beholder du klippet og kan bruge det senere i studiet.`);
+    if (!eligible.length) p("Der er ikke flere måneder i år, du kan nå at fravælge. Fristen er den 15. i måneden før.");
+    else if (M.headroom >= 0) p(el("b", { text: "Det kan ikke betale sig lige nu:" }), ` du er ${kr.format(M.headroom)} under fribeløbet med de nuværende tal.`);
+    else if (best.n === 0) p(el("b", { text: "Behold din SU:" }), " det er billigere at betale overskridelsen tilbage end at give afkald på hele måneder. Vil du gemme klip til senere, kan fravalg stadig give mening.");
+    else p(el("b", { text: `Det billigste er at fravælge ${best.n} ${best.n === 1 ? "måned" : "måneder"}` }), ` (${kr.format(rows[0].total - best.total)} sparet i forhold til ikke at gøre noget).`);
+    if (eligible.length) {
+      const next = eligible[0];
+      p(`Frist: SU for ${monthName(next.k, true)} skal fravælges i minSU senest `, el("b", { text: deadline(next.k).toLocaleDateString("da-DK", { day: "numeric", month: "long" }) }),
+        `. Man kan ikke fravælge måneder bagud i tid.`);
+    }
+  }
+
+  // ---------- settings ----------
+  function renderSettings() {
+    const box = $("settings"); box.replaceChildren();
+    const field = (key, label, help, attrs = {}) => box.append(el("label", { class: "f" }, label,
+      el("input", { type: "number", value: S[key], min: 0, ...attrs, onchange: (e) => { S[key] = Math.max(0, Number(e.target.value) || 0); changed(); } }),
+      el("small", { text: help })));
+    field("trk", "Trækprocent på lønnen", "Står på forskudsopgørelsen / lønsedlen", { max: 60, step: 0.5 });
+    field("fradrag", "Månedsfradrag på lønnen", "0 hvis lønnen bruger bikort (SU har hovedkortet)", { step: 100 });
+    field("forventet", "Forventet bruttoløn pr. måned", "Bruges i de kommende måneder, hvor du ikke har skrevet noget", { step: 500 });
+    field("laan", "SU-lån pr. måned", `0 hvis du ikke låner (maks. ${num.format(R.laan)} kr.)`, { step: 100, max: R.laan });
+  }
+
+  function renderRules() {
+    const box = $("rules"); box.replaceChildren();
+    const p = (...k) => box.append(el("p", {}, ...k));
+    p(el("b", { text: "Fribeløb pr. måned: " }), `SU-måned ${kr.format(R.su)} (ungdomsuddannelse ${kr.format(R.su_ung)}), måned uden SU ${kr.format(R.fravalgt)}, måned uden uddannelse ${kr.format(R.ingen)}. De lægges sammen til et årsfribeløb, så du godt må tjene mere end fribeløbet i én måned, hvis du tjener tilsvarende mindre i en anden.`);
+    p(el("b", { text: "Indkomst: " }), "Det, der tæller, er din personlige indkomst før skat, men efter 8 % AM-bidrag (den står på lønsedlen og i eIndkomst). Det gælder både løn og feriepenge. SU, boligstøtte, salg af egne ting, tilskud fra familie og overskydende skat tæller ikke med. Har du honorarer eller B-indkomst, så skriv dem med i bruttolønnen for måneden.");
+    p(el("b", { text: "Tilbagebetaling: " }), `Du skal betale det beløb tilbage, du har tjent over årsfribeløbet, dog højst den SU og det SU-lån, du har fået. Er beløbet over ${kr.format(R.sats + R.laan)}, lægges der 7 % oveni. Betaler du ikke inden for to måneder, kommer der renter på. Den skat, du har betalt af SU'en, får du automatisk tilbage. Der er også en lille rabat på den første del af overskridelsen, som siden ikke regner med, så beløbet her er et forsigtigt skøn.`);
+    p(el("b", { text: "Fravalg: " }), "Du fravælger SU i minSU senest den 15. i måneden før. Det kan ikke gøres bagud i tid.");
+    if (RATES_YEAR !== YEAR) p(el("b", { text: `Obs: siden kender kun satserne for ${RATES_YEAR}, så tallene for ${YEAR} er kun vejledende.` }));
+    p("Kilde: su.dk (satser for månedsfribeløb og \"Du har tjent for meget\"). Satserne ændrer sig hvert år, og minSU har altid det endelige tal.");
+  }
+
+  function changed() { saver.save(S); render(); }
+
+  addEventListener("resize", (() => { let t; return () => { clearTimeout(t); t = setTimeout(() => renderChart(model()), 120); }; })());
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);
+
+  Promise.all([loadData(), saver.load()]).then(([d, saved]) => {
+    DATA = d;
+    S = { ...defaults(), ...saved };
+    $("title").textContent = `SU-vagt ${YEAR}`;
+    $("meta").replaceChildren(...metaLine(d));
+    renderSettings();
+    renderRules();
+    render();
+  }).catch((e) => {
+    $("status").replaceChildren(el("div", {}, el("div", { class: "lbl", text: "Kunne ikke hente data" }), el("div", { class: "sub", text: String(e) })));
+  });
+})();
+</script>
+</body>
+</html>

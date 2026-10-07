@@ -1,0 +1,24 @@
+{
+ "_om": "Personlige indstillinger for Forbrug-siden. Kopiér filen til config.json (den kommer ikke i git) og ret til. Uden config.json virker siden stadig, bare uden knappen \"Siden flytning\" og med bankteksterne mere rå i fanen Modtagere.",
+ "_flytning": "Måned (ÅÅÅÅ-MM) for periodeknappen \"Siden flytning\". Udelad den, så forsvinder knappen.",
+ "flytning": "2025-08",
+ "_modtagere": "Banktekst -> modtagernavn til fanen Modtagere, når Sure ikke selv har en modtager på posteringen. Mønstrene er regulære udtryk uden hensyn til store og små bogstaver, og det første, der passer, vinder (derfor står \"Coop 365\" før \"Coop\").",
+ "modtagere": [
+  ["REMA ?1000", "Rema 1000"],
+  ["NETTO", "Netto"],
+  ["F(OE|Ø)TEX", "Føtex"],
+  ["LIDL", "Lidl"],
+  ["COOP ?365|^365 ", "Coop 365"],
+  ["COOP", "Coop"],
+  ["MENY", "Meny"],
+  ["SPAR ", "Spar"],
+  ["7-ELEVEN", "7-Eleven"],
+  ["DSB", "DSB"],
+  ["REJSEKORT", "Rejsekort"],
+  ["CIRCLE K", "Circle K"],
+  ["APOTEK", "Apotek"],
+  ["MATAS", "Matas"],
+  ["AMZ|AMAZON", "Amazon"],
+  ["APCOA|EasyPark|PARKMAN", "Parkering"]
+ ]
+}

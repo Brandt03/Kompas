@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Studie · Ugeoverblik</title>
+<!-- Studieprojektets side i Kompas (https://kompas.localhost/studie/). Kilde: Scripts/kompas/ i semestermappen,
+     kopieres af Scripts/kompas-eksport.js. Kalenderen kommer fra /form/liv.json (garmin-coach via livsoverblik),
+     ugeplanen og deadlines fra studie.json (køreplan-rutinen). -->
+<link rel="stylesheet" href="/kompas/assets/tokens.css">
+<link rel="stylesheet" href="/kompas/assets/page.css">
+<style>
+  .week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; }
+  .day { padding: 12px 12px 14px; min-height: 150px; display: flex; flex-direction: column; gap: 8px; }
+  .day h3 { margin: 0; font-size: 13px; font-weight: 500; color: var(--text-secondary); display: flex; justify-content: space-between; }
+  .day h3 small { color: var(--text-subdued); font-weight: 400; }
+  .day.today { box-shadow: var(--shadow-xs), 0 0 0 1.5px var(--nav-indicator); }
+  .day.today h3 { color: var(--text-primary); }
+  .blk { border-radius: 8px; padding: 7px 9px 8px; background: var(--container-inset); border-left: 3px solid var(--c, var(--gray-400)); }
+  .blk .t { font-size: 12px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+  .blk .n { font-size: 13px; font-weight: 500; line-height: 1.3; margin-top: 1px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .blk .a { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+  .blk.other { --c: var(--gray-300); }
+  .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: auto; }
+  .chip { font-size: 11.5px; padding: 3px 7px; border-radius: 999px; background: var(--surface-inset); color: var(--text-secondary); }
+  .none { color: var(--text-subdued); font-size: 12.5px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th { text-align: left; color: var(--text-secondary); font-weight: 500; font-size: 12.5px; padding: 8px 10px; border-bottom: 1px solid var(--divider); }
+  td { padding: 9px 10px; border-bottom: 1px solid var(--divider); vertical-align: middle; }
+  tr:last-child td { border-bottom: 0; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td .fag { display: flex; align-items: center; gap: 8px; }
+  td .kode { color: var(--text-subdued); font-size: 12px; }
+
+  @media (max-width: 1000px) {
+    .week { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+    .day { min-height: 0; }
+    .day.empty-day { display: none; }
+    /* På telefonen starter ugen ved i dag; de dage, der er gået, ligger bag en knap */
+    .week.skjul-forbi .day.forbi { display: none; }
+    .wrap .vis-forbi { display: block; }
+  }
+  .vis-forbi { display: none; width: 100%; font: inherit; font-size: 13px; color: var(--text-secondary); background: var(--container-inset);
+    border: 0; box-shadow: inset 0 0 0 1px var(--border-subdued); border-radius: 10px; padding: 9px 12px; cursor: pointer; margin-bottom: 8px; }
+  @media (max-width: 560px) { .hide-sm { display: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="page">
+    <div>
+      <h1>Ugeoverblik</h1>
+      <p class="sub" id="sub">Studie</p>
+    </div>
+    <div class="seg" role="group" aria-label="Vælg uge">
+      <button type="button" data-w="forrige" aria-pressed="false">Ugen før</button>
+      <button type="button" data-w="denne" aria-pressed="true">Denne uge</button>
+      <button type="button" data-w="naeste" aria-pressed="false">Næste uge</button>
+    </div>
+  </header>
+  <div class="stack" id="root"><div class="card empty">Henter …</div></div>
+</div>
+
+<script src="/kompas/assets/icons.js"></script>
+<script src="/kompas/assets/liv.js"></script>
+<script src="studie.js"></script>
+<script>
+const COLORS = ["var(--c1)", "var(--c2)", "var(--c3)", "var(--c4)", "var(--c5)", "var(--c6)", "var(--c7)", "var(--c8)"];
+// Weekenden hører til næste uge: ugens undervisning er overstået, og køreplanen for næste uge skrives søndag
+const OFFSET = { forrige: -7, denne: 0, naeste: 7 };
+let liv = null, studie = null, which = [0, 6].includes(new Date().getDay()) ? "naeste" : "denne", visForbi = false;
+
+// Kalenderen, som den ser ud nu (liv eksport, hvert 30. min). Mangler den, bruges reviewets øjebliksbillede fra mandag.
+function kalenderFor(monday) {
+  if (liv.kalender?.[monday]) return liv.kalender[monday];
+  for (const r of liv.reviews || []) {
+    if (r.mandag === monday && r.kalender) return r.kalender;
+    if (iso(addDays(parseDate(r.mandag), 7)) === monday && r.kommende) return r.kommende;
+  }
+  return null;
+}
+
+function render() {
+  const root = document.getElementById("root");
+  document.querySelectorAll(".seg button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.w === which)));
+  const thisMon = iso(addDays(new Date(new Date().toDateString()), -((new Date().getDay() + 6) % 7)));
+  const monday = iso(addDays(parseDate(thisMon), OFFSET[which]));
+  document.querySelector('.seg button[data-w="forrige"]').textContent = `Uge ${isoWeek(addDays(parseDate(thisMon), -7))}`;
+  document.getElementById("sub").textContent = `Uge ${isoWeek(parseDate(monday))} · ${range(monday)}`;
+  const kal = kalenderFor(monday);
+  if (!kal) { root.innerHTML = `<div class="card empty">Ingen kalender for uge ${isoWeek(parseDate(monday))} endnu. Kør <code>liv eksport</code> i livsoverblik.</div>`; return; }
+  const events = kal.map(parseEvent);
+
+  // same colour for a course across all weeks
+  const alle = [...Object.values(liv.kalender || {}).flat(), ...(liv.reviews || []).flatMap(r => [...(r.kalender || []), ...(r.kommende || [])])].map(parseEvent);
+  const allFag = [...new Set(alle.filter(e => e.fag).map(e => e.fag))].sort();
+  const color = f => FAG_FARVE[fagId(f)] || COLORS[allFag.indexOf(f) % COLORS.length];
+
+  const teach = events.filter(e => e.type === "undervisning");
+  const self = events.filter(e => e.type === "selvstudie");
+  const other = events.filter(e => e.type === "andet");
+  const teachH = teach.reduce((s, e) => s + hours(e), 0);
+  const fagRows = allFag.map(f => {
+    const es = teach.filter(e => e.fag === f);
+    return { f, kode: es[0]?.kode || alle.find(e => e.fag === f)?.kode,
+      h: es.reduce((s, e) => s + hours(e), 0),
+      fl: es.filter(e => e.art === "Forelæsning").length, ov: es.filter(e => e.art === "Øvelse").length,
+      andet: es.filter(e => e.art !== "Forelæsning" && e.art !== "Øvelse").length };
+  });
+
+  const todayIso = iso(new Date());
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const d = addDays(parseDate(monday), i), key = iso(d);
+    const evs = events.filter(e => e.dato === key && e.type !== "selvstudie")
+      .sort((a, b) => (a.heldag ? -1 : 0) - (b.heldag ? -1 : 0) || String(a.start).localeCompare(String(b.start)));
+    const logs = self.filter(e => e.dato === key);
+    const blocks = evs.map(e => e.type === "undervisning"
+      ? `<div class="blk" style="--c:${color(e.fag)}"><div class="t">${esc(e.start)}–${esc(e.slut)}</div>
+           <div class="n" title="${esc(e.fag)}">${esc(e.fag)}</div>
+           <div class="a">${esc([e.art, e.form].filter(Boolean).join(" · "))}</div></div>`
+      : `<div class="blk other"><div class="t">${e.heldag ? "hele dagen" : `${esc(e.start)}–${esc(e.slut)}`}</div><div class="n">${esc(e.titel)}</div></div>`).join("");
+    const chips = logs.length ? `<div class="chips" title="Selvstudie logget i CalTask">${logs.map(e => `<span class="chip">${esc(e.titel.replace(/^Selvstudie · /, ""))}</span>`).join("")}</div>` : "";
+    const empty = !evs.length && !logs.length;
+    return `<section class="card day${key === todayIso ? " today" : ""}${key < todayIso ? " forbi" : ""}${empty ? " empty-day" : ""}" aria-label="${weekday(d)} ${dayMonth(d)}">
+      <h3>${weekday(d)} <small>${dayMonth(d)}</small></h3>${blocks || `<span class="none">Fri</span>`}${chips}</section>`;
+  }).join("");
+
+  root.innerHTML = `
+    <section class="tiles" aria-label="Ugen i tal">
+      <div class="card tile"><div class="label">Undervisning</div><div class="value">${fmt(teachH, 1)}<small>t</small></div>
+        <div class="foot">${teach.length} moduler</div></div>
+      <div class="card tile"><div class="label">Fag med undervisning</div><div class="value">${fagRows.filter(x => x.h > 0).length}</div>
+        <div class="foot">af ${allFag.length} i kalenderen</div></div>
+      <div class="card tile"><div class="label">Selvstudie logget</div><div class="value">${self.length}</div>
+        <div class="foot">${liv.selvstudie_fra ? `logges i CalTask fra ${dayMonth(parseDate(liv.selvstudie_fra))}` : "logges i CalTask"}</div></div>
+      <div class="card tile"><div class="label">Andet i kalenderen</div><div class="value">${other.length}</div>
+        <div class="foot">${other.length ? esc(other.map(e => e.titel).slice(0, 2).join(", ")) : "ingenting"}</div></div>
+    </section>
+
+    ${which === "denne" && monday < todayIso ? `<button type="button" class="vis-forbi" id="vis-forbi">${visForbi ? "Skjul" : "Vis"} de dage, der er gået</button>` : ""}
+    <div class="week${visForbi ? "" : " skjul-forbi"}">${days}</div>
+    ${ugensPlan(isoWeek(parseDate(monday)), monday)}
+
+    <section class="card panel">
+      <div class="panel-head"><h2>Fag</h2><span class="meta">skemalagt i uge ${isoWeek(parseDate(monday))}</span></div>
+      <table>
+        <thead><tr><th>Fag</th><th class="num">Timer</th><th class="num hide-sm">Forelæsninger</th><th class="num hide-sm">Øvelser</th><th class="num hide-sm">Andet</th></tr></thead>
+        <tbody>${fagRows.map(x => `<tr>
+          <td><div class="fag"><span class="dot" style="background:${color(x.f)}"></span><a href="fag.html#${fagId(x.f)}" style="text-decoration:none">${esc(x.f)}</a>${x.kode ? ` <span class="kode">${esc(x.kode)}</span>` : ""}</div></td>
+          <td class="num">${fmt(x.h, 1)}</td><td class="num hide-sm">${x.fl}</td><td class="num hide-sm">${x.ov}</td><td class="num hide-sm">${x.andet}</td></tr>`).join("")}</tbody>
+      </table>
+    </section>
+    <p class="meta">Fra kalenderen via garmin-coach, opdateret ${stamp(liv.genereret)}. Kalenderen rækker kun ca. 14 dage tilbage, så ældre uger findes kun i ugereviewene.</p>
+  `;
+  const vf = document.getElementById("vis-forbi");
+  if (vf) vf.onclick = () => { visForbi = !visForbi; render(); };
+}
+
+document.querySelectorAll(".seg button").forEach(b => b.onclick = () => { which = b.dataset.w; if (liv) render(); });
+// Kalenderen er livsnerven; ugeplanen er et tillæg, så en manglende studie.json vælter ikke siden
+function ugensPlan(uge, monday) {
+  if (!studie) return "";
+  const plan = studie.planer.find(p => p.uge === uge);
+  const til = iso(addDays(parseDate(monday), 13));
+  const dl = studie.deadlines.filter(d => d.fra && d.fra <= til && (d.til || d.fra) >= monday);
+  const dlHtml = dl.length ? `<ul class="list">${dl.map(d => `<li><b>${esc(d.fag)}</b> · ${d.hvad} <span class="meta">(${esc(d.dato_tekst || `uge ${d.uger}`)})</span></li>`).join("")}</ul>`
+    : `<p class="meta">Ingen deadlines de næste to uger.</p>`;
+  return `<div class="cols">
+    <section class="card panel"><div class="panel-head"><h2>Vigtigst i uge ${uge}${plan ? ` <span class="meta">· skrevet før ugen</span>` : ""}</h2>${plan ? `<a class="link" href="fag.html">Ugeplanen pr. fag ${icon("arrow-right", 14)}</a>` : ""}</div>
+      ${plan?.vigtigst ? `<div class="md">${plan.vigtigst}</div>` : `<p class="meta">Ingen ugeplan for uge ${uge}. Køreplan-rutinen skriver den søndag kl. 18.</p>`}</section>
+    <section class="card panel"><div class="panel-head"><h2>Deadlines, to uger frem</h2><a class="link" href="deadlines.html">Alle ${icon("arrow-right", 14)}</a></div>${dlHtml}</section>
+  </div>`;
+}
+
+Promise.all([loadKalender(), loadStudie().catch(() => null)]).then(([d, s]) => { liv = d; studie = s; render(); }, e => {
+  document.getElementById("root").innerHTML = `<div class="card empty">Kunne ikke hente kalenderdata (${esc(e.message)}).</div>`;
+});
+</script>
+</body>
+</html>

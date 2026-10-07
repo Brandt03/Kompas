@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kompas</title>
+<script>
+  // "/" is always this page; Sure's own overview lives at /okonomi. When Sure sends the frame to "/"
+  // (after login, its logo), show its overview instead of the portal inside itself.
+  if (window.top !== window) location.replace("/okonomi" + location.search);
+</script>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230b0b0b'/%3E%3Cpath d='M19 25v-6.5a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1V25M8 14.5a2 2 0 0 1 .7-1.5l6-5.1a2 2 0 0 1 2.6 0l6 5.1a2 2 0 0 1 .7 1.5V23a2 2 0 0 1-2 2H10a2 2 0 0 1-2-2z' fill='none' stroke='white' stroke-width='2' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/kompas/assets/tokens.css">
+<style>
+  :root { --side-w: 248px; }
+  html, body { height: 100%; }
+  body { display: flex; overflow: hidden; }
+
+  /* sidebar */
+  .side {
+    width: var(--side-w); flex: none; height: 100dvh; display: flex; flex-direction: column;
+    border-right: 1px solid var(--divider); background: var(--surface);
+  }
+  .brand-row { display: flex; align-items: center; padding-right: 10px; }
+  .brand { display: flex; align-items: center; gap: 10px; padding: 18px 18px 14px; text-decoration: none; color: var(--text-primary); }
+  .mark { width: 32px; height: 32px; border-radius: 9px; background: var(--nav-indicator); color: var(--surface); display: grid; place-items: center; flex: none; }
+  .brand b { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+  .brand small { display: block; color: var(--text-secondary); font-size: 12px; font-weight: 400; }
+
+  nav.groups { flex: 1; overflow-y: auto; padding: 4px 10px 12px; }
+  .group + .group { margin-top: 14px; }
+  .group-label {
+    display: flex; align-items: center; gap: 8px; padding: 6px 10px 4px;
+    color: var(--text-secondary); font-size: 12px; font-weight: 500;
+  }
+  .group ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
+
+  .item {
+    position: relative; display: flex; align-items: center; gap: 10px; width: 100%;
+    padding: 7px 10px; border-radius: 8px; border: 0; background: none; font: inherit; font-size: 14px;
+    color: var(--text-secondary); text-decoration: none; cursor: pointer; text-align: left;
+  }
+  .item .ic { flex: none; }
+  .item:hover { background: var(--surface-hover); color: var(--text-primary); }
+  .item[aria-current="page"] { background: var(--container); color: var(--text-primary); font-weight: 500; box-shadow: var(--shadow-border-xs); }
+  .item[aria-current="page"]::before {
+    content: ""; position: absolute; left: -10px; top: 8px; bottom: 8px; width: 4px;
+    border-radius: 0 3px 3px 0; background: var(--nav-indicator);
+  }
+  /* Nyt indhold, du ikke har åbnet endnu ("nyt" i projektets kompas.json) */
+  .item[data-nyt]::after, #open[data-nyt]::after {
+    content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--text-primary); flex: none;
+  }
+  .item[data-nyt]::after { margin-left: auto; }
+  #open[data-nyt] { position: relative; }
+  #open[data-nyt]::after { position: absolute; top: 7px; right: 7px; box-shadow: 0 0 0 2px var(--surface); }
+  .item[aria-disabled="true"] { color: var(--text-subdued); cursor: default; }
+  .item[aria-disabled="true"]:hover { background: none; color: var(--text-subdued); }
+  .pill {
+    margin-left: auto; font-size: 11px; font-weight: 500; line-height: 1; padding: 3px 6px; border-radius: 999px;
+    background: var(--surface-inset); color: var(--text-subdued);
+  }
+
+  .foot { border-top: 1px solid var(--divider); padding: 10px; display: flex; flex-direction: column; gap: 2px; }
+  .status { display: flex; align-items: center; gap: 8px; padding: 6px 10px; font-size: 12.5px; color: var(--text-secondary); }
+  .status i { width: 8px; height: 8px; border-radius: 50%; background: var(--gray-400); flex: none; }
+  .status.up i { background: var(--success); }
+  .status.down i { background: var(--warning); }
+
+  /* content */
+  .content { flex: 1; min-width: 0; display: flex; flex-direction: column; height: 100dvh; }
+  .topbar { display: none; }
+  iframe { flex: 1; width: 100%; border: 0; display: block; background: var(--surface); }
+
+  .scrim { display: none; }
+  .icon-btn {
+    display: inline-grid; place-items: center; width: 36px; height: 36px; border-radius: 8px; border: 0;
+    background: none; color: var(--text-secondary); cursor: pointer;
+  }
+  .icon-btn:hover { background: var(--surface-hover); color: var(--text-primary); }
+  .close-btn { display: none; margin-left: auto; }
+
+  @media (max-width: 899px) {
+    .side {
+      position: fixed; z-index: 30; inset: 0 auto 0 0; width: min(300px, 86vw);
+      transform: translateX(-100%); transition: transform .2s ease; box-shadow: 0 10px 40px rgba(0,0,0,.18);
+    }
+    body.open .side { transform: none; }
+    body.open .scrim { display: block; position: fixed; inset: 0; z-index: 20; background: rgba(0,0,0,.3); }
+    .close-btn { display: inline-grid; }
+    .topbar {
+      display: flex; align-items: center; gap: 6px; padding: 8px 8px 8px 6px;
+      padding-top: calc(env(safe-area-inset-top) + 8px); border-bottom: 1px solid var(--divider); background: var(--surface);
+    }
+    .topbar b { font-size: 15px; font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  }
+</style>
+</head>
+<body>
+  <aside class="side" id="side" aria-label="Hovedmenu">
+    <div class="brand-row">
+      <a class="brand" href="#/kompas/">
+        <span class="mark" id="mark"></span>
+        <span><b>Kompas</b><small>Økonomi, studie og form</small></span>
+      </a>
+      <button class="icon-btn close-btn" id="close" type="button" aria-label="Luk menu"></button>
+    </div>
+    <nav class="groups" id="nav"></nav>
+    <div class="foot">
+      <div class="status" id="sure-status" role="status"><i></i><span>Tjekker Sure …</span></div>
+      <a class="item" id="newtab" href="/" target="_blank" rel="noopener"></a>
+    </div>
+  </aside>
+  <div class="scrim" id="scrim"></div>
+
+  <div class="content">
+    <div class="topbar">
+      <button class="icon-btn" id="open" type="button" aria-label="Åbn menu"></button>
+      <b id="top-title">Kompas</b>
+      <button class="icon-btn" id="reload" type="button" aria-label="Genindlæs siden"></button>
+    </div>
+    <iframe id="frame" title="Indhold" allow="publickey-credentials-get; publickey-credentials-create; clipboard-write"></iframe>
+  </div>
+
+<script src="/kompas/assets/icons.js"></script>
+<script>
+// Kompas owns only "Kompas". Every other group comes from the projects themselves: each writes a kompas.json
+// next to its pages, listed in projekter.json:
+//   { omraade, ikon, raekkefoelge, kilde, opdateret, sider: [{ titel, ikon, sti, match?, praecis?, fane?, nyt? }] }
+// `match` lists the path prefixes that count as "this page" when you click around inside it (Sure navigates
+// on its own); `praecis` means only the exact path; `fane` is the id of a tab inside the page that shows this
+// view, for projects with several views on one page. A page without `sti` is planned ("snart").
+// `nyt` is a key for the page's newest content (a new weekly review, a new plan). When it changes, the menu
+// shows a dot until the page is opened. Which key you last saw is remembered in this browser only.
+const HOME = "/kompas/";
+let NAV = [{ items: [{ label: "I dag", icon: "sun", src: HOME }] }];
+let PAGES = NAV[0].items;
+
+const $ = id => document.getElementById(id);
+const frame = $("frame");
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+
+$("mark").innerHTML = icon("compass", 18);
+$("open").innerHTML = icon("menu", 20);
+$("close").innerHTML = icon("x", 18);
+$("reload").innerHTML = icon("rotate-cw", 18);
+$("newtab").innerHTML = `${icon("external-link")}<span>Åbn siden i ny fane</span>`;
+
+async function loadNav() {
+  let list = [];
+  try { list = (await (await fetch("/kompas/projekter.json", { cache: "no-store" })).json()).manifester || []; } catch (e) {}
+  const groups = await Promise.all(list.map(async url => {
+    try {
+      const r = await fetch(url, { cache: "no-store" });
+      if (!r.ok) throw new Error(`svarede ${r.status}`);
+      const m = await r.json();
+      return { label: m.omraade, icon: m.ikon, order: m.raekkefoelge ?? 50, kilde: m.kilde, opdateret: m.opdateret,
+        items: (m.sider || []).map(p => ({ label: p.titel, icon: p.ikon, src: p.sti, match: p.match, exact: p.praecis, fane: p.fane, nyt: p.nyt, snart: !p.sti })) };
+    } catch (e) {
+      return { label: url.split("/")[1], order: 99, fejl: `${url} ${e.message}`, items: [] };
+    }
+  }));
+  NAV = [NAV[0], ...groups.sort((a, b) => a.order - b.order)];
+  PAGES = NAV.flatMap(g => g.items).filter(p => p.src);
+  renderNav();
+  husk();
+}
+
+// --- new content ---------------------------------------------------------------------------------
+const SET_NØGLE = "kompas-set";
+let SET = {};
+const gemSet = () => { try { localStorage.setItem(SET_NØGLE, JSON.stringify(SET)); } catch (e) {} };
+// The first time (or a page that's new in the menu) counts as seen, so the menu doesn't light up all at once
+function husk() {
+  let gemt = null;
+  try { gemt = JSON.parse(localStorage.getItem(SET_NØGLE)); } catch (e) {}
+  SET = gemt || {};
+  for (const p of PAGES) if (p.nyt && !(p.src in SET)) SET[p.src] = p.nyt;
+  gemSet();
+}
+function prikker() {
+  let nogen = false;
+  document.querySelectorAll("#nav a.item").forEach(a => {
+    const p = PAGES.find(x => x.src === a.dataset.src), ny = !!(p?.nyt && SET[p.src] !== p.nyt);
+    nogen ||= ny;
+    if (ny) { a.setAttribute("data-nyt", ""); a.title = "Nyt siden du sidst åbnede siden"; } else { a.removeAttribute("data-nyt"); a.removeAttribute("title"); }
+  });
+  if (nogen) $("open").setAttribute("data-nyt", ""); else $("open").removeAttribute("data-nyt");
+}
+
+function renderNav() {
+  $("nav").innerHTML = NAV.map(g => `
+  <div class="group">
+    ${g.label ? `<div class="group-label" title="${esc(g.kilde || "")}">${esc(g.label)}</div>` : ""}
+    <ul>${g.fejl ? `<li><span class="item" aria-disabled="true" title="${esc(g.fejl)}">${icon("x")}<span>Ikke tilgængelig</span></span></li>` : ""}${g.items.map(p => `<li>${p.snart
+      ? `<span class="item" aria-disabled="true" title="Ikke bygget endnu">${icon(p.icon)}<span>${esc(p.label)}</span><span class="pill">snart</span></span>`
+      : `<a class="item" href="#${esc(p.src)}" data-src="${esc(p.src)}">${icon(p.icon)}<span>${esc(p.label)}</span></a>`}</li>`).join("")}
+    </ul>
+  </div>`).join("");
+}
+renderNav();
+
+// --- which page is showing -------------------------------------------------------------------
+const pathOf = src => src.split("#")[0].split("?")[0];
+const fanePages = pathname => PAGES.filter(p => p.fane && pathOf(p.src) === pathname);
+
+function pageFor(path) {
+  const clean = path.split("#")[0], pathname = pathOf(path);
+  const views = fanePages(pathname);
+  if (views.length) return views.find(p => p.src === clean) || views[0];
+  let best = null, bestLen = -1;
+  for (const p of PAGES) {
+    for (const m of p.match || [pathOf(p.src)]) {
+      const hit = p.exact || m === "/" ? pathname === m : (pathname === m || pathname.startsWith(m.endsWith("/") ? m : m + "/"));
+      if (hit && m.length > bestLen) { best = p; bestLen = m.length; }
+    }
+  }
+  return best;
+}
+
+function mark(path, set = true) {
+  const page = pageFor(path);
+  document.querySelectorAll("#nav a.item").forEach(a => {
+    if (page && a.dataset.src === page.src) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
+  });
+  if (set && page?.nyt && SET[page.src] !== page.nyt) { SET[page.src] = page.nyt; gemSet(); }
+  prikker();
+  const label = page ? page.label : "I dag";
+  document.title = `${label} · Kompas`;
+  $("top-title").textContent = label;
+  $("newtab").href = path;
+}
+
+// --- frame navigation --------------------------------------------------------------------------
+const wanted = () => decodeURIComponent(location.hash.slice(1)) || HOME;
+
+// A page with views ("fane") is addressed by the view that is selected inside it
+function selectedView(pathname) {
+  try {
+    const d = frame.contentDocument;
+    return fanePages(pathname).find(p => d.getElementById(p.fane)?.getAttribute("aria-selected") === "true") || null;
+  } catch (e) { return null; }
+}
+function showView(page) {
+  try { frame.contentDocument.getElementById(page.fane)?.click(); } catch (e) {}
+}
+
+function framePath() {
+  try {
+    const l = frame.contentWindow.location;
+    if (l.href === "about:blank") return null;
+    const view = selectedView(l.pathname);
+    if (view) return view.src;
+    // Turbo can leave Sure's overview on "/"; its real address here is /okonomi
+    return (l.pathname === "/" ? "/okonomi" : l.pathname) + l.search + l.hash;
+  } catch (e) { return null; }
+}
+
+function go(path) {
+  path = path || HOME;
+  if (!path.startsWith("/")) path = HOME;
+  const cur = framePath();
+  if (cur === path) { mark(path); return; }
+  // Another view of the page already showing: switch it in place instead of reloading
+  const page = pageFor(path);
+  if (cur && page?.fane && pathOf(cur) === pathOf(path)) { showView(page); sync(); return; }
+  frame.src = path;
+  mark(path);
+}
+
+// Keep the address bar and menu in step with whatever the frame shows, without adding history entries
+// (the frame's own history already covers the back button).
+function sync(set = true) {
+  const p = framePath();
+  if (!p) return;
+  if (wanted() !== p) history.replaceState(null, "", "#" + p);
+  mark(p, set);
+}
+
+function injectSureStyle(doc) {
+  if (!doc.querySelector('meta[name="csrf-token"]') || doc.getElementById("kompas-embed")) return;
+  const l = doc.createElement("link");
+  l.id = "kompas-embed"; l.rel = "stylesheet"; l.href = "/kompas/assets/embed-sure.css";
+  doc.head.appendChild(l);
+}
+
+frame.addEventListener("load", () => {
+  let win, doc;
+  try { win = frame.contentWindow; doc = frame.contentDocument; } catch (e) { return; }
+  if (!doc) return;
+  injectSureStyle(doc);
+  // Sure (Turbo) changes page without a new load event
+  win.addEventListener("turbo:load", () => { injectSureStyle(win.document); sync(); });
+  win.addEventListener("popstate", () => setTimeout(sync));
+  if (fanePages(win.location.pathname).length) {
+    const asked = PAGES.find(p => p.fane && p.src === win.location.pathname + win.location.search);
+    if (asked) showView(asked);
+    doc.querySelectorAll('[role="tab"]').forEach(b => b.addEventListener("click", () => setTimeout(sync)));
+  }
+  sync();
+});
+
+window.addEventListener("hashchange", () => go(wanted()));
+$("nav").addEventListener("click", e => {
+  const a = e.target.closest("a.item");
+  if (!a) return;
+  e.preventDefault();
+  document.body.classList.remove("open");
+  history.replaceState(null, "", "#" + a.dataset.src);
+  go(a.dataset.src);
+});
+document.querySelector(".brand").addEventListener("click", e => {
+  e.preventDefault(); document.body.classList.remove("open"); history.replaceState(null, "", "#" + HOME); go(HOME);
+});
+$("open").onclick = () => document.body.classList.add("open");
+$("close").onclick = () => document.body.classList.remove("open");
+$("scrim").onclick = () => document.body.classList.remove("open");
+$("reload").onclick = () => { try { frame.contentWindow.location.reload(); } catch (e) { frame.src = frame.src; } };
+document.addEventListener("keydown", e => { if (e.key === "Escape") document.body.classList.remove("open"); });
+
+// --- is Sure running? (it's started on demand by the Kompas app) -------------------------------
+async function checkSure() {
+  const el = $("sure-status");
+  let up = false;
+  try { up = (await fetch("/up", { cache: "no-store" })).ok; } catch (e) {}
+  el.className = "status " + (up ? "up" : "down");
+  el.querySelector("span").textContent = up ? "Sure kører" : "Sure er lukket – åbn Kompas-appen";
+}
+checkSure();
+setInterval(checkSure, 60000);
+
+// The menu arrives from the projects; the frame can start loading meanwhile. It's fetched again every
+// 10 minutes, so a new review or plan gets its dot while the page is open.
+go(wanted());
+loadNav().then(sync);
+// The page already showing isn't marked as seen here: it shows what it loaded, not what's new.
+setInterval(() => loadNav().then(() => sync(false)), 10 * 60000);
+</script>
+</body>
+</html>

@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Karriere · Profil</title>
+<!-- Jobagentens side i Kompas (https://kompas.localhost/karriere/profil.html). profil.md og tærsklen i config.json
+     kan rettes herfra; cv.txt og søgeordene vises kun. -->
+<link rel="stylesheet" href="/kompas/assets/tokens.css">
+<link rel="stylesheet" href="/kompas/assets/page.css">
+<link rel="stylesheet" href="karriere.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="page">
+    <div>
+      <h1>Profil</h1>
+      <p class="sub">Det agenten matcher opslag mod. Ændringer bruges ved næste kørsel.</p>
+    </div>
+  </header>
+  <div class="stack" id="root"><div class="card empty">Henter …</div></div>
+</div>
+
+<script src="/kompas/assets/icons.js"></script>
+<script src="/kompas/assets/liv.js"></script>
+<script src="/kompas/assets/md.js"></script>
+<script src="karriere.js"></script>
+<script>
+let D = null, redigerer = false;
+
+function render() {
+  const J = D.jobs, sc = J.map(j => j.score).filter(x => x != null);
+  const fravalg = J.filter(j => j.status === "fravalgt");
+  const ord = D.soegning.positive_ord || {};
+  document.getElementById("root").innerHTML = `
+    <section class="tiles">
+      <div class="card tile"><div class="label">Vurderet i alt</div><div class="value">${J.length}</div><div class="foot">opslag</div></div>
+      <div class="card tile"><div class="label">Gennemsnitlig match</div><div class="value">${sc.length ? fmt(sc.reduce((a, b) => a + b, 0) / sc.length) : "–"}</div><div class="foot">af 100</div></div>
+      <div class="card tile"><div class="label">Over tærsklen</div><div class="value">${J.filter(j => j.score >= D.taerskel).length}</div><div class="foot">score ${D.taerskel} eller mere</div></div>
+      <div class="card tile"><div class="label">Fravalgt af dig</div><div class="value">${fravalg.length}</div><div class="foot">${fravalg.filter(j => j.note).length} med begrundelse</div></div>
+    </section>
+
+    <section class="card panel">
+      <div class="panel-head"><h2>Det agenten leder efter</h2>
+        ${redigerer ? "" : `<button type="button" class="btn ghost" id="rediger">${icon("pencil", 14)}Rediger</button>`}</div>
+      ${redigerer ? `<textarea class="profil" id="tekst" spellcheck="false">${esc(D.profil)}</textarea>
+        <div class="actions"><button type="button" class="btn" id="gem">${icon("check", 14)}Gem profil.md</button><button type="button" class="btn quiet" id="annuller">Annullér</button>
+          <span class="meta">Den gamle version gemmes i data/profil-historik/.</span></div>`
+        : `<div class="md">${md(D.profil)}</div>`}
+    </section>
+
+    <div class="cols">
+      <section class="card panel">
+        <div class="panel-head"><h2>Tærskel for gode match</h2></div>
+        <p class="meta" style="margin:0 0 12px;line-height:1.5">Opslag med en matchscore på mindst tærsklen er gode match: de står under "Over tærsklen" og øverst i agentens rapport.</p>
+        <div class="actions" style="margin:0"><input class="num" type="number" id="taerskel" min="0" max="100" value="${D.taerskel}" aria-label="Tærskel">
+          <button type="button" class="btn ghost" id="gem-t">Gem</button><span class="meta" id="t-effekt"></span></div>
+      </section>
+      <section class="card panel">
+        <div class="panel-head"><h2>Søgeord</h2><span class="meta">rettes i config.json</span></div>
+        <div class="chips">${[3, 2, 1].flatMap(w => (ord[w] || []).map(o => `<span class="chip w${w}" title="vægt ${w}">${esc(o)}</span>`)).join("")}</div>
+        <h3 class="sub-h" style="font-size:13px">Sorteres fra</h3>
+        <div class="chips">${(D.soegning.negative_ord || []).map(o => `<span class="chip neg">${esc(o)}</span>`).join("")}</div>
+      </section>
+    </div>
+
+    ${fravalg.some(j => j.note) ? `<section class="card panel"><div class="panel-head"><h2>Det har du sagt nej til</h2><span class="meta">agenten bruger det som signal</span></div>
+      <ul class="list">${fravalg.filter(j => j.note).map(j => `<li><b>${esc(j.virksomhed)}</b> (${esc(j.stilling)}): ${esc(j.note)}</li>`).join("")}</ul></section>` : ""}
+
+    ${D.seneste_rapport?.bemaerkninger ? `<section class="card panel"><details><summary>Agentens forslag fra kørslen ${dayMonth(parseDate(D.seneste_rapport.dato))}</summary>
+      <div class="md">${md(D.seneste_rapport.bemaerkninger)}</div></details></section>` : ""}
+    ${(D.dokumenter || []).length ? `<section class="card panel"><div class="panel-head"><h2>Dokumenter agenten kender</h2><span class="meta">i Jobs-mappen</span></div>
+      <div class="chips">${D.dokumenter.map(n => `<span class="chip">${icon("file-text", 12)} ${esc(n)}</span>`).join("")}</div>
+      <p class="meta" style="margin:10px 0 0;line-height:1.5">Karakterudskrifterne bruges kun, når et opslag stiller krav til karakterer.</p></section>` : ""}
+    <section class="card panel"><details><summary>CV, som agenten læser det (cv.txt fra CV.pdf)</summary><pre class="cv">${esc(D.cv)}</pre></details></section>`;
+
+  const t = document.getElementById("taerskel"), eff = document.getElementById("t-effekt");
+  const effekt = () => { const v = +t.value; eff.textContent = `${J.filter(j => j.score >= v).length} af de vurderede opslag ville ligge over`; };
+  effekt(); t.oninput = effekt;
+  document.getElementById("gem-t").onclick = async () => {
+    try { await post("/taerskel", { vaerdi: +t.value }); D.taerskel = +t.value; toast(`Tærsklen er nu ${t.value}`); render(); }
+    catch (e) { toast(`Kunne ikke gemme: ${e.message}`); }
+  };
+  const r = document.getElementById("rediger"); if (r) r.onclick = () => { redigerer = true; render(); document.getElementById("tekst").focus(); };
+  const a = document.getElementById("annuller"); if (a) a.onclick = () => { redigerer = false; render(); };
+  const g = document.getElementById("gem"); if (g) g.onclick = async () => {
+    const tekst = document.getElementById("tekst").value;
+    try { await post("/profil", { tekst }); D.profil = tekst; redigerer = false; render(); toast("profil.md er gemt"); }
+    catch (e) { toast(`Kunne ikke gemme: ${e.message}`); }
+  };
+}
+window.addEventListener("beforeunload", e => { if (redigerer) { e.preventDefault(); e.returnValue = ""; } });
+hentData().then(d => { D = d; render(); }, e => { document.getElementById("root").innerHTML = fejlkort(e); });
+</script>
+</body>
+</html>

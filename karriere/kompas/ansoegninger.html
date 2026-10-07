@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Karriere · Ansøgninger</title>
+<!-- Jobagentens side i Kompas (https://kompas.localhost/karriere/ansoegninger.html). Status gemmes i oversigt.csv. -->
+<link rel="stylesheet" href="/kompas/assets/tokens.css">
+<link rel="stylesheet" href="/kompas/assets/page.css">
+<link rel="stylesheet" href="karriere.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="page">
+    <div>
+      <h1>Ansøgninger</h1>
+      <p class="sub">Fra beslutning til svar. Du søger selv; her holder du styr på, hvor langt du er.</p>
+    </div>
+  </header>
+  <div class="stack" id="root"><div class="card empty">Henter …</div></div>
+</div>
+
+<script src="/kompas/assets/icons.js"></script>
+<script src="/kompas/assets/liv.js"></script>
+<script src="/kompas/assets/md.js"></script>
+<script src="karriere.js"></script>
+<script>
+const KOLONNER = [
+  { id: "vil", titel: "Vil søge", status: ["vil søge"], hint: "Tryk \"Vil søge\" på et opslag under Nye match." },
+  { id: "sendt", titel: "Sendt", status: ["søgt"], hint: "Når du har sendt en ansøgning, flytter du den hertil." },
+  { id: "samtale", titel: "Samtale", status: ["samtale"], hint: "Inviteret til samtale." },
+  { id: "svar", titel: "Svar", status: ["tilbud", "afslag"], hint: "Tilbud eller afslag." },
+];
+// Næste skridt pr. status: [ny status, knaptekst, primær?]
+const NAESTE = {
+  "vil søge": [["søgt", "Markér som sendt", 1]],
+  "søgt": [["samtale", "Samtale", 1], ["afslag", "Afslag"]],
+  "samtale": [["tilbud", "Tilbud", 1], ["afslag", "Afslag"]],
+};
+let D = null;
+
+function pk(j) {
+  const svar = j.status === "tilbud" ? `<span class="badge good">${icon("check", 12)}Tilbud</span>` : j.status === "afslag" ? `<span class="badge">Afslag</span>` : "";
+  const handl = (NAESTE[j.status] || []).map(([s, t, p]) => `<button type="button" class="btn${p ? "" : " ghost"}" data-s="${s}" data-id="${j.id}">${t}</button>`).join("");
+  const bag = j.forrige && j.forrige !== j.status ? `<button type="button" class="btn quiet" data-s="${esc(j.forrige)}" data-id="${j.id}" title="Tilbage til ${esc(STATUS_TEKST[j.forrige] || j.forrige)}">${icon("undo", 13)}</button>` : "";
+  return `<article class="card pc">
+    <h3>${esc(j.stilling)}</h3><div class="firma">${esc(j.virksomhed)}${j.omraade ? ` · ${esc(j.omraade)}` : ""}</div>
+    <div class="row">${j.status === "vil søge" ? fristBadge(j) : ""}${svar}<span class="badge" title="Matchscore">${j.score ?? "–"}</span>
+      ${j.besluttet ? `<span class="meta">${dayMonth(new Date(j.besluttet))}</span>` : ""}</div>
+    <div class="row">${handl}
+      <a class="btn quiet" href="${esc(j.link)}" target="_blank" rel="noopener">${icon("external-link", 13)}</a>${bag}</div>
+  </article>`;
+}
+
+function render() {
+  const J = D.jobs;
+  const fravalgt = J.filter(j => j.status === "fravalgt");
+  document.getElementById("root").innerHTML = `
+    <div class="board">${KOLONNER.map(k => { const js = J.filter(j => k.status.includes(j.status));
+      return `<section class="col" aria-label="${k.titel}"><header><h2>${k.titel}</h2><small>${js.length}</small></header>
+        ${js.map(pk).join("") || `<p class="hint">${esc(k.hint)}</p>`}</section>`; }).join("")}</div>
+    ${fravalgt.length ? `<section class="card panel"><details><summary>Fravalgt (${fravalgt.length})</summary>
+      <ul class="list" style="margin-top:6px">${fravalgt.map(j => `<li><b>${esc(j.virksomhed)}</b>: ${esc(j.stilling)}${j.note ? ` · <i>${esc(j.note)}</i>` : ""}
+        <button type="button" class="btn quiet" data-s="vurderet" data-id="${j.id}">${icon("undo", 13)}Fortryd</button></li>`).join("")}</ul></details></section>` : ""}
+    <p class="meta">Status gemmes i oversigt.csv i jobagent-mappen, og hver ændring logges i data/beslutninger.jsonl.</p>`;
+}
+
+async function opdater() { D = await hentData(); render(); }
+document.getElementById("root").addEventListener("click", async e => {
+  const b = e.target.closest("[data-s]"); if (!b) return;
+  const j = D.jobs.find(x => x.id === b.dataset.id), fra = j.status, til = b.dataset.s;
+  b.disabled = true;
+  try {
+    await saetStatus(j.id, til); await opdater();
+    toast(`${j.virksomhed}: ${STATUS_TEKST[til] || til}`, async () => { await saetStatus(j.id, fra); opdater(); });
+  } catch (x) { toast(`Kunne ikke gemme: ${x.message}`); b.disabled = false; }
+});
+hentData().then(d => { D = d; render(); }, e => { document.getElementById("root").innerHTML = fejlkort(e); });
+</script>
+</body>
+</html>

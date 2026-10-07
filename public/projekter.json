@@ -1,0 +1,9 @@
+{
+ "_om": "Hvert projekt beskriver selv sine sider i en kompas.json, som det skriver ved siden af sine sider. Kompas læser listen her og bygger menuen. Tilføj et projekt ved at tilføje stien til dets kompas.json.",
+ "manifester": [
+  "/forbrug/kompas.json",
+  "/studie/kompas.json",
+  "/form/kompas.json",
+  "/karriere/kompas.json"
+ ]
+}

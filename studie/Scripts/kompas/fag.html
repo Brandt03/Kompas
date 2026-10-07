@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Studie · Fag</title>
+<!-- Studieprojektets side i Kompas (https://kompas.localhost/studie/fag.html). Kopieres af Scripts/kompas-eksport.js.
+     Status er aflæst fra mappen (begreber, genkald, drills, afleveringer); ugeplanen og fagnoterne (Word) er køreplan-rutinens.
+     Siden viser kun; den skriver aldrig i arbejdsfilerne. -->
+<link rel="stylesheet" href="/kompas/assets/tokens.css">
+<link rel="stylesheet" href="/kompas/assets/page.css">
+<style>
+  .fag-head { display: flex; align-items: flex-start; gap: 14px; padding: 18px 20px; }
+  .fag-head .sw { width: 6px; align-self: stretch; border-radius: 3px; flex: none; }
+  .fag-head h2 { font-size: 17px; }
+  .fag-head p { margin: 4px 0 0; color: var(--text-secondary); line-height: 1.5; }
+  .fag-head p b { color: var(--text-primary); font-weight: 500; }
+  .meter { height: 6px; border-radius: 3px; background: var(--surface-inset); overflow: hidden; margin-top: 8px; }
+  .meter i { display: block; height: 100%; border-radius: 3px; background: var(--mark); }
+  .rows { display: grid; gap: 10px; }
+  .row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; align-items: baseline; }
+  .row .n { font-size: 13.5px; min-width: 0; }
+  .row .v { font-size: 13px; color: var(--text-secondary); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .row .meter { grid-column: 1 / -1; margin-top: 0; }
+  .row small { display: block; color: var(--text-subdued); font-size: 12px; }
+  table.g { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.g th { text-align: left; font-weight: 500; color: var(--text-secondary); padding: 6px 8px; border-bottom: 1px solid var(--divider); }
+  table.g td { padding: 7px 8px; border-bottom: 1px solid var(--divider); }
+  .files { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 13px; color: var(--text-secondary); }
+  .files li { display: flex; justify-content: space-between; gap: 10px; }
+  .files li span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .files li span:last-child { color: var(--text-subdued); flex: none; font-variant-numeric: tabular-nums; }
+  .plan-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+  select { font: inherit; font-size: 13px; color: var(--text-primary); background: var(--container); border: 0; box-shadow: var(--shadow-border-xs); border-radius: 8px; padding: 5px 8px; }
+  .weeknav { display: flex; align-items: center; gap: 6px; }
+  .nav-btn { display: inline-grid; place-items: center; width: 30px; height: 30px; border: 0; border-radius: 8px; background: var(--container); box-shadow: var(--shadow-border-xs); color: var(--text-secondary); cursor: pointer; }
+  .nav-btn:hover:not(:disabled) { color: var(--text-primary); background: var(--container-hover); }
+  .nav-btn:disabled { opacity: .4; cursor: default; }
+  .ind { display: grid; gap: 6px; }
+  .ugeknap { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 12px; align-items: center; width: 100%; text-align: left;
+    font: inherit; color: inherit; background: var(--container-inset); border: 0; box-shadow: inset 0 0 0 1px var(--border-subdued); border-radius: 10px; padding: 10px 12px; cursor: pointer; }
+  .ugeknap:hover { background: var(--surface-hover); }
+  .ugeknap .chk { width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid var(--text-subdued); display: grid; place-items: center; color: transparent; }
+  .ugeknap[aria-pressed="true"] .chk { background: var(--success); border-color: var(--success); color: #fff; }
+  .ugeknap .u { min-width: 0; }
+  .ugeknap .u b { font-weight: 500; font-size: 13.5px; }
+  .ugeknap .u small { display: block; color: var(--text-secondary); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  details.sec { border-top: 1px solid var(--divider); padding-top: 12px; margin-top: 12px; }
+  details.sec summary .meta { font-weight: 400; }
+  .fn h4.fn-label { margin: 18px 0 6px; }
+  .fn .fn-graa { color: var(--text-subdued); font-size: 12px; }
+  .fn h4 .fn-graa em { font-style: normal; font-weight: 400; margin-left: 6px; }
+  .fn .fn-midt { text-align: center; margin-bottom: 4px; }
+  .fn img { display: block; max-width: 100%; height: auto; margin: 10px auto 4px; border-radius: 8px; box-shadow: var(--shadow-border-xs); background: #fff; }
+  .fn pre { font-size: 12.5px; line-height: 1.5; }
+  .fn table { border-collapse: collapse; font-size: 13px; }
+  .fn td { border: 1px solid var(--divider); padding: 6px 8px; vertical-align: top; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="page">
+    <div>
+      <h1>Fag</h1>
+      <p class="sub" id="sub">Status fra mappen og ugens plan pr. fag</p>
+    </div>
+    <div class="seg" role="tablist" aria-label="Vælg fag" id="tabs"></div>
+  </header>
+  <div class="stack" id="root"><div class="card empty">Henter …</div></div>
+</div>
+
+<script src="/kompas/assets/icons.js"></script>
+<script src="/kompas/assets/liv.js"></script>
+<script src="studie.js"></script>
+<script>
+let S = null, valgt = (location.hash.slice(1) || "alfa"), planUge = null;
+// Styr på: hvilke uger du har læst (live fra Scripts/kompas-server.js). Styrer nye kort i Dagens kort.
+let LAEST = null, GK = null;
+// Fagnoterne (Word), udfyldt af køreplan-rutinen efter ugen, når slides er lagt op (fagnoter.json fra kompas-eksport.js)
+let FN = null;
+const pct = (a, b) => b ? Math.round(100 * a / b) : 0;
+const meter = (a, b) => `<div class="meter" role="img" aria-label="${a} af ${b}"><i style="width:${pct(a, b)}%"></i></div>`;
+const kort = iso => { if (!iso) return "–"; const d = new Date(iso); return `${d.getDate()}/${d.getMonth() + 1}`; };
+
+function tiles(f) {
+  const s = f.status, t = [];
+  if (s.begreber) t.push(`<div class="card tile"><div class="label">Begreber i egne ord</div><div class="value">${s.begreber.udfyldt}<small>/ ${s.begreber.i_alt}</small></div>${meter(s.begreber.udfyldt, s.begreber.i_alt)}<div class="foot">ændret ${kort(s.begreber.ændret)}</div></div>`);
+  if (s.genkald) {
+    const g = s.genkald.reduce((a, x) => ({ q: a.q + x.spoergsmaal, m: a.m + x.sad + x.halvt + x.blankt, sad: a.sad + x.sad }), { q: 0, m: 0, sad: 0 });
+    t.push(`<div class="card tile"><div class="label">Genkald forsøgt</div><div class="value">${g.m}<small>/ ${g.q}</small></div>${meter(g.m, g.q)}<div class="foot">${g.sad} sad helt</div></div>`);
+  }
+  if (s.modeller != null) t.push(`<div class="card tile"><div class="label">Tegnede modeller</div><div class="value">${s.modeller}</div><div class="foot">i ${esc(f.kort)}/Modeller</div></div>`);
+  if (s.drills) {
+    const d = s.drills.reduce((a, x) => ({ p: a.p + x.pladser, g: a.g + x.gættet, st: a.st + x.stubbe }), { p: 0, g: 0, st: 0 });
+    t.push(`<div class="card tile"><div class="label">Drills gættet</div><div class="value">${d.g}<small>/ ${d.p}</small></div>${meter(d.g, d.p)}<div class="foot">${d.st} kodestubbe tilbage</div></div>`);
+  }
+  if (s.afleveringer) t.push(`<div class="card tile"><div class="label">Afleveringer godkendt</div><div class="value">${s.afleveringer.godkendt}<small>/ ${s.afleveringer.krav ?? "–"} krævet</small></div>${meter(s.afleveringer.godkendt, s.afleveringer.krav || 1)}<div class="foot">${s.afleveringer.afleveret} afleveret af ${s.afleveringer.ud_af ?? s.afleveringer.raekker.length}</div></div>`);
+  if (s.oevelser_i_gang) t.push(`<div class="card tile"><div class="label">Øvelser</div><div class="value">${s.oevelser_faerdige}<small>færdige</small></div><div class="foot">${s.oevelser_i_gang.length} i gang: ${esc(s.oevelser_i_gang.join(", ")) || "ingen"}</div></div>`);
+  t.push(`<div class="card tile"><div class="label">Aktivitet, 7 dage</div><div class="value">${s.aktivitet.length}${s.aktivitet.length >= 12 ? "+" : ""}<small>filer</small></div><div class="foot">i dine arbejdsmapper</div></div>`);
+  return `<section class="tiles">${t.join("")}</section>`;
+}
+
+function detaljer(f) {
+  const s = f.status, parts = [];
+  if (s.begreber?.uger?.length) parts.push(`<section class="card panel"><div class="panel-head"><h2>Begreber pr. uge</h2><span class="meta">${f.kort}/Genkald/begreber.md</span></div>
+    <div class="rows">${s.begreber.uger.map(u => `<div class="row"><span class="n">${esc(u.uge)}</span><span class="v">${u.udfyldt} / ${u.i_alt}</span>${meter(u.udfyldt, u.i_alt)}</div>`).join("")}</div></section>`);
+  if (s.genkald?.length) parts.push(`<section class="card panel"><div class="panel-head"><h2>Genkaldelse</h2><span class="meta">markér [✓] [~] [✗] i filen</span></div>
+    <div class="rows">${s.genkald.map(g => `<div class="row"><span class="n">${esc(g.uger)}<small>${esc(g.fil)}</small></span>
+      <span class="v">${g.sad} sad · ${g.halvt} halvt · ${g.blankt} blankt · ${g.umarkeret} ikke forsøgt</span>${meter(g.sad + g.halvt + g.blankt, g.spoergsmaal)}</div>`).join("")}</div></section>`);
+  if (s.drills?.length) parts.push(`<section class="card panel"><div class="panel-head"><h2>Drills</h2><span class="meta">${esc(f.kort)}/vscode/Drills</span></div>
+    <div class="rows">${s.drills.map(d => `<div class="row"><span class="n">${esc(d.titel)}<small>${esc(d.fil)}${d.stubbe ? ` · ${d.stubbe} kodestubbe` : ""}</small></span>
+      <span class="v">${d.gættet} / ${d.pladser} gættet</span>${meter(d.gættet, d.pladser)}</div>`).join("")}</div></section>`);
+  if (s.afleveringer) parts.push(`<section class="card panel"><div class="panel-head"><h2>Afleveringer</h2><span class="meta">${s.afleveringer.krav} af ${s.afleveringer.ud_af} skal godkendes</span></div>
+    <div style="overflow-x:auto"><table class="g"><thead><tr><th>Opgave</th><th>Uge</th><th>Afleveret</th><th>Godkendt</th><th>Hvad drillede</th></tr></thead>
+    <tbody>${s.afleveringer.raekker.map(r => `<tr><td>${esc(r.opgave)}${r.mappe ? "" : ` <span class="meta">(ingen mappe)</span>`}</td><td>${esc(r.uge || "–")}</td><td>${esc(r.afleveret || "–")}</td><td>${esc(r.godkendt || "–")}</td><td>${esc(r.drillede || "")}</td></tr>`).join("")}</tbody></table></div></section>`);
+  return parts.length > 1 ? `<div class="cols">${parts.join("")}</div>` : parts.join("");
+}
+
+function plan(f) {
+  const planer = S.planer.filter(p => p.fag[f.id]);
+  if (!planer.length) return "";
+  const p = planer.find(x => x.uge === planUge) || planer.find(x => x.uge === S.aktuel_uge) || planer[planer.length - 1];
+  const i = planer.indexOf(p), a = p.fag[f.id];
+  const sek = (k, titel, aaben) => a[k] ? `<details class="sec"${aaben ? " open" : ""}><summary>${titel}</summary><div class="md">${a[k]}</div></details>` : "";
+  // To sæt noter pr. uge: ugeplanens (skrevet før ugen, til forberedelse) og fagnoterne i Word
+  // (udfyldt efter ugen ud fra slides og øvelser). Begge vises; fagnoterne kommer til, når ugen er slut.
+  const fd = FN?.[f.id], fn = fd?.uger?.[p.uge]?.udfyldt ? fd.uger[p.uge] : null;
+  const noter = sek("Noter til pensum", `Noter til pensum <span class="meta">· fra ugeplanen, skrevet før ugen</span>`)
+    + (fn
+      ? `<details class="sec"><summary>Fagnoter <span class="meta">· udfyldt efter ugen${fn.kun_bog ? ", kun ud fra bogen (slides var ikke lagt op)" : " ud fra slides og bog"}</span></summary>
+          <div class="md fn">${fn.html}</div><p class="meta" style="margin:12px 0 0">Fra ${esc(fd.fil)}, ændret ${kort(fd.ændret)}.</p></details>`
+      : `<p class="meta" style="border-top:1px solid var(--divider);padding-top:12px;margin:12px 0 0">Fagnoter: kommer, når ugen er slut og slides er lagt op (køreplan-rutinen søndag).</p>`);
+  return `<section class="card panel">
+    <div class="plan-head"><h2>Køreplan, uge ${p.uge} <span class="meta">(${range(p.fra)})${p.uge === S.aktuel_uge ? " · denne uge" : ""} · skrevet før ugen</span></h2>
+      <div class="weeknav">
+        <button type="button" class="nav-btn" data-step="-1" aria-label="Ugen før"${i === 0 ? " disabled" : ""}>${icon("arrow-left", 14)}</button>
+        <select id="uge" aria-label="Vælg uge">${planer.map(x => `<option value="${x.uge}"${x.uge === p.uge ? " selected" : ""}>Uge ${x.uge}</option>`).join("")}</select>
+        <button type="button" class="nav-btn" data-step="1" aria-label="Ugen efter"${i === planer.length - 1 ? " disabled" : ""}>${icon("arrow-right", 14)}</button>
+      </div></div>
+    ${a["Hurtigt overblik"] ? `<div class="md">${a["Hurtigt overblik"]}</div>` : ""}
+    ${a["Til rapporten"] ? `<div class="banner" style="padding:12px 0 0"><span class="bi">${icon("sparkles", 16)}</span><div><div class="bl">Til rapporten</div><div class="md">${a["Til rapporten"]}</div></div></div>` : ""}
+    ${a.Video ? `<div class="banner" style="padding:12px 0 0"><span class="bi">${icon("external-link", 16)}</span><div><div class="bl">Video</div><div class="md">${a.Video}</div></div></div>` : ""}
+    ${noter}
+    ${sek("Kilder", "Kilder")}
+    ${a["Hurtigt overblik"] ? "" : sek("intro", "Hele afsnittet", true)}
+    <p class="meta" style="margin:12px 0 0">Fra ${esc(p.fil)}, skrevet af køreplan-rutinen.</p>
+  </section>`;
+}
+
+function styrPaa(f) {
+  if (f.id === "gamma" || !LAEST) return "";
+  // Uger med undervisning i faget: dem planerne har et afsnit for, til og med denne uge
+  const uger = S.planer.filter(p => p.fag[f.id] && p.uge <= S.uge_nu).map(p => p.uge);
+  if (!uger.length) return "";
+  const qs = (GK || []).filter(x => x.fag === f.id).flatMap(x => x.spoergsmaal);
+  const emne = u => { const q = qs.find(x => x.uge === u); return q ? q.afsnit.replace(/^Uge\s+\d+\s*[—–-]\s*/i, "") : ""; };
+  const l = LAEST[f.id] || {}, n = uger.filter(u => l[u]).length;
+  return `<section class="card panel">
+    <div class="panel-head"><h2>Styr på</h2><span class="meta">${n} af ${uger.length} uger læst</span></div>
+    <div class="meter" style="margin:-4px 0 14px"><i style="width:${Math.round(100 * n / uger.length)}%"></i></div>
+    <div class="ind">${uger.map(u => { const q = qs.filter(x => x.uge === u).length, d = l[u];
+      return `<button type="button" class="ugeknap" data-uge="${u}" aria-pressed="${!!d}">
+        <span class="chk">${icon("check", 13)}</span>
+        <span class="u"><b>Uge ${u}</b><small>${esc(emne(u) || "ingen genkaldsspørgsmål endnu")}</small></span>
+        <span class="meta">${d ? `læst ${dayMonth(parseDate(d))}` : q ? `${q} spørgsmål venter` : ""}</span></button>`; }).join("")}</div>
+    <p class="meta" style="margin:12px 0 0;line-height:1.5">Markér en uge, når du har læst den. Så kommer dens genkaldsspørgsmål med i Dagens kort, op til 5 nye om dagen. Uger, du ikke har markeret, holdes ude, så du ikke genkalder stof, du ikke har læst.</p>
+  </section>`;
+}
+
+function render() {
+  const f = S.fag.find(x => x.id === valgt) || S.fag[0];
+  valgt = f.id;
+  document.getElementById("tabs").innerHTML = S.fag.map(x => `<button type="button" role="tab" data-id="${x.id}" aria-pressed="${x.id === valgt}" aria-selected="${x.id === valgt}">${esc(x.kort)}</button>`).join("");
+  document.getElementById("sub").textContent = `Uge ${S.uge_nu} · aflæst fra mappen ${stamp(S.genereret)}`;
+  const e = f.eksamen || {};
+  const kommende = S.deadlines.filter(d => (d.fag === f.kort || d.fag === "Alle") && (d.til || d.fra) >= iso(new Date()) && d.type !== "ferie").slice(0, 3);
+  document.getElementById("root").innerHTML = `
+    <section class="card fag-head"><span class="sw" style="background:${FAG_FARVE[f.id]}"></span><div>
+      <h2>${esc(f.navn)}</h2>
+      ${e.Eksamen ? `<p><b>Eksamen:</b> ${esc(e.Eksamen)}. <b>Det der virker:</b> ${esc((e["Det der virker"] || "").replace(/\*\*/g, ""))}.</p>` : ""}
+      ${kommende.length ? `<p><b>Næste:</b> ${kommende.map(d => `${d.hvad.replace(/<[^>]+>/g, "")} (${nedtaelling(d.dato || d.fra, !d.dato)})`).join(" · ")}</p>` : ""}
+    </div></section>
+    ${styrPaa(f)}
+    ${tiles(f)}
+    ${plan(f)}
+    ${detaljer(f)}
+    ${f.status.aktivitet.length ? `<section class="card panel"><details><summary>Ændret de sidste 7 dage (${f.status.aktivitet.length})</summary>
+      <ul class="files">${f.status.aktivitet.map(a => `<li><span>${esc(a.fil)}</span><span>${kort(a.ændret)}</span></li>`).join("")}</ul></details></section>` : ""}
+  `;
+  const sel = document.getElementById("uge");
+  if (sel) sel.onchange = () => { planUge = +sel.value; render(); };
+  document.querySelectorAll(".nav-btn").forEach(b => b.onclick = () => {
+    const ugr = [...sel.options].map(o => +o.value), j = ugr.indexOf(+sel.value) + +b.dataset.step;
+    if (ugr[j] != null) { planUge = ugr[j]; render(); }
+  });
+}
+
+document.getElementById("tabs").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  valgt = b.dataset.id; history.replaceState(null, "", "#" + valgt); render();
+});
+window.addEventListener("hashchange", () => { valgt = location.hash.slice(1); if (S) render(); });
+document.getElementById("root").addEventListener("click", async e => {
+  const b = e.target.closest(".ugeknap"); if (!b) return;
+  const uge = +b.dataset.uge, nu = b.getAttribute("aria-pressed") !== "true";
+  b.disabled = true;
+  try {
+    const r = await fetch("/studie/api/laest", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fag: valgt, uge, laest: nu }) });
+    const d = await r.json(); if (!r.ok) throw new Error(d.fejl || r.status);
+    (LAEST[valgt] ||= {}); if (d.laest) LAEST[valgt][uge] = d.laest; else delete LAEST[valgt][uge];
+    render();
+  } catch (x) { b.disabled = false; alert(`Kunne ikke gemme: ${x.message}`); }
+});
+fetch("fagnoter.json", { cache: "no-store" }).then(r => r.ok ? r.json() : null).then(d => { FN = d; if (S) render(); }).catch(() => {});
+// Styr på hentes live; svarer serveren ikke, vises siden bare uden kortet
+Promise.all([fetch("/studie/api/laest").then(r => r.json()), fetch("/studie/api/genkald").then(r => r.json())])
+  .then(([l, g]) => { LAEST = l; GK = g; if (S) render(); }).catch(() => {});
+loadStudie().then(d => { S = d; planUge = d.aktuel_uge; render(); },
+  e => { document.getElementById("root").innerHTML = `<div class="card empty">${esc(e.message)}. Kør <code>node Scripts/kompas-eksport.js</code> i semestermappen.</div>`; });
+</script>
+</body>
+</html>

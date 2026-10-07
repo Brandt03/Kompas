@@ -1,0 +1,4 @@
+/* Injected by the Kompas portal into Sure pages shown in its frame: the portal's sidebar replaces Sure's
+   icon rail (Home/Transactions/Reports/Plan + user menu). The accounts sidebar stays. If Sure changes its
+   markup this simply stops matching and the rail shows again – nothing breaks. */
+div:has(> nav.w-\[84px\]) { display: none !important; }

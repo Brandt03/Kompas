@@ -1,0 +1,12 @@
+.DS_Store
+__pycache__/
+*.tmp
+
+# Dine personlige filer bliver kun lokalt: CV, profil, fund og agentens tilstand.
+# Eksempelfilerne (*.example.*) viser formatet; se README.
+cv.txt
+profil.md
+oversigt.csv
+rapporter/
+data/
+*.pdf

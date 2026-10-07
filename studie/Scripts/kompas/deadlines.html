@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Studie · Deadlines</title>
+<!-- Studieprojektets side i Kompas (https://kompas.localhost/studie/deadlines.html). Kopieres af
+     Scripts/kompas-eksport.js. Datoerne er deadline-tabellen i den nyeste ugeplan (køreplan-rutinen);
+     eksamensformerne er tabellen i README.md. -->
+<link rel="stylesheet" href="/kompas/assets/tokens.css">
+<link rel="stylesheet" href="/kompas/assets/page.css">
+<style>
+  .next { padding: 22px 24px; display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
+  .next .big { font-size: 34px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  .next .what { font-size: 17px; font-weight: 500; line-height: 1.35; }
+  .next .what small { display: block; color: var(--text-secondary); font-size: 13px; font-weight: 400; margin-top: 3px; }
+  .tl { display: grid; }
+  .ti { display: grid; grid-template-columns: 28px 110px minmax(0, 1fr) auto; gap: 4px 14px; padding: 12px 0; border-top: 1px solid var(--divider); align-items: start; }
+  .ti:first-child { border-top: 0; }
+  .ti .when { font-size: 13px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+  .ti .when b { display: block; color: var(--text-primary); font-weight: 500; }
+  .ti .what { font-size: 14px; line-height: 1.45; }
+  .ti .what strong { font-weight: 600; }
+  .ti .what .note { display: block; color: var(--text-subdued); font-size: 12.5px; margin-top: 2px; }
+  .ti .tags { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  .ti.past { opacity: .55; }
+  .ok { width: 24px; height: 24px; border-radius: 50%; border: 1.5px solid var(--text-subdued); background: none; color: transparent; cursor: pointer; display: grid; place-items: center; padding: 0; margin-top: 1px; transition: .12s; }
+  .ok:hover { border-color: var(--success); color: var(--success); }
+  .ok[aria-pressed="true"] { background: var(--success); border-color: var(--success); color: #fff; }
+  .ok:disabled { opacity: .5; cursor: default; }
+  .ti.done .what { color: var(--text-secondary); text-decoration: line-through; text-decoration-color: var(--text-subdued); }
+  .ti.done .what strong { color: inherit; }
+  #toast { position: fixed; left: 50%; bottom: 20px; transform: translate(-50%, 20px); opacity: 0; pointer-events: none; transition: .15s; z-index: 50;
+    display: flex; gap: 12px; align-items: center; background: var(--nav-indicator); color: var(--container); border-radius: 10px; padding: 10px 12px 10px 14px; font-size: 13.5px; }
+  #toast.vis { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+  #toast button { font: inherit; font-weight: 600; border: 0; background: none; color: inherit; cursor: pointer; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); }
+  .ecards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+  .ecards h3 { margin: 0 0 8px; font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .ecards p { margin: 0 0 8px; color: var(--text-secondary); line-height: 1.5; font-size: 13.5px; }
+  .ecards p b { color: var(--text-primary); font-weight: 500; }
+  @media (max-width: 900px) { .ecards { grid-template-columns: minmax(0, 1fr); } }
+  @media (max-width: 560px) { .ti { grid-template-columns: 28px minmax(0, 1fr) auto; } .ti .when { grid-column: 2 / -1; grid-row: 1; } .ti .what { grid-column: 2; } .ti .ok { grid-row: 1 / span 2; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="page">
+    <div>
+      <h1>Deadlines</h1>
+      <p class="sub" id="sub"></p>
+    </div>
+  </header>
+  <div class="stack" id="root"><div class="card empty">Henter …</div></div>
+</div>
+
+<script src="/kompas/assets/icons.js"></script>
+<script src="/kompas/assets/liv.js"></script>
+<script src="studie.js"></script>
+<script>
+const TYPE = { proeve: ["", "Prøveeksamen"], eksamen: ["bad", "Eksamen"], aflevering: ["", "Aflevering"], praesentation: ["", "Præsentation"], ferie: ["good", "Ferie"], andet: ["", "Andet"] };
+const HAARD = ["eksamen", "aflevering", "praesentation"];
+const whenText = d => d.dato ? `${weekday(parseDate(d.dato)).slice(0, 3)} ${dayMonth(parseDate(d.dato))}` : `uge ${d.uger}`;
+const whenSub = d => d.dato ? `${d.tid ? `kl. ${d.tid} · ` : ""}uge ${d.uger}` : (d.fra ? `${dayMonth(parseDate(d.fra))} – ${dayMonth(parseDate(d.til))}` : "");
+// Uden præcis dato regner nedtællingen til ugens start: så er du hellere for tidligt ude
+const target = d => d.dato || d.fra;
+
+function row(d, today) {
+  const past = !d.faerdig && (d.til || d.fra || "") < today && !(d.dato && d.dato >= today);
+  const [cls, lbl] = TYPE[d.type] || TYPE.andet;
+  const n = target(d) ? daysUntil(target(d)) : null;
+  const id = FAG_FARVE[d.fag.toLowerCase()] ? d.fag.toLowerCase() : null;
+  const done = !!d.faerdig;
+  return `<div class="ti${past ? " past" : ""}${done ? " done" : ""}">
+    <button type="button" class="ok" data-k="${esc(d.noegle || "")}" aria-pressed="${done}" title="${done ? `Færdig ${esc(d.faerdig)} – klik for at fortryde` : "Markér som færdig"}" aria-label="${done ? "Fortryd færdig" : "Markér som færdig"}"${d.noegle ? "" : " disabled"}>${icon("check", 14)}</button>
+    <div class="when"><b>${esc(whenText(d))}</b>${esc(whenSub(d))}</div>
+    <div class="what">${d.hvad}${d.note ? `<span class="note">${d.note}</span>` : ""}</div>
+    <div class="tags"><span class="chip">${id ? `<span class="dot" style="background:${FAG_FARVE[id]}"></span>` : ""}${esc(d.fag)}</span>
+      <span class="badge ${cls}">${lbl}</span>${done ? `<span class="badge good">${icon("check", 12)}færdig ${esc(/^\d{4}-/.test(d.faerdig) ? dayMonth(parseDate(d.faerdig)) : d.faerdig)}</span>` : n != null && !past ? `<span class="badge">${nedtaelling(target(d), !d.dato)}</span>` : ""}</div>
+  </div>`;
+}
+
+function render(S) {
+  const today = iso(new Date());
+  const alle = [...S.deadlines].sort((a, b) => (target(a) || "").localeCompare(target(b) || ""));
+  const aktive = alle.filter(d => !d.faerdig), faerdige = alle.filter(d => d.faerdig);
+  const kommende = aktive.filter(d => (d.dato || d.til || d.fra || "") >= today);
+  const overstaaet = aktive.filter(d => !kommende.includes(d));
+  const naeste = kommende.find(d => HAARD.includes(d.type));
+  const eksamen = kommende.find(d => d.type === "eksamen");
+  document.getElementById("sub").textContent = `Fra ${S.deadline_kilde || "ugeplanen"} · opdateret ${stamp(S.genereret)}`;
+
+  const hero = (d, label) => {
+    if (!d) return "";
+    const n = daysUntil(target(d));
+    // Samme enhed som I dag og Eksamen: præcise datoer i dage, frister med kun en uge i uger
+    const big = d.dato ? (n <= 0 ? "I dag" : n === 1 ? "I morgen" : `${n} dage`) : nedtaelling(target(d), true).replace(/^./, c => c.toUpperCase());
+    return `<section class="card next"><div class="big">${big}</div>
+      <div class="what"><span class="meta">${label}</span><br>${esc(d.hvad.replace(/<[^>]+>/g, "").split(" — ")[0].replace(/^Eksamen: /, ""))}<small>${esc(d.fag)} · ${esc(whenText(d))}${d.tid ? ` kl. ${esc(d.tid)}` : ""}${d.dato ? "" : " (ingen præcis dato endnu)"}</small></div></section>`;
+  };
+
+  // Forudsætninger: godkendte afleveringer (status fra afleveringernes tabel) og en kommende præsentation i faget
+  const krav = f => {
+    const a = f.status.afleveringer, p = kommende.find(d => d.fag === f.kort && d.type === "praesentation");
+    return (a ? `<p><b>Forudsætning:</b> ${a.krav} af ${a.ud_af} afleveringer godkendt. Status: ${a.godkendt} godkendt, ${a.afleveret} afleveret.</p>` : "")
+      + (p ? `<p><b>Forudsætning:</b> præsentationen (${esc(whenText(p))}).</p>` : "");
+  };
+
+  document.getElementById("root").innerHTML = `
+    <div class="cols">${hero(naeste, "Næste hårde deadline")}${eksamen && eksamen !== naeste ? hero(eksamen, "Næste eksamen") : ""}</div>
+    <section class="card panel"><div class="panel-head"><h2>Kommende</h2><span class="meta">${kommende.length} punkter</span></div>
+      <div class="tl">${kommende.map(d => row(d, today)).join("") || `<p class="meta">Ingen kommende datoer i ugeplanen.</p>`}</div>
+      ${faerdige.length ? `<details style="margin-top:12px"${aabenFaerdig ? " open" : ""} id="faerdige"><summary>Færdige (${faerdige.length})</summary><div class="tl">${faerdige.map(d => row(d, today)).join("")}</div></details>` : ""}
+      ${overstaaet.length ? `<details style="margin-top:12px"><summary>Overståede, ikke markeret (${overstaaet.length})</summary><div class="tl">${overstaaet.map(d => row(d, today)).join("")}</div></details>` : ""}
+    </section>
+    <section class="ecards">${S.fag.map(f => `<div class="card panel">
+      <h3><span class="dot" style="background:${FAG_FARVE[f.id]}"></span>${esc(f.kort)}</h3>
+      ${f.eksamen ? `<p><b>Eksamen:</b> ${esc(f.eksamen.Eksamen)}</p><p><b>Det der virker:</b> ${esc((f.eksamen["Det der virker"] || "").replace(/\*\*/g, ""))}</p>` : `<p>Eksamensformen står ikke i README.md.</p>`}
+      ${krav(f)}
+      <p><b>Gamle sæt:</b> ${f.status.eksamenssaet.length ? esc(f.status.eksamenssaet.join(", ")) : "ingen i mappen"}</p>
+      <a class="link" href="fag.html#${f.id}">Status for faget ${icon("arrow-right", 14)}</a>
+    </div>`).join("")}</section>
+    <p class="meta">Står der "uge" i stedet for en dato, har ugeplanen ingen præcis frist. Tjek Canvas.</p>
+  `;
+}
+
+// ── færdig-markering (gemmes af Scripts/kompas-server.js) ──
+let S = null, aabenFaerdig = false, tt;
+function toast(t, fortryd) {
+  let el = document.getElementById("toast");
+  if (!el) { el = document.createElement("div"); el.id = "toast"; el.setAttribute("role", "status"); document.body.appendChild(el); }
+  el.innerHTML = `<span>${esc(t)}</span>${fortryd ? "<button type=\"button\">Fortryd</button>" : ""}`;
+  if (fortryd) el.querySelector("button").onclick = () => { el.classList.remove("vis"); fortryd(); };
+  el.classList.add("vis"); clearTimeout(tt); tt = setTimeout(() => el.classList.remove("vis"), 5000);
+}
+async function saet(noegle, faerdig) {
+  const r = await fetch("/studie/api/deadline", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ noegle, faerdig }) });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.fejl || `svarede ${r.status}`);
+  S.deadlines.filter(x => x.noegle === noegle).forEach(x => x.faerdig = d.faerdig);
+  aabenFaerdig = document.getElementById("faerdige")?.open || false;
+  render(S);
+}
+document.getElementById("root").addEventListener("click", async e => {
+  const b = e.target.closest(".ok"); if (!b || b.disabled) return;
+  const k = b.dataset.k, nu = b.getAttribute("aria-pressed") !== "true", d = S.deadlines.find(x => x.noegle === k);
+  b.disabled = true;
+  try {
+    await saet(k, nu);
+    const titel = d.hvad.replace(/<[^>]+>/g, "").split(" — ")[0];
+    toast(nu ? `${titel}: færdig` : `${titel}: ikke færdig`, () => saet(k, !nu).catch(x => toast(`Kunne ikke fortryde: ${x.message}`)));
+  } catch (x) { toast(`Kunne ikke gemme: ${x.message}`); b.disabled = false; }
+});
+loadStudie().then(d => { S = d; render(d); }, e => { document.getElementById("root").innerHTML = `<div class="card empty">${esc(e.message)}. Kør <code>node Scripts/kompas-eksport.js</code> i semestermappen.</div>`; });
+</script>
+</body>
+</html>

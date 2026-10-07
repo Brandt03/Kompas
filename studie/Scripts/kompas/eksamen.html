@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Studie · Eksamen</title>
+<!-- Studieprojektets eksamensside i Kompas (https://kompas.localhost/studie/eksamen.html). Kopieres af
+     Scripts/kompas-eksport.js. Sættene ligger i <Fag>/Eksamenstræning/; facit hentes fra Scripts/kompas-server.js
+     først efter dit forsøg. Besvarelser gemmes i <Fag>/Eksamenstræning/besvarelser/. -->
+<link rel="stylesheet" href="/kompas/assets/tokens.css">
+<link rel="stylesheet" href="/kompas/assets/page.css">
+<style>
+  .btn { display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: 13px; font-weight: 500; line-height: 1; padding: 9px 13px; border-radius: 8px; border: 0; cursor: pointer; background: var(--nav-indicator); color: var(--container); text-decoration: none; }
+  .btn:hover { opacity: .88; } .btn:disabled { opacity: .45; cursor: default; }
+  .btn.ghost { background: var(--container); color: var(--text-primary); box-shadow: var(--shadow-border-xs); }
+  .btn.ghost:hover { background: var(--container-hover); opacity: 1; }
+  .btn.quiet { background: none; color: var(--text-secondary); padding: 9px 8px; }
+  .btn.quiet:hover { color: var(--text-primary); background: var(--surface-hover); opacity: 1; }
+  .btn.m-sad { background: var(--success-tint); color: var(--success); } .btn.m-halvt { background: var(--warning-tint); color: var(--warning); } .btn.m-blankt { background: var(--destructive-tint); color: var(--destructive); }
+  .btn[aria-pressed="true"].m-sad { background: var(--success); color: #fff; } .btn[aria-pressed="true"].m-halvt { background: var(--warning); color: #fff; } .btn[aria-pressed="true"].m-blankt { background: var(--destructive); color: #fff; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .spacer { flex: 1; }
+  .saet { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+  .sc { padding: 18px 20px; display: grid; gap: 10px; align-content: start; }
+  .sc h3 { margin: 0; font-size: 15px; font-weight: 600; }
+  .sc .m { color: var(--text-secondary); font-size: 13px; }
+  .bar3 { display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: var(--surface-inset); }
+  .bar3 i { display: block; height: 100%; }
+  .count { display: flex; align-items: center; gap: 18px; padding: 18px 20px; }
+  .count .big { font-size: 30px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  .count .t b { display: block; font-weight: 600; }
+  .count .t span { color: var(--text-secondary); font-size: 13px; }
+  /* prøveeksamen */
+  .topbar { position: sticky; top: 0; z-index: 10; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 12px 16px; margin: 0 -4px; border-radius: 12px; background: var(--container); box-shadow: var(--shadow-border-xs), 0 6px 20px rgba(0,0,0,.06); }
+  .timer { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+  .timer.lav { color: var(--warning); } .timer.ude { color: var(--destructive); }
+  .sek h2 { font-size: 16px; margin: 6px 0 10px; }
+  .q { padding: 18px 20px; display: grid; gap: 12px; }
+  .q .nr { font-size: 12.5px; color: var(--text-secondary); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .q .spm { color: var(--text-primary); line-height: 1.6; }
+  .q .spm p { margin: 0 0 8px; }
+  textarea { width: 100%; font: inherit; font-size: 14px; line-height: 1.55; color: var(--text-primary); background: var(--container-inset); border: 0; box-shadow: inset 0 0 0 1px var(--divider); border-radius: 10px; padding: 11px 13px; min-height: 110px; resize: vertical; }
+  textarea.kode { font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; min-height: 220px; tab-size: 2; }
+  textarea:focus { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+  .mc { display: grid; gap: 6px; }
+  .mc label { display: flex; gap: 10px; align-items: flex-start; padding: 9px 12px; border-radius: 10px; background: var(--container-inset); box-shadow: inset 0 0 0 1px var(--border-subdued); cursor: pointer; line-height: 1.45; }
+  .mc label:hover { background: var(--surface-hover); }
+  .mc input { margin-top: 3px; accent-color: var(--mark); }
+  .mc label.rigtig { box-shadow: inset 0 0 0 1.5px var(--success); } .mc label.forkert { box-shadow: inset 0 0 0 1.5px var(--destructive); }
+  .facit { border-radius: 10px; padding: 14px 16px; background: var(--success-tint); }
+  .facit .lbl { font-size: 12px; font-weight: 600; color: var(--success); margin-bottom: 6px; }
+  .facit .md { color: var(--text-primary); }
+  .mitsvar { border-radius: 10px; padding: 12px 14px; background: var(--container-inset); white-space: pre-wrap; font-size: 13.5px; color: var(--text-secondary); }
+  .mitsvar.kode { font: 12.5px/1.5 ui-monospace, Menlo, monospace; }
+  .chip { font-size: 11.5px; padding: 3px 8px; border-radius: 999px; background: var(--surface-inset); color: var(--text-secondary); }
+  .score { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
+  .mini-t { font-variant-numeric: tabular-nums; font-size: 13px; color: var(--text-secondary); }
+  #toast { position: fixed; left: 50%; bottom: 20px; transform: translate(-50%, 20px); opacity: 0; transition: .15s; z-index: 50; background: var(--nav-indicator); color: var(--container); border-radius: 10px; padding: 10px 14px; font-size: 13.5px; pointer-events: none; }
+  #toast.vis { opacity: 1; transform: translate(-50%, 0); }
+  @media (max-width: 640px) { .q { padding: 16px; } .timer { font-size: 18px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="page" id="hoved">
+    <div>
+      <h1>Eksamen</h1>
+      <p class="sub" id="sub">Gamle sæt, tjeklister og pensumspørgsmål</p>
+    </div>
+    <div class="seg" role="group" aria-label="Fag" id="fagvalg"></div>
+  </header>
+  <div class="stack" id="root"><div class="card empty">Henter …</div></div>
+</div>
+<div id="toast" role="status"></div>
+
+<script src="/kompas/assets/icons.js"></script>
+<script src="/kompas/assets/liv.js"></script>
+<script src="/kompas/assets/md.js"></script>
+<script src="studie.js"></script>
+<script>
+const API = "/studie/api";
+const FAGNAVN = { alfa: "Alfa", gamma: "Gamma", beta: "Beta" };
+const SIK = [["sikker", "Sikker"], ["usikker", "Usikker"], ["gaet", "Gætter / kan ikke"]];
+let L = null, S = null, fag = (location.hash.slice(1) || "alfa"), tilstand = "liste";
+let E = null, set = null, svar = {}, marks = {}, start = null, facit = null, tick = null;
+let oCur = 0, oVist = false, oSik = null, oFacit = null;
+
+const hent = async sti => { const r = await fetch(API + sti, { cache: "no-store" }); const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.fejl || r.status); return d; };
+const post = async (sti, k) => { const r = await fetch(API + sti, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(k) }); const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.fejl || r.status); return d; };
+// "Alfa — reeksamen efterår 2025" → "Reeksamen efterår 2025"
+const kortTitel = t => t.replace(/^\w+ — /, "").replace(/^./, c => c.toUpperCase());
+// Sættene vægter i procent eller point; vis altid procent af det samlede
+const vaegte = sek => { const sum = sek.reduce((a, x) => a + (x.vaegt || 0), 0); return sek.map(x => x.vaegt && sum ? Math.round(100 * x.vaegt / sum) : null); };
+let tt; const toast = t => { const el = document.getElementById("toast"); el.textContent = t; el.classList.add("vis"); clearTimeout(tt); tt = setTimeout(() => el.classList.remove("vis"), 4000); };
+const root = () => document.getElementById("root");
+const gem = () => { try { localStorage.setItem(`eks:${set.fag}/${set.id}`, JSON.stringify({ svar, start })); } catch (e) {} };
+const glem = () => { try { localStorage.removeItem(`eks:${set.fag}/${set.id}`); } catch (e) {} };
+
+// MC: svarmulighederne "a) …" på egne linjer bliver til radioknapper
+function mc(tekst) {
+  const opts = [...tekst.matchAll(/^([a-e])\)\s+(.+)$/gm)].map(m => ({ k: m[1], t: m[2] }));
+  if (opts.length < 3) return null;
+  return { spm: tekst.replace(/^[a-e]\)\s+.+$/gm, "").trim(), opts };
+}
+// Facit starter med "**c)**" (eller fx "**b) — usikkert.**")
+const facitBogstav = f => ((f || "").match(/^\*\*([a-e])\)/) || [])[1] || null;
+const alleQ = () => E.sektioner.flatMap(s => s.spoergsmaal.map(q => ({ ...q, sek: s })));
+const erKode = q => fag === "gamma" || /^Opgave/i.test(q.sek?.titel || "");
+
+// ── oversigt ───────────────────────────────────────────────────────
+function renderListe() {
+  tilstand = "liste"; clearInterval(tick);
+  document.getElementById("hoved").hidden = false;
+  document.getElementById("fagvalg").innerHTML = ["alfa", "gamma", "beta"].map(f => `<button type="button" data-fag="${f}" aria-pressed="${f === fag}">${FAGNAVN[f]}</button>`).join("");
+  const saet = (L || []).filter(x => x.fag === fag);
+  const eks = (S?.deadlines || []).find(d => d.type === "eksamen" && d.fag.toLowerCase() === fag);
+  const n = eks ? daysUntil(eks.dato || eks.fra) : null;
+  root().innerHTML = `
+    ${eks ? `<section class="card count"><div class="big">${n} dage</div><div class="t"><b>${esc(eks.hvad.replace(/<[^>]+>/g, "").split(" — ")[0])}</b>
+      <span>${eks.dato ? `${weekday(parseDate(eks.dato))} ${dayMonth(parseDate(eks.dato))}` : `uge ${eks.uger}`}${eks.tid ? ` kl. ${eks.tid}` : ""}</span></div></section>` : ""}
+    ${proeveplan(saet)}
+    ${saet.length ? `<section class="saet">${saet.map(x => {
+      const r = x.resultat, t = r.sad + r.halvt + r.blankt;
+      return `<div class="card sc">
+        <h3>${esc(kortTitel(x.titel))}</h3>
+        <div class="m">${x.varighed ? `${x.varighed >= 60 ? `${x.varighed / 60} timer` : `${x.varighed} min`} · ` : ""}${x.antal} ${fag === "beta" ? "spørgsmål" : "opgaver"}${x.har_facit ? "" : " · facit mangler"}</div>
+        ${x.sektioner.length > 1 ? `<div class="m">${(v => x.sektioner.map((s, i) => `${esc(s.titel.replace(/^Del (\w) — /, "$1: "))}${v[i] != null ? ` ${v[i]} %` : ""}`).join(" · "))(vaegte(x.sektioner))}</div>` : ""}
+        ${t ? `<div class="bar3" title="${r.sad} sad, ${r.halvt} halvt, ${r.blankt} blankt af ${x.antal}"><i style="width:${100 * r.sad / x.antal}%;background:var(--success)"></i><i style="width:${100 * r.halvt / x.antal}%;background:var(--warning)"></i><i style="width:${100 * r.blankt / x.antal}%;background:var(--destructive)"></i></div>
+          <div class="m">${r.sad} sad · ${r.halvt} halvt · ${r.blankt} blankt${x.proever.length ? ` · prøveeksamen ${x.proever.map(p => dayMonth(parseDate(p))).join(", ")}` : ""}</div>` : `<div class="m">Ikke prøvet endnu</div>`}
+        <div class="row">${x.varighed && fag !== "beta" ? `<button type="button" class="btn" data-start="${x.id}">${icon("clock", 14)}Prøveeksamen</button>` : ""}
+          <button type="button" class="btn ${x.varighed && fag !== "beta" ? "ghost" : ""}" data-oev="${x.id}">${fag === "beta" ? "Øv et spørgsmål" : "Øv opgaver"}</button></div>
+      </div>`; }).join("")}</section>` : `<div class="card empty">Der er ingen sæt til ${FAGNAVN[fag]} endnu. De lægges i <code>${FAGNAVN[fag]}/Eksamenstræning/</code>.</div>`}
+    <p class="meta" style="line-height:1.55">${fag === "gamma"
+      ? "Sættene er i samme format som prøven. Facit er en tjekliste over kravene, ikke en løsning: du retter din egen kode mod den. Bøger og noter er tilladt til prøven, så øv med dem ved hånden."
+      : fag === "beta" ? "Der findes ingen gamle sæt. Pensumspørgsmålene er lavet ud fra lektionsplanen og bøgerne, med en disponeret 5-minutters besvarelse som facit. Øv dem højt: forbered 20 min, svar 5–7 min."
+      : "Facit er vejledende og skrevet ud fra lærebogen, ikke et officielt facit. MC rettes automatisk; resten retter du selv mod facit."}
+      Alt, du ikke havde helt rigtigt, kommer med i Dagens kort under Genkald.</p>`;
+}
+
+// Din egen plan for prøveeksamener (CLAUDE.md "Egen plan", ikke frister fra uddannelsen). Hver prøveeksamen, du har
+// afleveret i faget, krydser den næste i planen af, uanset hvilket sæt og hvilken uge.
+function proeveplan(saet) {
+  const plan = (S?.proeveplan || []).filter(p => p.fag.toLowerCase() === fag);
+  if (!plan.length) return "";
+  const taget = [...new Set(saet.flatMap(x => x.proever.map(p => p.slice(0, 10))))].sort();
+  return `<section class="card panel"><div class="panel-head"><h2>Prøveeksamener</h2><span class="meta">din egen plan</span></div>
+    <div class="stack" style="gap:10px">${plan.map((p, i) => {
+      const [, titel, detalje] = p.hvad.replace(/<[^>]+>/g, "").match(/^(.*?)\s*(?:\((.*)\))?$/), t = taget[i];
+      return `<div class="row" style="flex-wrap:nowrap;align-items:flex-start">
+        <span style="color:${t ? "var(--success)" : "var(--text-subdued)"};margin-top:2px">${icon(t ? "check" : "clock", 14)}</span>
+        <div style="flex:1"><div style="font-weight:500">${esc(titel)}</div>
+          <div class="meta">uge ${esc(p.uger)} · ${range(p.fra)}${detalje ? ` · ${esc(detalje.replace(/,?\s*(gammelt sæt )?på Kompas → Studie → Eksamen/, "").trim())}` : ""}</div></div>
+        <span class="badge${t ? " good" : ""}">${t ? `taget ${dayMonth(parseDate(t))}` : nedtaelling(p.fra, true)}</span></div>`; }).join("")}</div>
+  </section>`;
+}
+
+// ── prøveeksamen ───────────────────────────────────────────────────
+async function startProeve(id) {
+  set = L.find(x => x.fag === fag && x.id === id);
+  E = await hent(`/eksamen/saet?fag=${fag}&id=${encodeURIComponent(id)}`);
+  let gemt = null; try { gemt = JSON.parse(localStorage.getItem(`eks:${fag}/${id}`) || "null"); } catch (e) {}
+  if (gemt?.start && confirm("Du har en påbegyndt prøveeksamen i det her sæt. Fortsæt den? (Annuller starter forfra)")) { svar = gemt.svar || {}; start = gemt.start; }
+  else { svar = {}; start = new Date().toISOString(); }
+  marks = {}; facit = null; tilstand = "proeve"; gem();
+  renderProeve();
+  clearInterval(tick); tick = setInterval(opdaterTimer, 1000); opdaterTimer();
+}
+function opdaterTimer() {
+  const el = document.getElementById("timer"); if (!el) return;
+  const brugt = (Date.now() - Date.parse(start)) / 1000, rest = (E.varighed || 0) * 60 - brugt;
+  const f = s => { s = Math.abs(Math.round(s)); return `${Math.floor(s / 3600)}:${String(Math.floor(s % 3600 / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`; };
+  el.textContent = rest >= 0 ? f(rest) : `+${f(rest)}`;
+  el.className = "timer" + (rest < 0 ? " ude" : rest < 900 ? " lav" : "");
+  const n = document.getElementById("besvaret"); if (n) n.textContent = `${Object.values(svar).filter(v => String(v).trim()).length} af ${alleQ().length} besvaret`;
+}
+function svarFelt(q, laast) {
+  const m = mc(q.tekst), v = svar[q.nr] || "";
+  if (m) return `<div class="spm md">${md(m.spm)}</div><div class="mc">${m.opts.map(o => `<label><input type="radio" name="q${q.nr}" value="${o.k}"${v === o.k ? " checked" : ""}${laast ? " disabled" : ""} data-q="${q.nr}"><span><b>${o.k})</b> ${md(o.t).replace(/^<p>|<\/p>$/g, "")}</span></label>`).join("")}</div>`;
+  return `<div class="spm md">${md(q.tekst)}</div>${laast ? "" : `<textarea class="${erKode(q) ? "kode" : ""}" data-q="${q.nr}" spellcheck="${erKode(q) ? "false" : "true"}" placeholder="${erKode(q) ? "Din kode …" : "Dit svar …"}">${esc(v)}</textarea>`}`;
+}
+function renderProeve() {
+  document.getElementById("hoved").hidden = true;
+  root().innerHTML = `
+    <div class="topbar"><b style="font-weight:600">${esc(E.titel)}</b><span class="spacer"></span>
+      <span class="mini-t" id="besvaret"></span><span class="timer" id="timer">–</span>
+      <button type="button" class="btn" id="aflever">Aflevér</button><button type="button" class="btn quiet" id="afbryd">Afbryd</button></div>
+    ${E.intro ? `<section class="card panel"><div class="md">${md(E.intro)}</div></section>` : ""}
+    ${E.sektioner.map(s => `<div class="sek"><h2>${esc(s.titel)}${s.vaegt ? ` <span class="meta">(${vaegte(E.sektioner)[E.sektioner.indexOf(s)]} %)</span>` : ""}</h2>
+      ${s.intro ? `<section class="card panel" style="margin-bottom:12px"><div class="md">${md(s.intro)}</div></section>` : ""}
+      <div class="stack" style="gap:12px">${s.spoergsmaal.map(q => `<section class="card q" id="q${q.nr}"><div class="nr">${q.nr}.</div>${svarFelt(q, false)}</section>`).join("")}</div></div>`).join("")}
+    <div class="row"><span class="spacer"></span><button type="button" class="btn" id="aflever2">Aflevér og se facit</button></div>`;
+}
+
+// ── retning efter aflevering ───────────────────────────────────────
+async function aflever() {
+  if (!confirm("Aflevér nu? Bagefter ser du facit og retter dig selv.")) return;
+  clearInterval(tick);
+  const slut = new Date().toISOString();
+  facit = (await hent(`/eksamen/facit?fag=${fag}&id=${encodeURIComponent(set.id)}`)).facit || {};
+  // MC rettes automatisk; resten retter du selv
+  for (const q of alleQ()) { const b = facitBogstav(facit[q.nr]); if (mc(q.tekst) && b) marks[q.nr] = { mark: svar[q.nr] === b ? "sad" : "blankt" }; }
+  set.slut = slut; tilstand = "retning"; renderRetning();
+}
+function point() {
+  let ialt = 0, vægtSum = 0;
+  const pr = E.sektioner.map(s => {
+    const n = s.spoergsmaal.length, p = s.spoergsmaal.reduce((a, q) => a + ({ sad: 1, halvt: .5 }[marks[q.nr]?.mark] || 0), 0);
+    const rettet = s.spoergsmaal.filter(q => marks[q.nr]?.mark).length;
+    if (s.vaegt) { ialt += s.vaegt * p / Math.max(1, n); vægtSum += s.vaegt; }
+    return { titel: s.titel, p, n, rettet, vaegt: s.vaegt };
+  });
+  return { pr, pct: vægtSum ? Math.round(100 * ialt / vægtSum) : null };
+}
+function renderRetning() {
+  const P = point(), alle = alleQ(), mangler = alle.filter(q => !marks[q.nr]?.mark).length;
+  root().innerHTML = `
+    <div class="topbar"><b style="font-weight:600">Retning · ${esc(E.titel)}</b><span class="spacer"></span>
+      <span class="mini-t">${mangler ? `${mangler} mangler din vurdering` : "alt rettet"}</span>
+      <button type="button" class="btn" id="gem-res"${mangler ? " disabled" : ""}>Gem resultat</button></div>
+    <section class="score">${P.pr.map((x, i) => `<div class="card tile"><div class="label">${esc(x.titel)}${vaegte(E.sektioner)[i] != null ? ` · ${vaegte(E.sektioner)[i]} %` : ""}</div>
+      <div class="value">${String(x.p).replace(".", ",")}<small>/ ${x.n}</small></div><div class="foot">${x.rettet} af ${x.n} rettet</div></div>`).join("")}
+      ${P.pct != null ? `<div class="card tile"><div class="label">Samlet, vægtet</div><div class="value">${P.pct}<small>%</small></div><div class="foot">halvt tæller som ½. Ikke en karakter.</div></div>` : ""}</section>
+    ${E.sektioner.map(s => `<div class="sek"><h2>${esc(s.titel)}</h2><div class="stack" style="gap:12px">${s.spoergsmaal.map(q => {
+      const m = mc(q.tekst), b = facitBogstav(facit[q.nr]), mk = marks[q.nr]?.mark;
+      return `<section class="card q"><div class="nr">${q.nr}.${q.emne ? `<span class="chip">${esc(q.emne)}</span>` : ""}</div>
+        ${m ? `<div class="spm md">${md(m.spm)}</div><div class="mc">${m.opts.map(o => `<label class="${o.k === b ? "rigtig" : o.k === svar[q.nr] ? "forkert" : ""}"><input type="radio" disabled${svar[q.nr] === o.k ? " checked" : ""}><span><b>${o.k})</b> ${md(o.t).replace(/^<p>|<\/p>$/g, "")}</span></label>`).join("")}</div>`
+          : `<div class="spm md">${md(q.tekst)}</div><div class="mitsvar${erKode(q) ? " kode" : ""}">${esc(svar[q.nr] || "(ikke besvaret)")}</div>`}
+        <div class="facit"><div class="lbl">${fag === "gamma" ? "Tjekliste" : "Facit"}</div><div class="md">${facit[q.nr] ? md(facit[q.nr]) : "Der er ingen facit til denne opgave endnu."}</div></div>
+        <div class="row"><span class="meta">${m && b ? "Rettet automatisk; du kan ændre det." : "Hvordan gik det?"}</span>
+          ${[["sad", "✓ Sad"], ["halvt", "~ Halvt"], ["blankt", "✗ Blankt"]].map(([k, t]) => `<button type="button" class="btn m-${k}" data-mk="${q.nr}" data-v="${k}" aria-pressed="${mk === k}">${t}</button>`).join("")}</div>
+      </section>`; }).join("")}</div></div>`).join("")}`;
+}
+async function gemResultat() {
+  try {
+    const r = await post("/eksamen/afslut", { fag, id: set.id, svar, marks, start, slut: set.slut, tilstand: "proeve" });
+    glem(); toast(`Gemt i ${r.gemt}. Det, der ikke sad, er lagt i Dagens kort.`);
+    L = await hent("/eksamen"); renderListe(); window.scrollTo(0, 0);
+  } catch (e) { toast(`Kunne ikke gemme: ${e.message}`); }
+}
+
+// ── øv enkeltopgaver ───────────────────────────────────────────────
+async function startOevelse(id) {
+  set = L.find(x => x.fag === fag && x.id === id);
+  E = await hent(`/eksamen/saet?fag=${fag}&id=${encodeURIComponent(id)}`);
+  svar = {}; marks = {}; tilstand = "oevelse";
+  // start ved den første opgave, du ikke har haft helt rigtigt
+  oCur = 0; oVist = false; oSik = null; oFacit = null;
+  renderOevelse();
+}
+function renderOevelse() {
+  document.getElementById("hoved").hidden = true;
+  const alle = alleQ(), q = alle[oCur], m = mc(q.tekst), mundtlig = fag === "beta";
+  root().innerHTML = `
+    <div class="topbar"><b style="font-weight:600">${esc(E.titel)}</b><span class="spacer"></span>
+      <select id="ohop" aria-label="Opgave" style="font:inherit;font-size:13px;border:0;box-shadow:var(--shadow-border-xs);border-radius:8px;padding:6px 8px;background:var(--container);color:var(--text-primary)">${alle.map((x, i) => `<option value="${i}"${i === oCur ? " selected" : ""}>${x.nr}. ${esc(x.sek.titel.replace(/^Del (\w) — /, "$1 · ").slice(0, 28))}</option>`).join("")}</select>
+      <button type="button" class="btn quiet" id="tilbage">Tilbage til sættene</button></div>
+    ${q.sek.intro && (fag === "gamma" || mundtlig) ? `<section class="card panel"><div class="md">${md(q.sek.intro)}</div></section>` : ""}
+    <section class="card q"><div class="nr">${esc(q.sek.titel)} · ${q.nr}.${q.emne ? `<span class="chip">${esc(q.emne)}</span>` : ""}</div>
+      ${m ? `<div class="spm md">${md(m.spm)}</div><div class="mc">${m.opts.map(o => { const b = oVist && facitBogstav(oFacit);
+          return `<label class="${oVist && o.k === b ? "rigtig" : oVist && o.k === svar[q.nr] && o.k !== b ? "forkert" : ""}"><input type="radio" name="o${q.nr}" value="${o.k}" data-q="${q.nr}"${svar[q.nr] === o.k ? " checked" : ""}${oVist ? " disabled" : ""}><span><b>${o.k})</b> ${md(o.t).replace(/^<p>|<\/p>$/g, "")}</span></label>`; }).join("")}</div>`
+        : `<div class="spm md">${md(q.tekst)}</div>
+        ${mundtlig ? `<div class="row"><button type="button" class="btn ghost" data-ur="20">${icon("clock", 14)}Forbered 20 min</button><button type="button" class="btn ghost" data-ur="7">${icon("clock", 14)}Svar højt 7 min</button><span class="timer" id="ur" style="font-size:18px"></span></div>` : ""}
+        <textarea class="${erKode(q) ? "kode" : ""}" data-q="${q.nr}" spellcheck="${erKode(q) ? "false" : "true"}" placeholder="${mundtlig ? "Din disposition: 3–4 hovedpunkter med begreber …" : erKode(q) ? "Din kode …" : "Dit svar …"}">${esc(svar[q.nr] || "")}</textarea>`}
+      ${oVist ? `<div class="facit"><div class="lbl">${mundtlig ? "Disposition" : fag === "gamma" ? "Tjekliste" : "Facit"}</div><div class="md">${oFacit ? md(oFacit) : "Der er ingen facit til denne opgave endnu."}</div></div>
+        <div class="row"><span class="meta">Hvordan gik det?</span>${[["sad", "✓ Sad"], ["halvt", "~ Halvt"], ["blankt", "✗ Blankt"]].map(([k, t]) => `<button type="button" class="btn m-${k}" data-omk="${k}">${t}</button>`).join("")}
+          <span class="spacer"></span><span class="meta">du sagde: ${esc(SIK.find(([s]) => s === oSik)?.[1] || "")}</span></div>`
+      : `<div class="row"><span class="meta">Hvor sikker er du?</span>${SIK.map(([k, t], i) => `<button type="button" class="btn${i ? " ghost" : ""}" data-osik="${k}">${t}</button>`).join("")}<span class="spacer"></span><span class="meta">så vises ${mundtlig ? "dispositionen" : fag === "gamma" ? "tjeklisten" : "facit"}</span></div>`}
+    </section>
+    <div class="row"><button type="button" class="btn quiet" id="oforrige"${oCur ? "" : " disabled"}>${icon("arrow-left", 14)}Forrige</button><span class="spacer"></span><button type="button" class="btn quiet" id="onaeste"${oCur < alle.length - 1 ? "" : " disabled"}>Næste ${icon("arrow-right", 14)}</button></div>`;
+}
+let ur = null;
+function startUr(min) {
+  clearInterval(ur); const slut = Date.now() + min * 60000;
+  const t = () => { const el = document.getElementById("ur"); if (!el) return clearInterval(ur); const s = Math.round((slut - Date.now()) / 1000);
+    el.textContent = s >= 0 ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}` : "tiden er gået"; el.className = "timer" + (s < 0 ? " ude" : s < 60 ? " lav" : ""); };
+  t(); ur = setInterval(t, 1000);
+}
+
+// ── hændelser ──────────────────────────────────────────────────────
+document.addEventListener("input", e => {
+  const n = e.target.dataset?.q; if (!n) return;
+  svar[n] = e.target.value; if (tilstand === "proeve") { gem(); opdaterTimer(); }
+});
+document.addEventListener("click", async e => {
+  const b = e.target.closest("button"); if (!b) return;
+  try {
+    if (b.dataset.fag) { fag = b.dataset.fag; history.replaceState(null, "", "#" + fag); renderListe(); }
+    else if (b.dataset.start) await startProeve(b.dataset.start);
+    else if (b.dataset.oev) await startOevelse(b.dataset.oev);
+    else if (b.id === "aflever" || b.id === "aflever2") await aflever();
+    else if (b.id === "afbryd") { if (confirm("Afbryd prøveeksamen? Dine svar huskes, så du kan fortsætte senere.")) { clearInterval(tick); renderListe(); } }
+    else if (b.dataset.mk) { marks[b.dataset.mk] = { mark: b.dataset.v }; const y = window.scrollY; renderRetning(); window.scrollTo(0, y); }
+    else if (b.id === "gem-res") await gemResultat();
+    else if (b.id === "tilbage") { clearInterval(ur); L = await hent("/eksamen"); renderListe(); }
+    else if (b.dataset.osik) { const q = alleQ()[oCur]; oFacit = (await hent(`/eksamen/facit?fag=${fag}&id=${encodeURIComponent(set.id)}&nr=${q.nr}`)).facit; oSik = b.dataset.osik; oVist = true; renderOevelse(); }
+    else if (b.dataset.omk) { const q = alleQ()[oCur]; await post("/eksamen/resultat", { fag, id: set.id, nr: q.nr, mark: b.dataset.omk, sikkerhed: oSik });
+      toast(b.dataset.omk === "sad" ? "✓ gemt" : "Gemt – den kommer igen i Dagens kort"); if (oCur < alleQ().length - 1) oCur++; oVist = false; oSik = null; oFacit = null; renderOevelse(); window.scrollTo(0, 0); }
+    else if (b.id === "oforrige" || b.id === "onaeste") { oCur += b.id === "onaeste" ? 1 : -1; oVist = false; oSik = null; oFacit = null; renderOevelse(); window.scrollTo(0, 0); }
+    else if (b.dataset.ur) startUr(+b.dataset.ur);
+  } catch (x) { toast(`Noget gik galt: ${x.message}`); }
+});
+document.addEventListener("change", e => {
+  if (e.target.id === "ohop") { oCur = +e.target.value; oVist = false; oSik = null; oFacit = null; renderOevelse(); }
+  if (e.target.type === "radio" && e.target.dataset.q) { svar[e.target.dataset.q] = e.target.value; if (tilstand === "proeve") { gem(); opdaterTimer(); } }
+});
+// Svarene gemmes løbende i browseren, så en påbegyndt prøveeksamen kan fortsættes; ingen advarsel ved navigation
+
+Promise.all([hent("/eksamen"), loadStudie().catch(() => null)]).then(([l, s]) => { L = l; S = s; renderListe(); },
+  e => { root().innerHTML = `<div class="card empty">Eksamensserveren svarer ikke (${esc(e.message)}). Se <code>~/.kompas/studie-server.log</code>.</div>`; });
+</script>
+</body>
+</html>

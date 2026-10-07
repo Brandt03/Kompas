@@ -1,0 +1,120 @@
+# Kompas: økonomi, studie og form samlet på https://kompas.localhost
+# Importeres fra /opt/homebrew/etc/Caddyfile med:  import /Users/<dig>/kompas/Caddyfile
+# Alt ligger på samme adresse, så portalen kan vise Sure og de statiske sider i sin ramme.
+# https://localhost er urørt og virker som før.
+# Stierne forudsætter, at repoet ligger i ~/kompas ({$HOME} udfyldes af Caddy fra miljøet).
+kompas.localhost {
+	# Kun denne Mac, aldrig det lokale netværk (samme filter som localhost-blokken)
+	@remote not remote_ip 127.0.0.1 ::1
+
+	# "/" er altid Kompas. Sures forside ligger på /okonomi (Caddy omskriver til "/").
+	# Undtagelse: Sures egne kald til "/" inde i rammen skal til Sure. Det er Turbo-kald (har
+	# X-Turbo-Request-Id), også forsidens filtre. Lander rammen alligevel på "/", sender Kompas den
+	# videre til /okonomi med samme query.
+	# Tidligere skelnede vi på Sec-Fetch-Dest, men Sures service worker sender sidevisninger
+	# videre, og så var Kompas pludselig bare Sure.
+	@sure_turbo {
+		path /
+		header X-Turbo-Request-Id *
+	}
+
+	route {
+		abort @remote
+
+		handle @sure_turbo {
+			reverse_proxy 127.0.0.1:3000
+		}
+		handle /okonomi {
+			rewrite * /
+			reverse_proxy 127.0.0.1:3000
+		}
+		handle / {
+			root * {$HOME}/kompas/public
+			rewrite * /shell.html
+			header Cache-Control "no-store"
+			file_server
+		}
+
+		# Portalens egne sider (Kompas) og designkittet under /kompas/assets/, som projekternes sider bruger
+		redir /kompas /kompas/
+		redir /kompas/studie/* /studie/
+		handle_path /kompas/* {
+			root * {$HOME}/kompas/public
+			header Cache-Control "no-store"
+			file_server
+		}
+
+		# Studie: Genkald-fanens API (Scripts/kompas-server.js i semestermappen), LaunchAgent local.kompas.studie
+		handle /studie/api/* {
+			reverse_proxy 127.0.0.1:8767
+		}
+
+		# Studie: skrives af Scripts/kompas-eksport.js i semestermappen
+		redir /studie /studie/
+		handle_path /studie/* {
+			root * {$HOME}/.kompas/studie
+			header Cache-Control "no-store"
+			file_server
+		}
+
+		# Karriere: jobagentens lille server i Jobs/jobagent (kompas_server.py), LaunchAgent local.kompas.karriere
+		redir /karriere /karriere/
+		handle_path /karriere/* {
+			reverse_proxy 127.0.0.1:8766
+		}
+
+		# Forbrug, Scenarier, SU-vagt (fra okonomi/dashboard)
+		redir /forbrug /forbrug/
+		handle_path /forbrug/* {
+			root * {$HOME}/kompas/okonomi/dashboard/public
+			header Cache-Control "no-store"
+			file_server
+		}
+
+		# Form & Fokus (bygges af garmin-coach; liv.json skrives af livsoverblik)
+		redir /form /form/
+		handle_path /form/* {
+			root * {$HOME}/.garmin-coach/site
+			header Cache-Control "no-store"
+			file_server
+		}
+
+		# Alt andet er Sure
+		reverse_proxy 127.0.0.1:3000
+	}
+
+	handle_errors 502 503 {
+		header Content-Type "text/html; charset=utf-8"
+		@karriere path /karriere/*
+		respond @karriere `<!doctype html><meta charset="utf-8"><title>Jobagenten er lukket</title><body style="font:15px system-ui;margin:15vh auto;max-width:34em;padding:0 16px;color:#737373;background:#f7f7f7"><h1 style="color:#171717;font-size:21px;font-weight:600">Jobagentens side kører ikke</h1><p>Den kører normalt altid i baggrunden (LaunchAgent <code>local.kompas.karriere</code>). Log: <code>~/.kompas/karriere.log</code>. Genstart: <code>launchctl kickstart -k gui/$(id -u)/local.kompas.karriere</code></p><p>Selve jobagenten kører stadig hver morgen og skriver sine fund i mappen.</p></body>` 503
+		respond `<!doctype html><meta charset="utf-8"><title>Sure er lukket</title><body style="font:15px system-ui;margin:15vh auto;max-width:34em;padding:0 16px;color:#737373;background:#f7f7f7"><h1 style="color:#171717;font-size:21px;font-weight:600">Sure kører ikke lige nu</h1><p>Åbn programmet <b>Kompas</b> (i Programmer eller Dock) for at starte den. Det tager ca. 30 sekunder.</p><p>Kompas, Studie, Form &amp; fokus og <a href="/forbrug/" style="color:#171717">Forbrug</a> virker stadig med de seneste hentede tal.</p></body>` 503
+	}
+}
+
+# På farten: telefonen gennem Tailscale. `tailscale serve` tager imod på https://<mac>.<tailnet>.ts.net (kun dine
+# egne enheder i dit tailnet) og sender videre hertil. Lytter kun på denne Mac. Kun Studie og designkittet;
+# Økonomi, Karriere og Form er stadig kun på Mac'en. Forsiden er mobilsiden (Scripts/kompas/mobil.html i semestermappen).
+http://:8768 {
+	bind 127.0.0.1
+
+	route {
+		redir / /studie/mobil.html
+		handle /studie/api/* {
+			reverse_proxy 127.0.0.1:8767
+		}
+		redir /studie /studie/
+		handle_path /studie/* {
+			root * {$HOME}/.kompas/studie
+			header Cache-Control "no-store"
+			@manifest path *.webmanifest
+			header @manifest Content-Type application/manifest+json
+			file_server
+		}
+		handle_path /kompas/assets/* {
+			root * {$HOME}/kompas/public/assets
+			header Cache-Control "no-store"
+			file_server
+		}
+		respond "Ikke her. På telefonen er kun Studie med; resten af Kompas er på Mac'en." 404
+	}
+}

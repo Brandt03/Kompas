@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Coach</title>
+<!-- Vises i Kompas (https://kompas.localhost), som leverer designkittet under /kompas/assets/.
+     Data: coach.json, skrevet af `python -m garmin_coach.site byg`. Vurderingerne er fra den seneste
+     14-dages rapport (rutinen "Form & Fokus"), og dagens råd regnes af garmin-coach (metrics.dagens_raad);
+     siden finder ikke selv på råd. -->
+<link rel="stylesheet" href="/kompas/assets/tokens.css">
+<link rel="stylesheet" href="/kompas/assets/page.css">
+<style>
+  .kv { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 14px; }
+  .kv div span { display: block; color: var(--text-secondary); font-size: 12.5px; }
+  .kv div b { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .kv div small { color: var(--text-secondary); font-size: 12.5px; }
+  .fokus { counter-reset: f; list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+  .fokus li { counter-increment: f; display: grid; grid-template-columns: 26px 1fr; gap: 10px; line-height: 1.55; color: var(--text-secondary); }
+  .fokus li::before { content: counter(f); width: 24px; height: 24px; border-radius: 7px; background: var(--nav-indicator); color: var(--container); display: grid; place-items: center; font-size: 12px; font-weight: 600; }
+  .fu { display: grid; gap: 8px; }
+  .fu div { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: start; color: var(--text-secondary); line-height: 1.5; }
+  .days { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  .days h3 { margin: 0 0 6px; font-size: 13px; font-weight: 600; }
+  .days .ev { font-size: 13px; color: var(--text-secondary); margin: 2px 0; }
+  .days .ev b { color: var(--text-primary); font-weight: 500; font-variant-numeric: tabular-nums; }
+  .days .free { font-size: 12.5px; color: var(--success); margin-top: 6px; }
+  .ask { display: grid; gap: 8px; }
+  .ask button {
+    display: flex; justify-content: space-between; gap: 10px; align-items: center; text-align: left; width: 100%;
+    font: inherit; font-size: 13.5px; color: var(--text-primary); background: var(--container-inset);
+    border: 0; box-shadow: inset 0 0 0 1px var(--border-subdued); border-radius: 10px; padding: 10px 12px; cursor: pointer;
+  }
+  .ask button:hover { background: var(--surface-hover); }
+  .ask button small { color: var(--text-subdued); flex: none; }
+  @media (max-width: 760px) { .days { grid-template-columns: minmax(0, 1fr); } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="page">
+    <div>
+      <h1>Coach</h1>
+      <p class="sub">Dagens status og dit fokus fra den seneste 14-dages rapport</p>
+    </div>
+    <div class="meta" id="meta"></div>
+  </header>
+  <div class="stack" id="root"><div class="card empty">Henter …</div></div>
+</div>
+
+<script src="/kompas/assets/icons.js"></script>
+<script src="/kompas/assets/liv.js"></script>
+<script src="/kompas/assets/chart.js"></script>
+<script>
+const sd = x => x == null ? "–" : `${x > 0 ? "+" : ""}${fmt(x, 1)} SD`;
+const flagText = f => f.split(" — ")[0].replace(/^./, c => c.toUpperCase()) + ".";
+const STATUS = { naaet: ["good", "Nået"], delvist: ["", "Delvist"], ikke: ["bad", "Ikke nået"] };
+const SPOERG = [
+  "Hvad skal jeg træne i dag?",
+  "Hvordan ser min restitution ud, og skal jeg skrue ned?",
+  "Læg en plan for resten af ugen ud fra min kalender",
+  "Hvordan går det med fokuspunkterne fra min seneste rapport?",
+];
+
+function render(d) {
+  const root = document.getElementById("root");
+  if (d.fejl) { root.innerHTML = `<div class="card empty">Kunne ikke beregne coach-data: ${esc(d.fejl)}</div>`; return; }
+  const r = d.restitution, sn = r.seneste_døgn || {}, b = d.belastning || {}, p = d.periode, v = p?.vurdering || {};
+  document.getElementById("meta").textContent = `Data til ${r.datafriskhed?.seneste_data ? dayMonth(parseDate(r.datafriskhed.seneste_data)) : "–"} · bygget ${stamp(d.genereret)}`;
+  const flags = r.flag || [];
+  const raad = d.dagens_raad?.dato === iso(new Date()) ? d.dagens_raad : null;
+  const band = b.tre_baand_procent;
+
+  root.innerHTML = `
+    <section class="card panel">
+      <div class="panel-head"><h2>I dag</h2><a class="link" href="soevn.html">Søvn &amp; restitution ${icon("arrow-right", 14)}</a></div>
+      ${raad?.niveau ? `<div class="banner ${{ rolig: "warn", klar: "good" }[raad.niveau] || ""}" style="padding:0 0 16px"><span class="bi">${icon("activity", 16)}</span>
+        <div><div class="bl">Dagens råd</div><p><b style="color:var(--text-primary);font-weight:600">${esc(raad.titel)}.</b> ${esc(raad.tekst)}</p>
+        <p class="meta" style="margin-top:4px">Fordi: ${esc(raad.grunde.join(", "))}.</p></div></div>`
+        : `<p class="meta" style="margin:0 0 14px">Intet råd i dag: ${esc((d.dagens_raad?.grunde || ["dagens tal er ikke hentet endnu"]).join(", "))}.</p>`}
+      <div class="kv">
+        <div><span>Readiness</span><b>${fmt(sn.training_readiness)}</b></div>
+        <div><span>Søvnscore i nat</span><b>${fmt(sn["søvnscore"])}</b></div>
+        <div><span>HRV mod grundniveau</span><b>${sd(r.hrv?.afvigelse_sd)}</b></div>
+        <div><span>Hvilepuls mod grundniveau</span><b>${sd(r.hvilepuls?.afvigelse_sd)}</b></div>
+        <div><span>Body battery top</span><b>${fmt(sn.body_battery_top)}</b></div>
+      </div>
+      ${flags.length ? `<div style="margin-top:14px" class="stack">${flags.map(f => `<div class="banner warn" style="padding:0"><span class="bi">${icon("activity", 16)}</span><div><div class="bl">Værd at bemærke</div><p>${esc(flagText(f))}</p></div></div>`).join("")}</div>` : ""}
+    </section>
+
+    ${p ? `<section class="card panel">
+      <div class="panel-head"><h2>Dit fokus</h2><a class="link" href="perioder.html">Periode ${dayMonth(parseDate(p.start))} – ${dayMonth(parseDate(p.slut))} ${icon("arrow-right", 14)}</a></div>
+      ${v.resume ? `<p style="margin:0 0 14px;line-height:1.55">${esc(v.resume)}</p>` : ""}
+      ${(v.fokus || []).length ? `<ol class="fokus">${v.fokus.map(x => `<li><span>${esc(x)}</span></li>`).join("")}</ol>` : `<p class="meta">Rapporten har ingen fokuspunkter.</p>`}
+      ${(v.forbedring || []).length ? `<details style="margin-top:14px"><summary>Konkrete handlinger (${v.forbedring.length})</summary><ul class="list">${v.forbedring.map(x => `<li>${esc(x)}</li>`).join("")}</ul></details>` : ""}
+      ${(v.opfoelgning || []).length ? `<details style="margin-top:10px"><summary>Opfølgning på perioden før</summary><div class="fu">${v.opfoelgning.map(o => {
+        const [cls, txt] = STATUS[o.status] || ["", o.status];
+        return `<div><span class="badge ${cls}">${esc(txt)}</span><span><b style="color:var(--text-primary);font-weight:500">${esc(o.fokus)}</b> ${esc(o.note || "")}</span></div>`; }).join("")}</div></details>` : ""}
+    </section>` : `<div class="card empty">Der er ingen endelig 14-dages rapport endnu.</div>`}
+
+    <div class="cols">
+      <section class="card panel">
+        <div class="panel-head"><h2>Belastning</h2><span class="meta">til og med ${b.beregnet_til_og_med ? dayMonth(parseDate(b.beregnet_til_og_med)) : "–"}</span></div>
+        <div class="kv">
+          <div><span>Seneste 7 dage</span><b>${fmt(b.akut_7d)}</b></div>
+          <div><span>Snit pr. uge, 28 dage</span><b>${fmt(b.kronisk_uge_snit_28d)}</b></div>
+          <div><span>Forhold (ACWR)</span><b>${fmt(b.acwr, 2)}</b></div>
+        </div>
+        ${b.acwr_fortolkning ? `<p class="meta" style="margin:8px 0 0">${esc(b.acwr_fortolkning.replace(/^./, c => c.toUpperCase()))}.</p>` : ""}
+        <div id="c-load" style="margin-top:12px"></div>
+      </section>
+      <section class="card panel">
+        <div class="panel-head"><h2>Intensitet, 28 dage</h2></div>
+        ${band ? `<div class="kv">
+          <div><span>Let</span><b>${band.let} %</b></div><div><span>Moderat</span><b>${band.moderat} %</b></div><div><span>Hård</span><b>${band["hård"]} %</b></div>
+        </div>` : `<p class="meta">Ingen pulsdata i perioden.</p>`}
+        ${b.intensitet_note ? `<p class="meta" style="margin:10px 0 0;line-height:1.5">${esc(b.intensitet_note)}</p>` : ""}
+        ${(b.pas_uden_belastning_28d || []).length ? `<p class="meta" style="margin:8px 0 0">Uden belastningstal: ${esc(b.pas_uden_belastning_28d.join(", "))}.</p>` : ""}
+      </section>
+    </div>
+
+    <section class="card panel">
+      <div class="panel-head"><h2>De næste tre dage</h2></div>
+      <div class="days">${(d.kalender?.dage || []).map(x => `<div>
+        <h3>${weekday(parseDate(x.dato))} ${dayMonth(parseDate(x.dato))}</h3>
+        ${(x.program || []).map(e => `<div class="ev"><b>${esc(e.tid || "hele dagen")}</b> ${esc(e.titel)}</div>`).join("") || `<div class="ev">Intet i kalenderen</div>`}
+        ${(x.frie_vinduer || []).length ? `<div class="free">Fri: ${esc(x.frie_vinduer.join(", "))}</div>` : ""}
+      </div>`).join("")}</div>
+    </section>
+
+    <section class="card panel">
+      <div class="panel-head"><h2>Spørg coachen</h2><span class="meta">svarer i Claude med garmin-coach-værktøjerne</span></div>
+      <div class="ask">${SPOERG.map(q => `<button type="button" data-q="${esc(q)}"><span>${esc(q)}</span><small>kopiér</small></button>`).join("")}</div>
+    </section>
+  `;
+
+  const weeks = [...(b.ugentligt || [])].reverse();
+  if (weeks.length) barChart(document.getElementById("c-load"), {
+    label: "Belastning pr. uge", height: 150, fmt: v => fmt(v, 0),
+    points: weeks.map(w => ({ label: w.uge_siden === 0 ? "denne" : `−${w.uge_siden}`, y: w.load,
+      tip: `<div class="th">${w.uge_siden === 0 ? "Seneste 7 dage" : `${w.uge_siden} uge${w.uge_siden > 1 ? "r" : ""} før`}</div>belastning <b>${fmt(w.load)}</b> · ${w["træningsdage"]} træningsdage` })),
+  });
+  root.querySelectorAll(".ask button").forEach(btn => btn.onclick = async () => {
+    try { await navigator.clipboard.writeText(btn.dataset.q); btn.querySelector("small").textContent = "kopieret – indsæt i Claude"; }
+    catch (e) { btn.querySelector("small").textContent = "kunne ikke kopiere"; }
+    setTimeout(() => { btn.querySelector("small").textContent = "kopiér"; }, 2500);
+  });
+}
+
+fetch("coach.json", { cache: "no-store" }).then(r => { if (!r.ok) throw new Error(`coach.json svarede ${r.status}`); return r.json(); })
+  .then(render, e => { document.getElementById("root").innerHTML = `<div class="card empty">${esc(e.message)}. Byg med <code>python -m garmin_coach.site byg</code>.</div>`; });
+</script>
+</body>
+</html>
