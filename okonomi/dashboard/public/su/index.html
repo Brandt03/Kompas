@@ -90,7 +90,8 @@
       fravalgt: 23598,  // indskrevet, men uden SU (fravalgt / ikke søgt)
       ingen: 45420,     // ikke i gang med en uddannelse (før start / efter slut)
       sats: 7426,       // SU udeboende, før skat
-      laan: 3799,       // SU-lån pr. måned
+      hjemme_maks: 3692, // højeste SU for hjemmeboende, før skat (bruges til at kende udeboende-SU på kontoen)
+      laan: 3799,       // SU-lån pr. måned (det fulde lån; også grænsen for tillægget)
     },
   };
   const STATUSES = [
@@ -100,7 +101,9 @@
     ["ingen", "Ikke i uddannelse"],
   ];
   const AM = 0.08;          // arbejdsmarkedsbidrag
-  const TILLAEG = 0.07;     // fast tillæg på tilbagebetaling over grænsen
+  // SU-loven § 30, stk. 5: 7 % lægges til, hvis beløbet overstiger summen af det månedlige stipendium for
+  // udeboende og det månedlige studielån, altså lovens satser (R.sats + R.laan), ikke det lån, du selv har valgt.
+  const TILLAEG = 0.07;
 
   const YEAR = Number(TODAY_KEY.slice(0, 4));
   const R = RATES[YEAR] || RATES[Math.max(...Object.keys(RATES).map(Number))];
@@ -151,6 +154,12 @@
     return out;
   }
 
+  // Loftet for tilbagebetaling er den SU, du har fået, før skat (su.dk, "Du har tjent for meget"). Kontoen viser
+  // SU efter skat. Over den højeste hjemmeboende-sats kan det kun være udeboende-SU, og før skat er det satsen;
+  // hjemmeboende-SU ligger under personfradraget, så der er ingen skat at lægge til. Et større beløb end satsen
+  // (fx efterbetaling) tælles fuldt.
+  const suFoerSkat = (net) => (net > R.hjemme_maks ? Math.max(R.sats, net) : net);
+
   // ---------- model ----------
   function model() {
     const su = suByMonth(), wages = wagesByMonth(), ys = yearState(), def = defaultStatus(su);
@@ -165,7 +174,7 @@
       else { income = S.forventet * (1 - AM); source = S.forventet ? "forventet" : ""; }
       const isSu = status === "su" || status === "su_ung";
       return { k, status, statusDefault: def[k], brutto, net, suNet: su.get(k) || 0, future, income, source, fribelob: R[status], isSu,
-               suGross: isSu ? (future ? R.sats : Math.max(su.get(k) || 0, 0)) : 0 };
+               suGross: isSu ? (future ? R.sats : suFoerSkat(Math.max(su.get(k) || 0, 0))) : 0 };
     });
     const fribelob = rows.reduce((s, r) => s + r.fribelob, 0);
     const income = rows.reduce((s, r) => s + r.income, 0);
@@ -352,7 +361,7 @@
     const p = (...k) => box.append(el("p", {}, ...k));
     p(el("b", { text: "Fribeløb pr. måned: " }), `SU-måned ${kr.format(R.su)} (ungdomsuddannelse ${kr.format(R.su_ung)}), måned uden SU ${kr.format(R.fravalgt)}, måned uden uddannelse ${kr.format(R.ingen)}. De lægges sammen til et årsfribeløb, så du godt må tjene mere end fribeløbet i én måned, hvis du tjener tilsvarende mindre i en anden.`);
     p(el("b", { text: "Indkomst: " }), "Det, der tæller, er din personlige indkomst før skat, men efter 8 % AM-bidrag (den står på lønsedlen og i eIndkomst). Det gælder både løn og feriepenge. SU, boligstøtte, salg af egne ting, tilskud fra familie og overskydende skat tæller ikke med. Har du honorarer eller B-indkomst, så skriv dem med i bruttolønnen for måneden.");
-    p(el("b", { text: "Tilbagebetaling: " }), `Du skal betale det beløb tilbage, du har tjent over årsfribeløbet, dog højst den SU og det SU-lån, du har fået. Er beløbet over ${kr.format(R.sats + R.laan)}, lægges der 7 % oveni. Betaler du ikke inden for to måneder, kommer der renter på. Den skat, du har betalt af SU'en, får du automatisk tilbage. Der er også en lille rabat på den første del af overskridelsen, som siden ikke regner med, så beløbet her er et forsigtigt skøn.`);
+    p(el("b", { text: "Tilbagebetaling: " }), `Du skal betale det beløb tilbage, du har tjent over årsfribeløbet, dog højst den SU (før skat) og det SU-lån, du har fået. Er beløbet over én måneds SU for udeboende plus én måneds fulde SU-lån (${kr.format(R.sats + R.laan)}), lægges der 7 % oveni, også selvom du selv låner mindre (SU-loven § 30, stk. 5). Betaler du ikke inden for to måneder, kommer der renter på. Den skat, du har betalt af SU'en, får du automatisk tilbage. Der er også en lille rabat på den første del af overskridelsen, som siden ikke regner med, så beløbet her er et forsigtigt skøn.`);
     p(el("b", { text: "Fravalg: " }), "Du fravælger SU i minSU senest den 15. i måneden før. Det kan ikke gøres bagud i tid.");
     if (RATES_YEAR !== YEAR) p(el("b", { text: `Obs: siden kender kun satserne for ${RATES_YEAR}, så tallene for ${YEAR} er kun vejledende.` }));
     p("Kilde: su.dk (satser for månedsfribeløb og \"Du har tjent for meget\"). Satserne ændrer sig hvert år, og minSU har altid det endelige tal.");
