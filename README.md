@@ -161,6 +161,17 @@ the demo (its menu items show a short explanation instead).
 
 ## Running it for real
 
+**Status: a personal project, not a product.** Kompas is built for my own everyday life on my own Mac, so the
+demo is the easy way to see all of it. Running it with your own data takes some adapting:
+
+- It is macOS only (LaunchAgents, zsh, Docker via Colima for Sure).
+- Each part is set up on its own: Caddy, Sure, Garmin and calendar feeds, Hevy, and Tailscale for the phone.
+  There is no single installer.
+- The LaunchAgents, the small app that starts and stops everything, and most of the scheduled Claude routines
+  are not in the repository.
+- It assumes three courses, Danish student grant (SU) rules and Danish job listings, and the interface is in
+  Danish.
+
 Each project has its own README with setup and environment variables. The short version: clone into `~/kompas`,
 import the `Caddyfile` into Caddy, set up each project you want, and point the LaunchAgents at `bin/opdater.sh`
 and the two small servers. See [docs/arkitektur.md](docs/arkitektur.md).
