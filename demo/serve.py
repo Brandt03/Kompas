@@ -25,7 +25,7 @@ UD = lav.UD
 
 # Sti → mapper, der slås op i rækkefølge (demodata først, så projektets egne sider)
 MONTERINGER = {
-    "/kompas/": [ROD / "public"],
+    "/kompas/": [UD / "kompas", ROD / "public"],
     "/form/": [UD / "form", ROD / "coach" / "site"],
     "/studie/": [UD / "studie", ROD / "studie" / "Scripts" / "kompas"],
     "/karriere/": [UD / "karriere", ROD / "karriere" / "kompas"],

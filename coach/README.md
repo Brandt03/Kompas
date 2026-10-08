@@ -151,9 +151,9 @@ til `~/.garmin-coach/site`, som Caddy leverer på `https://localhost/form/`
 Mappen kan flyttes med `GC_SITE` (standard `~/.garmin-coach/site`).
 
 Kompas.app bygger siden, henter nye data i baggrunden og åbner den.
-Perioderne skrives af den planlagte opgave "Form & Fokus" hver anden fredag
-med `gem-periode`, som selv regner tallene, så kun vurderingen kommer fra
-modellen.
+Perioderne skrives af den planlagte opgave "Træning" hver anden lørdag (perioder
+fra lørdag til fredag) med `gem-periode`, som selv regner tallene, så kun
+vurderingen kommer fra modellen.
 
 Visningen "Ugen" (`/form/#ugen`) viser mandagsreviewet fra ~/kompas/overblik:
 afvigelser fra det normale, dag for dag, ugekalenderen, sammenhænge og

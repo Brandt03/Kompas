@@ -9,6 +9,7 @@
 #   overblik (liv.json)               hver gang
 #   Studie-eksporten                  hver gang
 #   backup af databaserne             første kørsel hver dag
+#   status til Forbindelser           hver gang (bin/forbindelser.py → public/forbindelser.json)
 # Sure og forbrugssiden opdateres ikke her; de kræver Docker og hører til Kompas-appen.
 set -u
 export PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
@@ -39,3 +40,5 @@ $HOME/kompas/overblik/.venv/bin/liv opdater >/dev/null && $HOME/kompas/overblik/
 /usr/local/bin/node "$SEM/Scripts/kompas-eksport.js" >/dev/null || log "studie-eksporten fejlede"
 $HOME/kompas/bin/backup-data.sh | while read -r l; do log "backup: $l"; done
 log "ok"
+# Status for siden Forbindelser. Efter "ok", så den læser denne kørsel i loggen
+/usr/bin/python3 $HOME/kompas/bin/forbindelser.py || log "forbindelser fejlede"

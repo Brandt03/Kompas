@@ -161,7 +161,7 @@ def coach(conn: sqlite3.Connection) -> dict:
 def belastning(conn: sqlite3.Connection) -> dict:
     """Træningsbelastning pr. dag for hele historikken, regnet ét sted (metrics.daily_loads: Banister-TRIMP ud fra
     puls, styrkepas ud fra Hevy-sæt kalibreret til TRIMP). Til andre projekter, så de ikke regner deres egen
-    belastning: pr. dag (livsoverblik lægger dagene sammen til uger) og pr. pas. En dag uden pas er 0, og dage før
+    belastning: pr. dag (overblik lægger dagene sammen til uger) og pr. pas. En dag uden pas er 0, og dage før
     første pas er ikke med."""
     ath = metrics.athlete(conn)
     ctx = metrics.load_context(conn, ath)

@@ -23,7 +23,8 @@ one design system, and a front page that pulls the day together across all of th
 | **Økonomi** (Money) | Spending by month, "what if" scenarios, and a guard that warns before I earn too much to keep my student grant (SU) | `okonomi/` + [Sure](https://github.com/we-promise/sure) |
 | **Studie** (Study) | Week plan, courses, deadlines, spaced-repetition flashcards, exam practice, and an offline phone app | `studie/` |
 | **Form & fokus** (Health) | 14-day training periods, sleep and recovery, a daily recommendation, and a weekly review | `coach/` + `overblik/` |
-| **Karriere** (Career) | A job agent that finds student jobs every morning and scores them against my profile, with the reasons and gaps for each | `karriere/` |
+| **Karriere** (Career) | A job agent that finds student jobs twice a week and scores them against my profile, with the reasons and gaps for each | `karriere/` |
+| **Forbindelser** (Connections) | Whether every data source, Claude routine and background job works, with how to fix it when one doesn't | `bin/forbindelser.py` |
 
 | | |
 |---|---|
@@ -36,6 +37,9 @@ one design system, and a front page that pulls the day together across all of th
 <em>On the phone: today's cards work offline and sync later.</em></p>
 
 Everything follows the system's light or dark mode ([light version of I dag](docs/skaermbilleder/i-dag-lys.png)).
+[Forbindelser](docs/skaermbilleder/forbindelser.png) shows whether everything Kompas depends on works: it tests the
+MCP server with a real handshake, reads the Claude routines' own schedules, and never reads secrets, only whether
+they are set.
 
 ## How it fits together
 

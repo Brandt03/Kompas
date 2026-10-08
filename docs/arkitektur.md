@@ -11,6 +11,7 @@ I dette repo ligger projekterne som undermapper. I brug har hvert sit eget git-r
 
 ```
 I dag           dagen på tværs: kalender, frister, form, fokus, Genkald og jobmatch   public/index.html
+Forbindelser    om datakilder, Claude, baggrundsjob og værktøjer virker              bin/forbindelser.py
 Økonomi         Oversigt, Transaktioner, Rapporter, Plan (Sure)                       Sure (ikke i repoet)
                 Forbrug, Scenarier, SU-vagt                                           okonomi/
 Studie          Ugeoverblik, Fag, Deadlines, Genkald, Eksamen, På farten (telefon)    studie/
@@ -117,11 +118,20 @@ Garmin med det samme og åbner siden (`okonomi/bin/kompas-start.sh` og `kompas-s
 studie-eksporten hver gang, Garmin højst hver 3. time, og tager dagens backup ved første kørsel.
 
 Planlagte Claude-rutiner står for det, der kræver vurdering: køreplanen for studieugen (søndag), 14-dages
-rapporten i Form & fokus (hver anden fredag), ugereviewet (mandag) og jobagenten (dagligt). De skriver filer,
+rapporten i Form & fokus (hver anden lørdag), ugereviewet (mandag) og jobagenten (mandag og torsdag). De skriver filer,
 som projekterne viser; de sender eller indsender aldrig noget.
 
 **Backup:** `bin/backup-data.sh` gemmer `~/.garmin-coach/coach.db` og `~/.overblik/liv.db` gzippet i
 `$KOMPAS_BACKUP` (14 dage tilbage), én gang om dagen og igen ved "Luk Kompas".
+
+**Forbindelser** (`/kompas/forbindelser.html`) viser, om alt det, Kompas henter fra og kører på, virker:
+datakilderne (Garmin, Hevy, kalendere, banken via Sure, Jobindex, Canvas), Claude (MCP-serveren og rutinerne),
+baggrundsjobbene og værktøjerne på Mac'en, plus en MCP-guide til Claude-appen og `claude` i Terminal. Statussen
+regnes af `bin/forbindelser.py`, som `opdater.sh` kører til sidst hver gang, og skrives til
+`public/forbindelser.json` (ikke i git). Datakilderne vises ud fra seneste vellykkede hentning, serverne spørges
+direkte, garmin-coach testes med et rigtigt MCP-håndtryk, og rutinerne læses fra Claude-appens egne tidsplaner;
+ret `RUTINE_INFO` i scriptet, så id'erne passer til dine planlagte opgaver. Scriptet læser aldrig hemmeligheder
+som kalender-adresser og API-nøgler, kun om de findes, og viser aldrig rå loglinjer.
 
 ## Opsætning
 
@@ -134,8 +144,8 @@ caddy reload --config /opt/homebrew/etc/Caddyfile
 
 | Variabel | Bruges af | Standard |
 |---|---|---|
-| `KOMPAS_SEMESTER` | `bin/opdater.sh` | `~/kompas/studie` |
-| `KOMPAS_BACKUP` | `bin/backup-data.sh` | `~/Backup/kompas` |
+| `KOMPAS_SEMESTER` | `bin/opdater.sh`, `bin/forbindelser.py` | `~/kompas/studie` |
+| `KOMPAS_BACKUP` | `bin/backup-data.sh`, `bin/forbindelser.py` | `~/Backup/kompas` |
 
 Hvert projekt har sin egen README med sine variabler.
 
