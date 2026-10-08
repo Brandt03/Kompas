@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint (ruff, rigtige fejl)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install ruff
+      # Kun regler, der finder fejl (ubrugte navne, udefinerede navne, syntaks), ikke stil
+      - run: ruff check --isolated --select F,E9 .
+
+  python:
+    name: Demo og tests (Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # 3.9 er macOS' indbyggede Python, som demoen skal kunne køre på
+        python: ["3.9", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Demodata
+        run: python demo/lav.py
+      - name: Demo-serveren svarer på alle områder
+        run: |
+          python demo/serve.py --port 8000 &
+          for i in $(seq 30); do curl -sf http://localhost:8000/ > /dev/null && break; sleep 1; done
+          for u in / /kompas/ /form/coach.json /form/liv.json /form/belastning.json /studie/studie.json \
+                   /studie/api/repetition /karriere/api/data /forbrug/data.json /forbrug/su/ /transactions; do
+            kode=$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:8000$u")
+            echo "$u $kode"
+            test "$kode" = 200
+          done
+      - name: Tests (Overbliks statistik, Karriere-serverens sikkerhed)
+        run: python -m unittest discover -s tests -v
+
+  coach:
+    name: Coach smoke-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install ./coach
+      - run: python coach/smoke_test.py
+
+  node:
+    name: Studie (Node)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Syntaks
+        run: for f in studie/Scripts/*.js studie/Scripts/kompas/*.js; do node --check "$f"; done
+      - name: Drill-gæt køres aldrig som kode
+        run: node tests/test_drill_gaet.js

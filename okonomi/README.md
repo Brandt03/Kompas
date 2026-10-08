@@ -92,7 +92,7 @@ Programmerne **Kompas** og **Luk Kompas** (to små apps i `/Applications`) køre
 før den erstatter noget, og beholder de nyeste 30. Hvordan du gendanner, står øverst i filen.
 
 `bin/refresh-excel.sh` trækker månedstal og saldi ud af Sure (`scripts/monthly.csv`, `scripts/balances.csv`, ikke i
-git) og bygger med `scripts/yearly_excel.py` og `scripts/yearly_overview.py` (kræver `openpyxl`) et Excel-regnskab
+git) og bygger med `scripts/yearly_excel.py` og `scripts/yearly_overview.py` (kræver `openpyxl`: `pip install -r scripts/requirements.txt`) et Excel-regnskab
 pr. år og en oversigt over alle år. Findes der en `Budget <år>.xlsx` med fanen *Månedsbudget*, kommer budgettet med
 ved siden af årets tal. Den fil læses kun.
 

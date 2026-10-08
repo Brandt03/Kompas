@@ -7,7 +7,6 @@ overhovedet logger ind. Kør: python smoke_test.py
 import json
 import os
 import random
-import sqlite3
 import tempfile
 from datetime import date, datetime, timedelta
 from pathlib import Path

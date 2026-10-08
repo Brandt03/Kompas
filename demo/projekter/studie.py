@@ -898,7 +898,6 @@ class Studie:
 
     # ── repetition (Dagens kort) ──
     def repetition(self, G: list, B: dict, D: list, E: list) -> tuple:
-        nu = self.nu
         dag_slut = datetime.combine(self.idag, datetime.max.time())
         laest = {fag: set(int(u) for u in ugr) for fag, ugr in self.laest().items()}
         alle, svar = [], {}

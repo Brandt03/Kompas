@@ -173,7 +173,7 @@ def build(year, budget=None):
         for col in ("R", "S"):
             cell(ws, f"{col}{r}", f"={T(col,'Indtægter')}-{T(col,'Faste udgifter')}-{T(col,'Variable udgifter')}-{T(col,'Indflytning')}-{T(col,'Opsparing og investering')}", b=True, fl=TOTAL, nf=NF, align="right")
         cell(ws, f"T{r}", f"=S{r}-R{r}" if BM else None, b=True, fl=TOTAL, nf=NF, align="right")
-    r += 1; acc = r
+    r += 1
     last_entry = max([m for m in range(1, 13) if any(k[0] == year and k[1] == m for k in data)] + active[-1:])
     cell(ws, f"B{r}", "Resultat akkumuleret over året", b=True, align="left")
     for i, col in enumerate(MC):
@@ -264,7 +264,6 @@ def build(year, budget=None):
     for col, w in {"R": 3, "S": 18, "T": 11, "U": 11, "V": 11, "W": 11, "X": 3, "Y": 30, "Z": 11}.items():
         g.column_dimensions[col].width = w
 
-    PAL = ["1F3864", "8EAADB", "ED7D31", "70AD47", "FFC000", "A5A5A5"]
     def style(ch, t, w=13.5, h=8):
         ch.title = t; ch.width = w; ch.height = h; ch.style = 10
         return ch

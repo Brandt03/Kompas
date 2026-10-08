@@ -228,11 +228,17 @@
     const tiles = $("tiles"); tiles.replaceChildren();
     const tile = (label, value, sub) => tiles.append(el("div", { class: "card tile" },
       el("div", { class: "label", text: label }), el("div", { class: "value", title: value, text: value }), el("div", { class: "sub", text: sub })));
-    const rec = recommend(S);
+    // En måldato, der er passeret, giver ingen meningsfuld horisont; så beder fliserne om en ny dato i stedet for at
+    // regne på én måned (som gav "over 20.000 kr./md."). Den indeværende måned regnes som før.
+    const passeret = monthDiff(TODAY_KEY, S.goalDate) < 0;
+    const rec = passeret ? null : recommend(S);
     const monthly = S.income - S.fixed - S.variable;
     tile(`Formue om ${S.years} år`, kr.format(main.final[1]), `typisk forløb · 80 % ligger mellem ${kr.format(main.final[0])} og ${kr.format(main.final[2])}`);
-    tile(`${S.goalName} (${kr.format(S.goal)})`, reachText(main.reachMedian), `nås typisk da · ${pct.format(main.goalProb)} chance for at have den i ${monthName(S.goalDate)}`);
-    tile("Opsparing der skal til", rec == null ? "over 20.000 kr./md." : rec === 0 ? "Du er på sporet" : `+${kr.format(rec)} pr. md.`,
+    tile(`${S.goalName} (${kr.format(S.goal)})`, reachText(main.reachMedian), passeret
+      ? `nås typisk da · måldatoen ${monthName(S.goalDate)} er passeret`
+      : `nås typisk da · ${pct.format(main.goalProb)} chance for at have den i ${monthName(S.goalDate)}`);
+    if (passeret) tile("Opsparing der skal til", "Vælg en ny dato", `måldatoen ${monthName(S.goalDate)} er passeret; vælg under "Nås senest", hvornår ${kr.format(S.goal)} senest skal stå der`);
+    else tile("Opsparing der skal til", rec == null ? "over 20.000 kr./md." : rec === 0 ? "Du er på sporet" : `+${kr.format(rec)} pr. md.`,
       rec === 0 ? `mindst ${pct.format(TARGET_PROB)} chance for at have ${kr.format(S.goal)} stående i ${monthName(S.goalDate)} med dit budget (${kr.format(monthly)}/md. tilovers)`
         : `oven i budgettets ${kr.format(monthly)}/md. for ${pct.format(TARGET_PROB)} chance for at have ${kr.format(S.goal)} stående i ${monthName(S.goalDate)}`);
     tile("Risiko for at gå i minus", pct.format(main.neg), "på et tidspunkt i perioden, altså at pengene ikke rækker");
