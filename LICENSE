@@ -19,15 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-
-Third-party files in this repository keep their own licences:
-
-- public/assets/Geist.woff2: the Geist typeface, SIL Open Font License 1.1
-  (see public/assets/Geist-OFL.txt).
-- public/assets/icons.js: icon paths from Lucide (https://lucide.dev), ISC License.
-- public/assets/tokens.css: design tokens copied from Sure
-  (https://github.com/we-promise/sure), AGPL-3.0.
-- okonomi/custom/: Rails initializers that run inside Sure and adjust it at
-  startup. They are licensed AGPL-3.0, like Sure itself.

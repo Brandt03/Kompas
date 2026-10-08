@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only (runs inside Sure, so it is licensed like Sure)
+#
 # Small UI fixes on top of stock Sure, mounted read-only by compose.override.yml (like dashboard_tabs.rb).
 # Every patch checks its anchor first and logs + skips if upstream has changed, so `docker compose pull`
 # can never break the app – at worst a tweak silently turns itself off.

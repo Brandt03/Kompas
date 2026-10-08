@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: AGPL-3.0-only (copied from Sure, https://github.com/we-promise/sure) */
 /* Sure's design tokens (app/assets/tailwind/sure-design-system/_generated.css), copied as plain CSS so the
    portal and its own pages look like Sure without depending on Sure's build. Dark mode follows the system,
    or data-theme on <html>. */

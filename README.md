@@ -220,4 +220,5 @@ they may read, what they may write, and that they never act on my behalf).
 
 My code is MIT licensed (see [LICENSE](LICENSE)). The Geist font (OFL), Lucide icons (ISC) and Sure's design
 tokens (AGPL-3.0) keep their own licences, and the small add-ons in `okonomi/custom/` that run inside Sure are
-AGPL-3.0 like Sure.
+AGPL-3.0 like Sure. [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) lists the files and where their licence
+texts are.
