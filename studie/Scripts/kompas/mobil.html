@@ -230,7 +230,7 @@ function renderKort(f) {
     : `<p class="hint">Ekstra genkaldsspørgsmål ud over dagens kort: først nye fra uger, du har markeret som læst, så dem du havde forkert eller halvt.</p>`;
   if (!k) {
     root().innerHTML = top + `<div class="card empty">${f === "idag"
-      ? `Du er igennem dagens kort.${P.statistik?.naeste ? ` Næste kort kommer ${dayMonth(new Date(P.statistik.naeste))}.` : ""}<br><br>Vil du mere, så tag ${P.ekstra.length ? "ekstra spørgsmål under Genkald, " : ""}begreber eller drills.`
+      ? `Du er igennem dagens kort.${P.statistik?.naeste ? ` Næste kort kommer ${dayMonth(new Date(P.statistik.naeste)).replace(/\.$/, "")}.` : ""}<br><br>Vil du mere, så tag ${P.ekstra.length ? "ekstra spørgsmål under Genkald, " : ""}begreber eller drills.`
       : P.ekstra.length ? "Du har taget alle de ekstra spørgsmål i pakken. Hent en ny pakke, når Mac'en er vågen."
       : "Pakken har ingen ekstra spørgsmål. Nye genkaldsspørgsmål kommer med, når du har markeret deres uge som læst under Fag → Styr på, på Mac'en."}</div>`;
     return;

@@ -673,9 +673,10 @@ def _vaerdi(k: str, v) -> str:
 def _review_tekst(snap: dict, uger_med_selvstudie: int) -> dict:
     r = snap["rapport"]
     af = r["afvigelser"]
-    # Vurderede afvigelser (godt/skidt) før de blot usædvanlige, og i fast rækkefølge efter emne
+    # Vurderede afvigelser (godt/skidt) før de blot usædvanlige, og i fast rækkefølge efter emne. Ikke efter z:
+    # robust_z er None, når de fleste baseline-uger var ens
     tydelige = sorted(((k, a) for k, a in af.items() if a["tydelig"] and k in NAVN),
-                      key=lambda x: (x[1]["vurdering"] is None, list(NAVN).index(x[0]), -abs(x[1]["robust_z"])))
+                      key=lambda x: (x[1]["vurdering"] is None, list(NAVN).index(x[0])))
     tydelige = [(k, a) for k, a in tydelige if not (k in DUBLET and DUBLET[k] in dict(tydelige))]
     dele = [FRASE.get((k, a["retning"]), f"{'mere' if a['retning'] == 'over' else 'mindre'} {NAVN[k][0]}")
             for k, a in tydelige]

@@ -24,10 +24,20 @@ class Afvigelser(unittest.TestCase):
         self.assertFalse(a["tydelig"])
         self.assertEqual(a["robust_z"], 0.0)
 
-    def test_reserve_naar_de_fleste_uger_er_ens(self):
+    def test_uden_for_ugerne_naar_de_fleste_er_ens(self):
         a = rapport._afvigelse("cafe_bar_kr", 900, [0] * 7 + [200])
         self.assertTrue(a["tydelig"])
-        self.assertGreater(a["robust_z"], rapport.Z_GRAENSE)
+        self.assertIsNone(a["robust_z"])
+
+    def test_inden_for_ugerne_er_ikke_tydelig(self):
+        # Den gamle reserveskala gav 4 pas z = 3,2 efter uger med 2–4 pas
+        hist = [3, 3, 3, 3, 3, 4, 2, 3]
+        self.assertFalse(rapport._afvigelse("traening_pas", 4, hist)["tydelig"])
+        self.assertTrue(rapport._afvigelse("traening_pas", 5, hist)["tydelig"])
+
+    def test_lille_forskel_fra_ens_uger_er_ikke_tydelig(self):
+        self.assertFalse(rapport._afvigelse("cafe_bar_kr", 899, [900] * 8)["tydelig"])
+        self.assertFalse(rapport._afvigelse("cafe_bar_kr", 990, [900] * 7 + [950])["tydelig"])
 
     def test_almindelig_kolonne_som_foer(self):
         hist = [7.0, 7.3, 7.1, 7.4, 7.2, 6.9, 7.5, 7.2]

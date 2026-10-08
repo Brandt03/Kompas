@@ -146,7 +146,7 @@ function renderIdag() {
           : `<button type="button" class="btn m-sad" data-rmark="sad">✓ Sad</button><button type="button" class="btn m-halvt" data-rmark="halvt">~ Halvt</button><button type="button" class="btn m-blankt" data-rmark="blankt">✗ Blankt</button>`}
           <span class="spacer"></span><span class="meta">du sagde: ${esc(SIK.find(([s]) => s === rSik)?.[1] || "")}</span></div>`
       : `${sikKnapper(false)}<div class="row"><span class="spacer"></span><button type="button" class="btn quiet" id="r-spring">Tag den senere</button></div>`}
-    </section>` : `<div class="card empty">Du er igennem dagens kort.${st.naeste ? ` Næste kort kommer ${dayMonth(new Date(st.naeste))}.` : ""}<br>Vil du mere, så tag nye spørgsmål under Genkald eller skriv begreber under Begreber.</div>`}
+    </section>` : `<div class="card empty">Du er igennem dagens kort.${st.naeste ? ` Næste kort kommer ${dayMonth(new Date(st.naeste)).replace(/\.$/, "")}.` : ""}<br>Vil du mere, så tag nye spørgsmål under Genkald eller skriv begreber under Begreber.</div>`}
     ${st.nye_venter_paa_laesning ? `<a class="card panel" href="fag.html" style="display:flex;gap:12px;align-items:center;text-decoration:none;color:inherit">
       <span class="mk" style="min-width:auto;padding:0 8px">${st.nye_venter_paa_laesning}</span>
       <span style="flex:1">nye genkaldsspørgsmål venter, til du markerer deres uge som læst under <b>Fag → Styr på</b>.</span>${icon("arrow-right", 14)}</a>` : ""}

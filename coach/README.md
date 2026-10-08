@@ -174,8 +174,23 @@ lokalt som JSON ved siden af de udtrukne felter: bryder en sync, mister du nye
 data, ikke din historik. Vær også opmærksom på at det ligger i en gråzone i
 forhold til Garmins vilkår.
 
-ACWR er et groft pejlemærke. Litteraturen om det som skadesforudsigelse er
-omdiskuteret, og tallet bruges her til at se retning, ikke som facit.
+Tallene har kendte begrænsninger, så brug dem til at se retning, ikke som
+facit:
+
+- **ACWR** er et groft pejlemærke, og litteraturen om det som
+  skadesforudsigelse er omdiskuteret. Her er det de seneste 7 dages belastning
+  delt med snittet pr. uge over 28 dage, og de 7 dage indgår selv i de 28. Det
+  trækker tallet mod 1, så et stort spring ser mindre ud, end det er.
+- **HRV og hvilepuls** er Garmins egne natlige tal fra en lukket algoritme.
+  Afvigelsen er snittet af de seneste 7 dage målt i standardafvigelser for
+  enkelte dage i de 53 dage før, uden logaritme. Et 7-dages snit svinger mindre
+  end enkelte dage, så afvigelsen er forsigtig, og én usædvanlig nat i
+  grundniveauet gør målestokken bredere.
+- **Estimeret 1RM** er Epleys formel, vægt × (1 + gentagelser / 30), på det
+  bedste sæt, uden RPE-justering og kun op til 12 gentagelser. Et sæt, der ikke
+  er taget til grænsen, giver et for lavt tal, og formlen passer forskelligt
+  til forskellige øvelser og personer. Den er god til at følge den samme øvelse
+  over tid, ikke til at kende din max.
 
 Dine helbredsdata indgår i samtalen og forlader dermed maskinen. Vil du undgå
 det, kan serveren tales med af en lokal model gennem en MCP-klient der peger på

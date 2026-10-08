@@ -21,7 +21,7 @@
   #compare td:first-child { font-weight: 550; min-width: 200px; }
   #compare td.num { white-space: nowrap; }
   #fan .hover-line { stroke: var(--axis); stroke-width: 1; }
-  @media (max-width: 1000px) { .layout { grid-template-columns: 1fr; } .side { position: static; } }
+  @media (max-width: 1000px) { .layout { grid-template-columns: minmax(0, 1fr); } .side { position: static; } }
   @media (max-width: 520px) { .tiles { grid-template-columns: 1fr; } }
 </style>
 </head>
@@ -88,7 +88,7 @@
   "use strict";
   const { kr, num, pct, $, el, svgEl, addMonths, monthDiff, monthName, TODAY_KEY, loadData, metaLine, store, showTip, hideTip, yAxis } = window.Dash;
 
-  const N_MAIN = 1000, N_SIDE = 400;
+  const N_MAIN = 1000;
   const TARGET_PROB = 0.8;           // "anbefalet opsparing" = 80 % chance for the goal by its date
   const HISTORY_MONTHS = 36;         // variable spending history used for the month-to-month swings
 
@@ -154,7 +154,6 @@
   }
 
   function simulate(p, N, T, { keepPaths = true } = {}) {
-    const rng = mulberry32(123456789);
     const plan = schedule(p, T).rows;
     const inflM = Math.pow(1 + p.infl / 100, 1 / 12), cashM = Math.pow(1 + p.cashRate / 100, 1 / 12) - 1;
     const sig = p.vol / 100 / Math.sqrt(12), mu = Math.log(1 + p.ret / 100) / 12 - sig * sig / 2;
@@ -165,6 +164,9 @@
     const finals = new Float64Array(N);
     let neg = 0, goalHit = 0; const reach = [];
     for (let n = 0; n < N; n++) {
+      // Each run has its own random numbers, the same in every scenario and for every horizon: a comparison or the
+      // search for the extra saving then only shows the difference in the plan, not a different draw of the future
+      const rng = mulberry32(123456789 + n);
       let W = p.start, f = 1, wentNeg = W < 0, reached = W >= p.goal ? 0 : Infinity;
       if (paths) paths[0][n] = W;
       for (let t = 1; t <= T; t++) {
@@ -176,8 +178,9 @@
         const invested = W > p.goal * f ? (W - p.goal * f) * p.investShare / 100 : 0;
         const cash = W - invested;
         if (cash > 0) W += cash * cashM;
+        // the market moves every month, also when nothing is invested, so the runs stay in step across scenarios
+        const u1 = rng() || 1e-12, u2 = rng();
         if (invested > 0) {
-          const u1 = rng() || 1e-12, u2 = rng();
           const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
           W += invested * (Math.exp(mu + sig * z) - 1);
         }
@@ -202,7 +205,7 @@
   // smallest extra saving per month that gives TARGET_PROB chance of the goal by its date
   function recommend(p) {
     const T = Math.max(1, monthDiff(TODAY_KEY, p.goalDate));
-    const prob = (extra) => simulate({ ...p, extra }, N_SIDE, T, { keepPaths: false }).goalProb;
+    const prob = (extra) => simulate({ ...p, extra }, N_MAIN, T, { keepPaths: false }).goalProb;
     if (prob(0) >= TARGET_PROB) return 0;
     let lo = 0, hi = 20000;
     if (prob(hi) < TARGET_PROB) return null;
@@ -218,7 +221,7 @@
     const T = T_of(S);
     const main = simulate(S, N_MAIN, T);
     const changed = S.sabbat.on || S.oneoff.on;
-    const baseline = changed ? simulate({ ...S, sabbat: { ...S.sabbat, on: false }, oneoff: { ...S.oneoff, on: false } }, N_SIDE, T) : null;
+    const baseline = changed ? simulate({ ...S, sabbat: { ...S.sabbat, on: false }, oneoff: { ...S.oneoff, on: false } }, N_MAIN, T) : null;
     renderTiles(main);
     renderFan(main, baseline);
     renderCompare(T, main);
@@ -229,15 +232,16 @@
     const tile = (label, value, sub) => tiles.append(el("div", { class: "card tile" },
       el("div", { class: "label", text: label }), el("div", { class: "value", title: value, text: value }), el("div", { class: "sub", text: sub })));
     // En måldato, der er passeret, giver ingen meningsfuld horisont; så beder fliserne om en ny dato i stedet for at
-    // regne på én måned (som gav "over 20.000 kr./md."). Den indeværende måned regnes som før.
-    const passeret = monthDiff(TODAY_KEY, S.goalDate) < 0;
-    const rec = passeret ? null : recommend(S);
+    // regne på én måned (som gav "over 20.000 kr./md."). Er måldatoen denne måned, er der ingen måneder at spare op
+    // i, så anbefalingen beder også om en ny dato; chancen for målet regnes som før.
+    const passeret = monthDiff(TODAY_KEY, S.goalDate) < 0, ingenTid = monthDiff(TODAY_KEY, S.goalDate) <= 0;
+    const rec = ingenTid ? null : recommend(S);
     const monthly = S.income - S.fixed - S.variable;
     tile(`Formue om ${S.years} år`, kr.format(main.final[1]), `typisk forløb · 80 % ligger mellem ${kr.format(main.final[0])} og ${kr.format(main.final[2])}`);
     tile(`${S.goalName} (${kr.format(S.goal)})`, reachText(main.reachMedian), passeret
       ? `nås typisk da · måldatoen ${monthName(S.goalDate)} er passeret`
       : `nås typisk da · ${pct.format(main.goalProb)} chance for at have den i ${monthName(S.goalDate)}`);
-    if (passeret) tile("Opsparing der skal til", "Vælg en ny dato", `måldatoen ${monthName(S.goalDate)} er passeret; vælg under "Nås senest", hvornår ${kr.format(S.goal)} senest skal stå der`);
+    if (ingenTid) tile("Opsparing der skal til", "Vælg en ny dato", `måldatoen ${monthName(S.goalDate)} er ${passeret ? "passeret" : "denne måned, så der er ingen måneder at spare op i"}; vælg under "Nås senest", hvornår ${kr.format(S.goal)} senest skal stå der`);
     else tile("Opsparing der skal til", rec == null ? "over 20.000 kr./md." : rec === 0 ? "Du er på sporet" : `+${kr.format(rec)} pr. md.`,
       rec === 0 ? `mindst ${pct.format(TARGET_PROB)} chance for at have ${kr.format(S.goal)} stående i ${monthName(S.goalDate)} med dit budget (${kr.format(monthly)}/md. tilovers)`
         : `oven i budgettets ${kr.format(monthly)}/md. for ${pct.format(TARGET_PROB)} chance for at have ${kr.format(S.goal)} stående i ${monthName(S.goalDate)}`);
@@ -305,7 +309,7 @@
     svg.append(hit);
 
     $("fanTitle").textContent = `Din formue de næste ${S.years} år`;
-    $("fanHint").textContent = `${num.format(N_MAIN)} simulerede forløb i dagens kroner${S.infl ? ` (med ${S.infl} % inflation)` : ""}. Linjen er det typiske forløb (medianen), det mørke bånd er de midterste 50 %, og det lyse bånd er de midterste 80 %.`;
+    $("fanHint").textContent = `${num.format(N_MAIN)} simulerede forløb i dagens kroner${S.infl ? ` (med ${String(S.infl).replace(".", ",")} % inflation)` : ""}. Linjen er det typiske forløb (medianen), det mørke bånd er de midterste 50 %, og det lyse bånd er de midterste 80 %.`;
     const leg = [
       el("span", {}, el("i", { class: "ln", style: "background:var(--s1)" }), "Typisk forløb"),
       el("span", {}, el("i", { class: "band", style: "background:var(--s1);opacity:.3" }), "80 % af forløbene"),
@@ -326,7 +330,7 @@
     $("cmpHead").textContent = `Formue om ${S.years} år`;
     const body = $("compare").querySelector("tbody"); body.replaceChildren();
     for (const [name, p] of variants) {
-      const r = p === S ? main : simulate(p, N_SIDE, T, { keepPaths: false });
+      const r = p === S ? main : simulate(p, N_MAIN, T, { keepPaths: false });
       body.append(el("tr", {},
         el("td", { text: name }),
         el("td", { class: "num", text: kr.format(r.final[1]) }),

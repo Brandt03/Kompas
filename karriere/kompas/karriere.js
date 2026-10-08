@@ -39,6 +39,10 @@ function fristTekstBadge(j, f) {
   return `<span class="badge ${cls}">${icon("clock", 12)}${t}</span>`;
 }
 const udloebet = j => { const f = frist(j); return f.dage != null && f.dage < 0; };
+// Linket skriver jobagenten ud fra opslag udefra, så kun https:// bliver et link (aldrig javascript: o.l.)
+function jobLink(j, klasse, indhold) {
+  return /^https:\/\//i.test(j.link || "") ? `<a class="${klasse}" href="${esc(j.link)}" target="_blank" rel="noopener">${indhold}</a>` : "";
+}
 
 // ── skuffe til opslaget ──
 function skuffe(titel, underTitel, html, knapper = "") {
@@ -66,7 +70,7 @@ async function visOpslag(j) {
   const t = r.ok ? await r.text() : "";
   skuffe(j.stilling, `${j.virksomhed} · teksten som jobagenten hentede den`,
     t.trim() ? `<div class="opslag">${esc(t.trim())}</div>` : `<p class="meta">Teksten er ikke gemt. Se opslaget på Jobindex.</p>`,
-    `<a class="btn ghost" href="${esc(j.link)}" target="_blank" rel="noopener">${icon("external-link", 14)}Åbn på Jobindex</a>`);
+    jobLink(j, "btn ghost", `${icon("external-link", 14)}Åbn på Jobindex`));
 }
 
 // ── besked nederst med fortryd ──

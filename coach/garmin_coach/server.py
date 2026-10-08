@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 import sqlite3
 import threading
+import time
 from datetime import date, datetime, timedelta
 
 from mcp.server.mcpserver import MCPServer
@@ -38,6 +39,8 @@ eller symptomer hører hjemme hos en fagperson.
 """.strip()
 
 OPSLAG_MAX_ROWS = 500
+# En forespørgsel, der løber løbsk (fx en krydsjoin uden betingelse), stoppes efter så mange sekunder
+OPSLAG_SEKUNDER = 10
 
 mcp = MCPServer("garmin-coach", instructions=INSTRUCTIONS, version="0.1.0")
 
@@ -257,8 +260,16 @@ def opslag(sql: str) -> dict:
     if not cleaned.lower().startswith(("select", "with")):
         raise ToolError("Kun SELECT- og WITH-forespørgsler er tilladt")
     conn = connect_readonly()
+    # SQLite spørger handleren for hver 10.000 trin og afbryder forespørgslen, når den svarer sandt
+    slut = time.monotonic() + OPSLAG_SEKUNDER
+    conn.set_progress_handler(lambda: time.monotonic() > slut, 10_000)
     try:
         rows = conn.execute(cleaned).fetchmany(OPSLAG_MAX_ROWS + 1)
+    except sqlite3.OperationalError as exc:
+        if time.monotonic() > slut:
+            raise ToolError(f"Forespørgslen tog over {OPSLAG_SEKUNDER} sekunder og blev stoppet. "
+                            "Afgræns den med WHERE, eller aggregér i SQL.") from exc
+        raise ToolError(f"SQLite: {exc}") from exc
     except sqlite3.Error as exc:
         # ToolError når frem til modellen med teksten, så den kan rette sin
         # SQL. Andre undtagelser bliver til en generisk fejl uden forklaring.

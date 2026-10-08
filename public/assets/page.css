@@ -65,7 +65,7 @@ svg.chart .line { fill: none; stroke: var(--mark); stroke-width: 2; stroke-linej
 svg.chart .pt { fill: var(--mark); stroke: var(--container); stroke-width: 2; }
 svg.chart .band { fill: var(--band); }
 svg.chart .ref { stroke: var(--text-secondary); stroke-dasharray: 4 4; }
-svg.chart .ref-label { fill: var(--text-secondary); }
+svg.chart .ref-label { fill: var(--text-secondary); paint-order: stroke; stroke: var(--container); stroke-width: 4px; stroke-linejoin: round; }
 svg.chart .cross { stroke: var(--text-subdued); }
 svg.chart .hit { fill: transparent; }
 .chart-tip {

@@ -72,15 +72,17 @@ Stier, datoer og titelmønstre kan overstyres med miljøvariabler (se `overblik/
 `liv rapport` tager sidste hele uge og regner to ting ud:
 
 - **Afvigelser**: hver kolonne sammenlignes med medianen af de 8 foregående
-  uger (robust z-score). Kun |z| ≥ 1,5 regnes som tydelig.
+  uger (robust z-score). Kun |z| ≥ 1,5 regnes som tydelig. Er de fleste uger
+  ens (fx 0 kr. på café), er ugen kun tydelig, når den ligger uden for alle 8
+  uger og mindst en fast forskel fra medianen (fx 100 kr.).
 - **Sammenhænge**: 11 faste hypoteser (fx søvn ↔ take-away) testes med
-  Spearman på ugens afvigelse fra medianen af de 4 nærmeste uger på hver side,
-  så en fælles udvikling over tid (sommer mod semester) ikke tæller som en
-  sammenhæng. p-værdien findes ved blok-permutation (blokke af 3 uger), fordi
-  uger, der ligger tæt, ligner hinanden. Kun uger med mindst 5 dages
-  Garmin-data, og mindst 18 uger. "stærk" skal klare p < 0,05/11, "antydning"
-  p < 0,05, og begge |rho| ≥ 0,3. Studiehypoteserne venter på nok ugers
-  selvstudielogning.
+  Spearman på ugens afvigelse fra medianen af op til 4 nærmeste uger, lige
+  mange på hver side, så en fælles udvikling over tid (sommer mod semester) ikke
+  tæller som en sammenhæng. De to første og sidste uger er ikke med. p-værdien
+  findes ved blok-permutation (blokke af 3 uger), fordi uger, der ligger tæt,
+  ligner hinanden. Kun uger med mindst 5 dages Garmin-data, og mindst 18 uger.
+  "stærk" skal klare p < 0,05/11, "antydning" p < 0,05, og begge |rho| ≥ 0,3.
+  Studiehypoteserne venter på nok ugers selvstudielogning.
 
 Faste hypoteser frem for alle par mod alle, fordi 153 par ville give ca. 8
 falske fund ved rent tilfælde.

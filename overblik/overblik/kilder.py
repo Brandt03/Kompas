@@ -28,9 +28,11 @@ def garmin(fra: date) -> tuple[dict, str | None]:
     conn.row_factory = sqlite3.Row
     data_til = conn.execute("SELECT max(date) FROM daily").fetchone()[0]
     # Belastningen regnes ét sted, i garmin-coach, og læses her pr. dag. Garmins egen training load bruges ikke:
-    # den mangler på styrkepas og ligger på en anden skala end coachens TRIMP. Mangler filen, er belastningen ukendt.
+    # den mangler på styrkepas og ligger på en anden skala end coachens TRIMP. Mangler filen, eller kunne coachen ikke
+    # regne den ({"fejl": …}), er belastningen ukendt (None), ikke 0, så en fejl ikke ligner en hvileuge.
     try:
-        belastning_pr_dag = json.loads(config.BELASTNING_JSON.read_text()).get("dage") or {}
+        b = json.loads(config.BELASTNING_JSON.read_text())
+        belastning_pr_dag = None if "fejl" in b else b.get("dage") or {}
     except (OSError, ValueError):
         belastning_pr_dag = None
 

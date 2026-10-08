@@ -89,9 +89,10 @@ Inde i rammen skjules Sures egen ikonmenu, fordi Kompas' menu erstatter den. Det
 `public/assets/embed-sure.css`, som rammen lægger ind i Sures sider. Sures image er urørt. Hvis Sure ændrer sin
 markup, dukker ikonmenuen bare op igen.
 
-Kun tre ting kan skrive gennem siderne, og kun det, brugeren selv taster eller klikker: Karriere (status,
-profil, tærskel), Genkald (svar, markeringer, definitioner, drill-gæt) og færdig-markering af frister. Resten er
-læsning, og siderne regner ikke selv videre på tal; de viser det, projekterne har beregnet.
+Siderne skriver kun det, brugeren selv taster eller klikker, og kun gennem tre servere: Karriere-serveren (status,
+profil, tærskel), Studie-serveren (Genkald-svar og -markeringer, definitioner, drill-gæt, læste uger,
+prøveeksamener, telefonens sync og færdig-markering af frister) og Sure (input på Scenarier og SU-vagt, bag Sures
+login). Resten er læsning, og siderne regner ikke selv videre på tal; de viser det, projekterne har beregnet.
 
 ## Telefonen
 

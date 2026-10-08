@@ -65,7 +65,8 @@ const plusDage = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); 
 
 // ── markdown → html (det, planerne bruger: overskrifter, lister, tabeller, fed, kode) ──
 
-const escHtml = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+// " escapes også: link-reglen og alt-teksterne sætter teksten ind i en attribut
+const escHtml = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 function inline(s) {
   const koder = [];
   s = escHtml(s).replace(/`([^`]+)`/g, (_, c) => `\u0000${koder.push(c) - 1}\u0000`);

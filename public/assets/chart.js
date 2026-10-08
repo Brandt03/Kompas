@@ -80,14 +80,17 @@
   window.lineChart = function (el, opts) {
     const pts = opts.points, band = opts.band;
     const f = frame(el, pts, opts, [...(band ? [band.lo, band.hi] : []), ...(opts.ref ? [opts.ref.y] : [])]);
+    // labels go after the line so they sit on top of it (with a halo in the card colour, see page.css)
+    let labels = "";
     if (band) {
       const y1 = f.y(band.hi), y2 = f.y(band.lo);
       f.g += `<rect class="band" x="${f.L}" y="${y1}" width="${f.W - f.L - f.R}" height="${Math.max(1, y2 - y1)}" rx="4"/>`;
-      if (band.label) f.g += `<text x="${f.W - f.R - 6}" y="${y1 + 13}" text-anchor="end" class="ref-label">${band.label}</text>`;
+      if (band.label) labels += `<text x="${f.W - f.R - 6}" y="${y1 + 13}" text-anchor="end" class="ref-label">${band.label}</text>`;
     }
     if (opts.ref) {
       const yy = f.y(opts.ref.y);
-      f.g += `<line x1="${f.L}" x2="${f.W - f.R}" y1="${yy}" y2="${yy}" class="ref"/><text x="${f.W - f.R}" y="${yy - 5}" text-anchor="end" class="ref-label">${opts.ref.label}</text>`;
+      f.g += `<line x1="${f.L}" x2="${f.W - f.R}" y1="${yy}" y2="${yy}" class="ref"/>`;
+      labels += `<text x="${f.W - f.R}" y="${yy - 5}" text-anchor="end" class="ref-label">${opts.ref.label}</text>`;
     }
     let d = "", pen = false;
     pts.forEach((p, i) => {
@@ -97,6 +100,7 @@
     f.g += `<path class="line" d="${d}"/>`;
     const last = pts.map((p, i) => [p, i]).filter(([p]) => p.y != null).pop();
     if (last) f.g += `<circle class="pt" cx="${f.x(last[1])}" cy="${f.y(last[0].y)}" r="4"/>`;
+    f.g += labels;
     hover(f, pts, el);
   };
 })();

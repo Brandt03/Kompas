@@ -261,7 +261,8 @@
 
     idx.forEach((p) => {
       svg.append(svgEl("circle", { cx: x(p.i), cy: y(p.ci), r: 4, fill: "var(--s1)", "fill-opacity": p.future ? 0.4 : 1, stroke: "var(--card)", "stroke-width": 2 }));
-      const t = svgEl("text", { x: x(p.i), y: H - 8, "text-anchor": "middle" }); t.textContent = MONTHS[p.i]; svg.append(t);
+      // on a phone the twelve month names run together; then every other month is enough
+      if (band >= 34 || p.i % 2 === 0) { const t = svgEl("text", { x: x(p.i), y: H - 8, "text-anchor": "middle" }); t.textContent = MONTHS[p.i]; svg.append(t); }
       const hit = svgEl("rect", { x: padL + band * p.i, y: padT, width: band, height: H - padT - padB, fill: "transparent", tabindex: 0,
         "aria-label": `${monthName(p.k, true)}: indkomst ${kr.format(p.ci)}, fribeløb ${kr.format(p.cf)}` });
       const show = (ev) => showTip(ev, `${monthName(p.k, true)}${p.future ? " (forventet)" : ""}`, [

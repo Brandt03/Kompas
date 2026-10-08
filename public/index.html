@@ -268,7 +268,7 @@ function render({ coach, soevn, liv, studie, genkald, karriere }) {
       <div class="panel-head"><h2>Fokus</h2><a class="link" href="/form/uge.html">Ugen i tal ${icon("arrow-right", 14)}</a></div>
       ${review?.tekst?.en_ting ? `<div class="one"><span class="ic-wrap">${icon("sparkles", 16)}</span><div><div class="lbl">Én ting denne uge</div><p>${esc(review.tekst.en_ting)}</p></div></div>` : ""}
       ${fokus.length ? `<ol class="fk">${fokus.map(x => `<li><span>${esc(x)}</span></li>`).join("")}</ol>
-        <p class="fk-kilde">Mål fra 14-dages rapporten ${dayMonth(parseDate(periode.start))}–${dayMonth(parseDate(periode.slut))}. Tallene i parentes er fra den periode.</p>` : ""}
+        <p class="fk-kilde">Mål fra 14-dages rapporten ${dayMonth(parseDate(periode.start))}–${dayMonth(parseDate(periode.slut)).replace(/\.$/, "")}. Tallene i parentes er fra den periode.</p>` : ""}
     </section>` : ""}
 
     <div class="s5 fade" style="animation-delay:.22s;display:grid;gap:16px;align-content:start">

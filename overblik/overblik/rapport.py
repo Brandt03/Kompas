@@ -7,7 +7,7 @@ from __future__ import annotations
 import random
 import sqlite3
 from datetime import date, timedelta
-from statistics import mean, median
+from statistics import median
 
 from .db import KOLONNER
 from .kilder import mandag
@@ -15,9 +15,18 @@ from .kilder import mandag
 BASELINE_UGER = 8
 # |robust z| over denne grænse regnes som en tydelig afvigelse.
 Z_GRAENSE = 1.5
+# Er de fleste baseline-uger ens (MAD = 0), er der ingen skala at regne z ud fra. Så er en uge kun tydelig, når den
+# ligger uden for alle baseline-ugerne og mindst så langt fra medianen. Kolonner, der ikke står her (fx antal pas),
+# skal blot ligge uden for.
+MIN_FORSKEL = {
+    "traening_timer": 0.5, "belastning": 50, "hrv_snit": 3, "hvilepuls_snit": 2, "soevn_timer_snit": 0.25,
+    "soevnscore_snit": 3, "stress_snit": 3, "skridt_snit": 1000,
+    "takeaway_kr": 100, "cafe_bar_kr": 100, "dagligvarer_kr": 100, "variabelt_kr": 200,
+    "undervisning_timer": 1, "selvstudie_timer": 1,
+}
 # Sammenhænge testes på ugens afvigelse fra medianen af de NABO_UGER nærmeste uger på hver side, så en fælles
-# udvikling over tid (sommer mod semester) ikke tæller som en sammenhæng. Naboer på begge sider, ikke kun de
-# foregående: en bagudrettet median halter efter, når begge kolonner følger samme sæson, og så ligner det en
+# udvikling over tid (sommer mod semester) ikke tæller som en sammenhæng. Naboer på begge sider og lige mange, ikke
+# kun de foregående: en bagudrettet median halter efter, når begge kolonner følger samme sæson, og så ligner det en
 # sammenhæng. p-værdien findes ved at blande ugerne i
 # blokke af BLOK_UGER sammenhængende uger, fordi uger, der ligger tæt, ligner hinanden, og en almindelig
 # permutationstest derfor giver for små p-værdier. Med færre end 6 blokke er der for få måder at blande på til,
@@ -90,11 +99,14 @@ def spearman(a: list[float], b: list[float], blok: int = BLOK_UGER) -> tuple[flo
 
 
 def _fra_normalen(alle: list[dict], kol: str) -> list[float | None]:
-    """For hver uge: værdien minus medianen af de NABO_UGER nærmeste uger før og efter (mindst 4 med data).
-    De seneste uger har kun naboer bagud."""
+    """For hver uge: værdien minus medianen af op til NABO_UGER nærmeste uger før og efter (mindst 4 med data).
+    Altid lige mange på hver side: ved kanterne havde ugen før kun naboer på én side, og så halter medianen efter
+    en fælles udvikling, der derfor alligevel kunne ligne en sammenhæng. De to første og sidste uger er derfor ikke
+    med, og den nyeste uge kommer med, når der er gået to uger mere."""
     ud = []
     for i, u in enumerate(alle):
-        naboer = alle[max(0, i - NABO_UGER):i] + alle[i + 1:i + 1 + NABO_UGER]
+        k = min(NABO_UGER, i, len(alle) - 1 - i)
+        naboer = alle[i - k:i] + alle[i + 1:i + 1 + k]
         hist = [w[kol] for w in naboer if w[kol] is not None]
         ud.append(None if u[kol] is None or len(hist) < 4 else u[kol] - median(hist))
     return ud
@@ -104,13 +116,17 @@ def _afvigelse(kol: str, v: float | None, historik: list[float]) -> dict | None:
     if v is None or len(historik) < 4:
         return None
     med = median(historik)
-    # Er over halvdelen af ugerne ens (fx 0 kr. på café i de fleste uger), er MAD 0. Så bruges den gennemsnitlige
-    # afvigelse fra medianen (·1,2533 giver samme skala for normalfordelte data). Er også den 0, er alle ugerne
-    # ens, og enhver anden værdi er tydelig; z er så None i stedet for uendelig. Før blev z sat til 0, så en uge
-    # med 900 kr. efter otte uger med 0 kr. aldrig blev markeret.
-    skala = median(abs(x - med) for x in historik) * 1.4826 or mean(abs(x - med) for x in historik) * 1.2533
-    z = (v - med) / skala if skala > 0 else (0.0 if v == med else None)
-    tydelig = z is None or abs(z) >= Z_GRAENSE
+    skala = median(abs(x - med) for x in historik) * 1.4826
+    if skala > 0:
+        z = (v - med) / skala
+        tydelig = abs(z) >= Z_GRAENSE
+    else:
+        # Over halvdelen af ugerne er ens (fx 0 kr. på café i de fleste uger), så MAD er 0, og z er None. Før blev z
+        # sat til 0, så 900 kr. efter otte uger med 0 kr. aldrig blev markeret. En reserveskala ud fra den
+        # gennemsnitlige afvigelse var derefter for følsom: 4 pas efter uger med 2–4 pas gav z = 3,2, og 899 kr.
+        # efter uger med 900 kr. blev tydelig.
+        z = 0.0 if v == med else None
+        tydelig = not min(historik) <= v <= max(historik) and abs(v - med) >= MIN_FORSKEL.get(kol, 0)
     retning = "over" if v > med else "under" if v < med else "som"
     vurdering = None
     if tydelig:
@@ -175,10 +191,10 @@ def lav(conn: sqlite3.Connection, uge_mandag: date | None = None) -> dict:
         "afvigelser": afvigelser,
         "sammenhaenge": sammenhaenge,
         "metode": (
-            "Afvigelse: robust z = (værdi − median) / (1,4826·MAD) over baseline-ugerne (er MAD 0, bruges "
-            "1,2533 · gennemsnitlig afvigelse; er alle ugerne ens, er enhver anden værdi tydelig); "
-            f"|z| ≥ {Z_GRAENSE} er tydelig. Sammenhæng: Spearman på ugens afvigelse fra medianen af de "
-            f"{NABO_UGER} nærmeste uger på hver side (så en fælles udvikling over tid ikke tæller), med blok-permutation i "
+            f"Afvigelse: robust z = (værdi − median) / (1,4826·MAD) over baseline-ugerne; |z| ≥ {Z_GRAENSE} er "
+            "tydelig. Er MAD 0 (de fleste uger ens), er z None, og ugen er kun tydelig, når den ligger uden for alle "
+            "baseline-ugerne og mindst en fast forskel pr. kolonne fra medianen (fx 100 kr.). Sammenhæng: Spearman på ugens afvigelse fra medianen af de "
+            f"op til {NABO_UGER} nærmeste uger, lige mange på hver side (så en fælles udvikling over tid ikke tæller), med blok-permutation i "
             f"blokke af {BLOK_UGER} uger; mindst {MIN_UGER_KORRELATION} uger og kun uger med ≥5 dages Garmin-data. "
             f"'stærk' = p < {grænse_stærk:.4f} "
             f"(0,05 delt på {len(HYPOTESER)} hypoteser) og |rho| ≥ 0,3; 'antydning' = p < 0,05. "

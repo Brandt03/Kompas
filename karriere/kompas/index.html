@@ -41,11 +41,11 @@ function kort(j) {
   const plus = (j.hvorfor || []).map(x => `<li class="plus">${icon("check", 14)}<span>${inl(x)}</span></li>`).join("");
   const minus = (j.huller || []).map(x => `<li class="minus">${icon("activity", 14)}<span>${inl(x)}</span></li>`).join("");
   const handlinger = AABEN.includes(j.status)
-    ? `<button type="button" class="btn" data-a="vil" data-id="${j.id}">${icon("check", 14)}Vil søge</button>
-       <button type="button" class="btn ghost" data-a="nej" data-id="${j.id}">Ikke interesseret</button>`
-    : j.status === "fravalgt" ? `<button type="button" class="btn ghost" data-a="fortryd" data-id="${j.id}">${icon("undo", 14)}Tilbage til uafklarede</button>`
+    ? `<button type="button" class="btn" data-a="vil" data-id="${esc(j.id)}">${icon("check", 14)}Vil søge</button>
+       <button type="button" class="btn ghost" data-a="nej" data-id="${esc(j.id)}">Ikke interesseret</button>`
+    : j.status === "fravalgt" ? `<button type="button" class="btn ghost" data-a="fortryd" data-id="${esc(j.id)}">${icon("undo", 14)}Tilbage til uafklarede</button>`
     : `<a class="btn ghost" href="ansoegninger.html">${icon("kanban", 14)}Se i Ansøgninger</a>`;
-  return `<article class="card job${ud ? " udloebet" : ""}" id="j-${j.id}">
+  return `<article class="card job${ud ? " udloebet" : ""}" id="j-${esc(j.id)}">
     <div class="score${hi ? " hi" : ""}" title="Matchscore fra jobagenten (tærskel ${D.taerskel})"><b>${j.score ?? "–"}</b><small>match</small></div>
     <div>
       <div class="top"><h3>${esc(j.stilling)}</h3><div class="badges">${fristBadge(j)}${stat}</div></div>
@@ -56,9 +56,9 @@ function kort(j) {
       ${j.kort ? `<p class="kort">${inl(j.kort)}</p>` : ""}
       ${j.note ? `<p class="note">Din note: ${esc(j.note)}</p>` : ""}
       <div class="actions">${handlinger}<span class="spacer"></span>
-        ${j.har_tekst ? `<button type="button" class="btn quiet" data-a="opslag" data-id="${j.id}">Opslaget</button>` : ""}
-        <a class="btn quiet" href="${esc(j.link)}" target="_blank" rel="noopener">${icon("external-link", 14)}Jobindex</a></div>
-      ${aabenFravalg === j.id ? `<form class="fravalg" data-id="${j.id}"><input name="note" placeholder="Hvorfor ikke? Valgfrit, men agenten lærer af det" maxlength="300" autofocus>
+        ${j.har_tekst ? `<button type="button" class="btn quiet" data-a="opslag" data-id="${esc(j.id)}">Opslaget</button>` : ""}
+        ${jobLink(j, "btn quiet", `${icon("external-link", 14)}Jobindex`)}</div>
+      ${aabenFravalg === j.id ? `<form class="fravalg" data-id="${esc(j.id)}"><input name="note" placeholder="Hvorfor ikke? Valgfrit, men agenten lærer af det" maxlength="300" autofocus>
         <button class="btn" type="submit">Fravælg</button><button class="btn quiet" type="button" data-a="annuller">Annullér</button></form>` : ""}
     </div></article>`;
 }

@@ -1,7 +1,7 @@
 """Karriere i Kompas (https://kompas.localhost/karriere/).
 
 En lille lokal server, der viser jobagentens fund og lader dig beslutte, hvad der skal ske med dem.
-Den er det eneste sted, siderne kan skrive, og den kan kun tre ting:
+Den er det eneste sted, Karriere-siderne kan skrive, og den kan kun tre ting:
 
   - sætte status på et opslag i oversigt.csv (samme felt, som README'en siger, du selv opdaterer)
     og logge beslutningen med en eventuel note i data/beslutninger.jsonl

@@ -40,7 +40,9 @@
   .ecards p { margin: 0 0 8px; color: var(--text-secondary); line-height: 1.5; font-size: 13.5px; }
   .ecards p b { color: var(--text-primary); font-weight: 500; }
   @media (max-width: 900px) { .ecards { grid-template-columns: minmax(0, 1fr); } }
-  @media (max-width: 560px) { .ti { grid-template-columns: 28px minmax(0, 1fr) auto; } .ti .when { grid-column: 2 / -1; grid-row: 1; } .ti .what { grid-column: 2; } .ti .ok { grid-row: 1 / span 2; } }
+  /* På telefonen får mærkerne deres egen linje under titlen, så de ikke presser den sammen */
+  @media (max-width: 560px) { .ti { grid-template-columns: 28px minmax(0, 1fr); } .ti .when { grid-column: 2; grid-row: 1; } .ti .what { grid-column: 2; }
+    .ti .tags { grid-column: 2; justify-content: flex-start; } .ti .ok { grid-row: 1 / span 3; } }
 </style>
 </head>
 <body>

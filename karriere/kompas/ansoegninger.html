@@ -41,14 +41,14 @@ let D = null;
 
 function pk(j) {
   const svar = j.status === "tilbud" ? `<span class="badge good">${icon("check", 12)}Tilbud</span>` : j.status === "afslag" ? `<span class="badge">Afslag</span>` : "";
-  const handl = (NAESTE[j.status] || []).map(([s, t, p]) => `<button type="button" class="btn${p ? "" : " ghost"}" data-s="${s}" data-id="${j.id}">${t}</button>`).join("");
-  const bag = j.forrige && j.forrige !== j.status ? `<button type="button" class="btn quiet" data-s="${esc(j.forrige)}" data-id="${j.id}" title="Tilbage til ${esc(STATUS_TEKST[j.forrige] || j.forrige)}">${icon("undo", 13)}</button>` : "";
+  const handl = (NAESTE[j.status] || []).map(([s, t, p]) => `<button type="button" class="btn${p ? "" : " ghost"}" data-s="${s}" data-id="${esc(j.id)}">${t}</button>`).join("");
+  const bag = j.forrige && j.forrige !== j.status ? `<button type="button" class="btn quiet" data-s="${esc(j.forrige)}" data-id="${esc(j.id)}" title="Tilbage til ${esc(STATUS_TEKST[j.forrige] || j.forrige)}">${icon("undo", 13)}</button>` : "";
   return `<article class="card pc">
     <h3>${esc(j.stilling)}</h3><div class="firma">${esc(j.virksomhed)}${j.omraade ? ` · ${esc(j.omraade)}` : ""}</div>
     <div class="row">${j.status === "vil søge" ? fristBadge(j) : ""}${svar}<span class="badge" title="Matchscore">${j.score ?? "–"}</span>
       ${j.besluttet ? `<span class="meta">${dayMonth(new Date(j.besluttet))}</span>` : ""}</div>
     <div class="row">${handl}
-      <a class="btn quiet" href="${esc(j.link)}" target="_blank" rel="noopener">${icon("external-link", 13)}</a>${bag}</div>
+      ${jobLink(j, "btn quiet", icon("external-link", 13))}${bag}</div>
   </article>`;
 }
 
@@ -61,7 +61,7 @@ function render() {
         ${js.map(pk).join("") || `<p class="hint">${esc(k.hint)}</p>`}</section>`; }).join("")}</div>
     ${fravalgt.length ? `<section class="card panel"><details><summary>Fravalgt (${fravalgt.length})</summary>
       <ul class="list" style="margin-top:6px">${fravalgt.map(j => `<li><b>${esc(j.virksomhed)}</b>: ${esc(j.stilling)}${j.note ? ` · <i>${esc(j.note)}</i>` : ""}
-        <button type="button" class="btn quiet" data-s="vurderet" data-id="${j.id}">${icon("undo", 13)}Fortryd</button></li>`).join("")}</ul></details></section>` : ""}
+        <button type="button" class="btn quiet" data-s="vurderet" data-id="${esc(j.id)}">${icon("undo", 13)}Fortryd</button></li>`).join("")}</ul></details></section>` : ""}
     <p class="meta">Status gemmes i oversigt.csv i jobagent-mappen, og hver ændring logges i data/beslutninger.jsonl.</p>`;
 }
 

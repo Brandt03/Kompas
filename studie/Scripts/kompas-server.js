@@ -435,6 +435,16 @@ function skrivVærdi(v) {
   return par.length ? `{ ${par.join(", ")} }` : "{}";
 }
 
+// Én drill-skrivning ad gangen pr. fil. Ellers kan to gæt (fx telefonens sync og Mac'en) læse samme tekst, mens
+// filen køres, og gendannelsen efter et nedbrud kan skrive den gamle tekst oven i det andet gæt.
+const drillKoe = new Map();
+function enAdGangen(f, fn) {
+  const næste = (drillKoe.get(f) || Promise.resolve()).catch(() => {}).then(fn);
+  drillKoe.set(f, næste);
+  næste.catch(() => {}).finally(() => { if (drillKoe.get(f) === næste) drillKoe.delete(f); });
+  return næste;
+}
+
 async function gemDrill({ fil, linje, beskrivelse, gaet }, meta = {}) {
   const f = drillFil(fil);
   gaet = String(gaet || "").trim();
@@ -446,17 +456,22 @@ async function gemDrill({ fil, linje, beskrivelse, gaet }, meta = {}) {
     const hint = /er ikke en værdi/.test(e.message) ? ` Tekst skal stå i anførselstegn: "${gaet}".` : ` Tekst skal stå i anførselstegn, fx "number".`;
     throw new Error(`gættet kan ikke læses som en værdi (${e.message}).${hint}`);
   }
+  return enAdGangen(f, () => skrivDrill(f, fil, linje, beskrivelse, gaet, meta));
+}
+async function skrivDrill(f, fil, linje, beskrivelse, gaet, meta) {
   const tekst = læs(f);
   // Er linjen flyttet (fx efter en rettelse i VS Code), findes tjekket på beskrivelsen, hvis den er entydig
   const alle = tjekKald(tekst), samme = alle.filter(x => !x.fejl && x.desc === beskrivelse);
   let t = alle.find(x => x.linje === +linje);
   if ((!t || t.fejl || t.desc !== beskrivelse) && samme.length === 1) t = samme[0];
   if (!t || t.fejl || t.desc !== beskrivelse) throw new Error("linjen har ændret sig; genindlæs siden");
-  skriv(f, `${tekst.slice(0, t.gaetStart)} ${gaet}${tekst.slice(t.gaetSlut)}`);
+  const med = `${tekst.slice(0, t.gaetStart)} ${gaet}${tekst.slice(t.gaetSlut)}`;
+  skriv(f, med);
   const k = await koerDrill(f);
   drillCache = null;
-  // Går filen ned efter gættet, sættes den tilbage, så drillen altid kan køres
-  if (k.crash) { skriv(f, tekst); return { status: "ukendt", fejl: `Filen kunne ikke køres med det gæt, så det er ikke gemt.\n${k.crash}` }; }
+  // Går filen ned efter gættet, sættes den tilbage, så drillen altid kan køres; men kun hvis ingen andre (fx VS Code)
+  // har ændret den imens
+  if (k.crash) { if (læs(f) === med) skriv(f, tekst); return { status: "ukendt", fejl: `Filen kunne ikke køres med det gæt, så det er ikke gemt.\n${k.crash}` }; }
   logFoersoeg({ ...meta, type: "drill", noegle: `drill/${fil}#${beskrivelse}`, rigtig: !k.fejl[beskrivelse] });
   const forklaring = forklaringer(fil)[forklaringNoegle(beskrivelse)] || null;
   return k.fejl[beskrivelse] ? { status: "forkert", javascript: k.fejl[beskrivelse].js, forklaring } : { status: "rigtig", javascript: gaet, forklaring };

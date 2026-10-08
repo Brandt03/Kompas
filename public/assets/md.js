@@ -1,8 +1,9 @@
 // md(text) → HTML for the projects' own markdown files (plans, drafts, profiles): headings, lists,
-// tables, block quotes, code, bold/italic/code/links. Everything is escaped first, so it is safe for
-// text from files and job ads. Pair with the .md styles in page.css.
+// tables, block quotes, code, bold/italic/code/links. Everything is escaped first, quotes too because
+// links put text in an attribute, so it is safe for text from files and job ads. Pair with the .md
+// styles in page.css.
 (function () {
-  const esc = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const esc = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   function inline(s) {
     const codes = [];
     s = esc(s).replace(/`([^`]+)`/g, (_, c) => `\u0000${codes.push(c) - 1}\u0000`);

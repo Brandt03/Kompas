@@ -404,12 +404,16 @@ def claude(cfg, rutiner):
 
 
 def mcp_guide(cfg):
-    """Konfigurationen til guiden: kommando, argumenter og kun de kendte, ufarlige env-værdier."""
+    """Konfigurationen til guiden: kommandoen, de faste argumenter og kun de kendte, ufarlige env-værdier.
+    Argumenterne fra Claudes konfiguration vises aldrig, for en hemmelighed kan stå dér (fx --token …), og
+    kommandoen kun, når den er stien til en fil."""
     env = {k: v for k, v in (cfg.get("env") or {}).items() if k in MCP_ENV}
     env.setdefault("GC_DB", str(COACH_DB))
     env.setdefault("GARMINTOKENS", str(HJEM / ".garminconnect"))
-    return {"navn": "garmin-coach", "command": cfg.get("command") or str(COACH / ".venv/bin/python"),
-            "args": cfg.get("args") or ["-m", "garmin_coach.server"], "env": env,
+    kommando = cfg.get("command")
+    if not (isinstance(kommando, str) and Path(kommando).is_absolute() and Path(kommando).is_file()):
+        kommando = str(COACH / ".venv/bin/python")
+    return {"navn": "garmin-coach", "command": kommando, "args": ["-m", "garmin_coach.server"], "env": env,
             "desktop": bool(cfg), "code": i_claude_code("garmin-coach")}
 
 

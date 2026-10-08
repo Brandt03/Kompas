@@ -13,7 +13,8 @@ one design system, and a front page that pulls the day together across all of th
 
 ![Kompas, "I dag" (Today), with demo data](docs/skaermbilleder/i-dag.png)
 
-*All screenshots use made-up demo data. Run it yourself with `python3 demo/serve.py` (see below).*
+*All screenshots use made-up demo data and are taken from the demo with `node demo/skaermbilleder.mjs`. Run it
+yourself with `python3 demo/serve.py` (see below).*
 
 ## What it does
 
@@ -77,9 +78,11 @@ flowchart LR
   JSON. The pages only display them, so the same figure never disagrees between two pages.
 - **Local first.** Everything is served by Caddy on `localhost`, kept fresh by macOS LaunchAgents every 30
   minutes, and backed up daily. Nothing is hosted anywhere.
-- **Read-only by default.** Only three things can write through the pages, and only what I type or click:
-  job decisions, flashcard answers, and marking a deadline done. Each server binds to `127.0.0.1`, answers only
-  to Kompas' own host names (against DNS rebinding), and accepts writes only from Kompas' own origin.
+- **Read-only by default.** The pages only write what I type or click, and only through three servers:
+  Karriere's (job decisions, profile, threshold), Studie's (flashcard answers and marks, definitions, drill
+  guesses, weeks marked as read, practice exams, deadlines marked done) and Sure's (the inputs on Scenarier and
+  SU-vagt, behind Sure's login). Karriere's and Studie's servers bind to `127.0.0.1`, answer only to Kompas' own
+  host names (against DNS rebinding), and accept writes only from Kompas' own origin.
 - **Phone without a server.** The study pages work offline on my phone as a small PWA. It downloads today's
   cards while my Mac is reachable over Tailscale, and syncs the answers back later without duplicates.
 - **AI where judgement is needed.** Scheduled Claude routines do the parts that need judgement: the weekly
@@ -99,8 +102,9 @@ python3 demo/serve.py
 ```
 
 Then open http://localhost:8000. The demo generates made-up data around today's date, so the calendar,
-deadlines and countdowns look alive whenever you run it. It never saves anything. Sure itself is not part of
-the demo (its menu items show a short explanation instead).
+deadlines and countdowns look alive whenever you run it. The demo server refuses every write, so nothing is
+saved on disk; only Scenarier and SU-vagt keep what you type in your own browser, as they do when Sure is closed.
+Sure itself is not part of the demo (its menu items show a short explanation instead).
 
 ## The projects
 
@@ -111,7 +115,7 @@ the demo (its menu items show a short explanation instead).
 - `metrics.py` computes everything: acute:chronic workload, monotony, HRV and resting heart rate as deviations
   from a 60-day baseline, Banister TRIMP, strength load calibrated to TRIMP, and estimated 1RM. Gaps stay gaps
   (`null`, not 0), and each figure carries the reason it is or isn't shown.
-- A local **MCP server** with 11 tools lets Claude answer questions about my training from finished aggregates
+- A local **MCP server** with 12 tools lets Claude answer questions about my training from finished aggregates
   instead of doing arithmetic on raw series. Its SQL lookup is read-only, enforced by SQLite itself.
 - `site byg` writes the pages' JSON atomically, plus the daily recommendation shown on the front page.
 
@@ -119,14 +123,16 @@ the demo (its menu items show a short explanation instead).
 
 - One row per ISO week across training, money and study, built from Garmin data, the Sure extract and the
   calendar.
-- Flags unusual weeks with a robust z-score (median/MAD) against the previous 8 weeks, with a fallback when
-  most weeks are identical (say, nothing spent on cafés), so one unusual week still stands out.
+- Flags unusual weeks with a robust z-score (median/MAD) against the previous 8 weeks. When most weeks are
+  identical (say, nothing spent on cafés), a week only stands out if it falls outside all 8 weeks and differs
+  from the median by a fixed amount per column (100 kr., half an hour of training), so 899 kr. after weeks of
+  900 kr. is not news.
 - Instead of mining every pair of columns for correlations, it tests 11 fixed hypotheses, Bonferroni-corrected.
-  Each week is compared with its neighbours (4 weeks on each side) before testing, so a shared drift over the
-  semester doesn't count as a link, and p-values come from a block permutation (blocks of 3 weeks), because
-  neighbouring weeks resemble each other. In simulations this cut false "strong" links from 39 % to under 1 %
-  for drifting series, and from 100 % to 0 % for a shared seasonal pattern, while still finding a real
-  week-to-week link 90 % of the time.
+  Each week is compared with its neighbours (up to 4 weeks, as many on each side) before testing, so a shared
+  drift over the semester doesn't count as a link, and p-values come from a block permutation (blocks of 3
+  weeks), because neighbouring weeks resemble each other. In simulations this cut false "strong" links from 39 %
+  to under 1 % for drifting series, and from 100 % to 0 % for a shared seasonal pattern, while still finding a
+  real week-to-week link 90 % of the time.
 - Training load comes from coach (TRIMP), the same number everywhere.
 
 ### [studie/](studie/): study planner and flashcards (Node.js)
