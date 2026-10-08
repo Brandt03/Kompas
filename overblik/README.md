@@ -48,7 +48,9 @@ begivenheder der er slut tæller, og de skal være synket ind i garmin-coach.
   venner". Refusioner tæller ikke, fordi de hører til en anden uges udgift.
 - **takeaway_kr** m.fl.: netto for kategorien, så MobilePay tilbage fra en
   ven trækkes fra. Kan derfor blive en smule negativ.
-- **belastning**: sum af Garmins træningsbelastning. Styrkepas har intet tal.
+- **belastning**: træningsbelastning (TRIMP), regnet af garmin-coach og læst fra
+  `~/.garmin-coach/site/belastning.json` (`LIV_BELASTNING_JSON`). Styrkepas er med
+  via Hevy. Garmins egen training load bruges ikke: den mangler på styrkepas.
 - Uger er ISO-uger, mandag til søndag.
 
 Stier, datoer og titelmønstre kan overstyres med miljøvariabler (se `overblik/config.py`):
@@ -57,6 +59,7 @@ Stier, datoer og titelmønstre kan overstyres med miljøvariabler (se `overblik/
 |---|---|---|
 | `LIV_DB` | `~/.overblik/liv.db` | egen database med én række pr. uge og de gemte reviews |
 | `LIV_GARMIN_DB` | `~/.garmin-coach/coach.db` | garmin-coach's database (læses kun) |
+| `LIV_BELASTNING_JSON` | `~/.garmin-coach/site/belastning.json` | træningsbelastning pr. dag og pr. pas, skrevet af garmin-coach's `site byg` |
 | `LIV_SURE_JSON` | `~/kompas/okonomi/dashboard/public/data.json` | Sures eksport |
 | `LIV_SITE` | `~/.garmin-coach/site` | hvor `liv eksport` lægger `liv.json` |
 | `LIV_KURSUSKODE` | `KURS` | tekst i titlen, der gør en kalenderbegivenhed til undervisning (kursuskodens præfiks) |
@@ -71,9 +74,13 @@ Stier, datoer og titelmønstre kan overstyres med miljøvariabler (se `overblik/
 - **Afvigelser**: hver kolonne sammenlignes med medianen af de 8 foregående
   uger (robust z-score). Kun |z| ≥ 1,5 regnes som tydelig.
 - **Sammenhænge**: 11 faste hypoteser (fx søvn ↔ take-away) testes med
-  Spearman og permutationstest over alle uger med mindst 5 dages Garmin-data.
-  "stærk" skal klare p < 0,05/11, "antydning" p < 0,05. Studiehypoteserne
-  venter på 12 ugers selvstudielogning.
+  Spearman på ugens afvigelse fra medianen af de 4 nærmeste uger på hver side,
+  så en fælles udvikling over tid (sommer mod semester) ikke tæller som en
+  sammenhæng. p-værdien findes ved blok-permutation (blokke af 3 uger), fordi
+  uger, der ligger tæt, ligner hinanden. Kun uger med mindst 5 dages
+  Garmin-data, og mindst 18 uger. "stærk" skal klare p < 0,05/11, "antydning"
+  p < 0,05, og begge |rho| ≥ 0,3. Studiehypoteserne venter på nok ugers
+  selvstudielogning.
 
 Faste hypoteser frem for alle par mod alle, fordi 153 par ville give ca. 8
 falske fund ved rent tilfælde.

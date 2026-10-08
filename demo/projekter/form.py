@@ -779,11 +779,16 @@ def lav(ud: Path, idag: date) -> None:
             _byg_coach_db(conn, tl, rng)
             _perioder(m, conn, tl)
 
+            # garmin-coach regner træningsbelastningen, og overblik læser den (samme rækkefølge som opdater.sh)
+            mappe.mkdir(parents=True, exist_ok=True)
+            m.site._write(mappe / "belastning.json", json.dumps(m.site.belastning(conn), ensure_ascii=False))
+
             # overblik: ugetabel, tre reviews og liv.json, læst fra den opdigtede database
             sure = tmp / "sure.json"
             _sure_udtraek(sure, tl, rng)
             for mod, felt, v in ((m.liv_config, "GARMIN_DB", coach_db), (m.liv_config, "SURE_JSON", sure),
-                                 (m.liv_config, "SITE_DIR", mappe), (m.liv_config, "FOERSTE_UGE", tl.start.isoformat()),
+                                 (m.liv_config, "SITE_DIR", mappe), (m.liv_config, "BELASTNING_JSON", mappe / "belastning.json"),
+                                 (m.liv_config, "FOERSTE_UGE", tl.start.isoformat()),
                                  (m.liv_config, "SELVSTUDIE_FRA", tl.selvstudie_fra.isoformat()),
                                  (m.liv_config, "KURSUSKODE", "KURS"), (m.liv_config, "SELVSTUDIE_PRAEFIKS", "Selvstudie ·"),
                                  (m.liv_db, "DB_PATH", tmp / "liv.db")):

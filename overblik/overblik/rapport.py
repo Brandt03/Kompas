@@ -15,7 +15,16 @@ from .kilder import mandag
 BASELINE_UGER = 8
 # |robust z| over denne grænse regnes som en tydelig afvigelse.
 Z_GRAENSE = 1.5
-MIN_UGER_KORRELATION = 12
+# Sammenhænge testes på ugens afvigelse fra medianen af de NABO_UGER nærmeste uger på hver side, så en fælles
+# udvikling over tid (sommer mod semester) ikke tæller som en sammenhæng. Naboer på begge sider, ikke kun de
+# foregående: en bagudrettet median halter efter, når begge kolonner følger samme sæson, og så ligner det en
+# sammenhæng. p-værdien findes ved at blande ugerne i
+# blokke af BLOK_UGER sammenhængende uger, fordi uger, der ligger tæt, ligner hinanden, og en almindelig
+# permutationstest derfor giver for små p-værdier. Med færre end 6 blokke er der for få måder at blande på til,
+# at 0,05/11 overhovedet kan nås, så der kræves mindst 6 blokke.
+NABO_UGER = 4
+BLOK_UGER = 3
+MIN_UGER_KORRELATION = 6 * BLOK_UGER
 PERMUTATIONER = 5000
 
 # Faste hypoteser i stedet for alle par mod alle: med 18 kolonner er der 153
@@ -65,19 +74,30 @@ def _pearson(a: list[float], b: list[float]) -> float:
     return sum((x - ma) * (y - mb) for x, y in zip(a, b)) / (sa * sb)
 
 
-def spearman(a: list[float], b: list[float]) -> tuple[float, float]:
-    """Rangkorrelation og tosidet p-værdi ved permutation, som ikke
-    forudsætter normalfordeling og holder ved små n."""
+def spearman(a: list[float], b: list[float], blok: int = BLOK_UGER) -> tuple[float, float]:
+    """Rangkorrelation og tosidet p-værdi ved blok-permutation: b's uger blandes i blokke af `blok`
+    sammenhængende uger, så ugernes indbyrdes lighed bevares. Forudsætter ikke normalfordeling."""
     ra, rb = _rang(a), _rang(b)
     rho = _pearson(ra, rb)
     rng = random.Random(0)
-    rb2 = rb[:]
+    blokke = [rb[i:i + blok] for i in range(0, len(rb), blok)]
     mindst_saa_stor = 0
     for _ in range(PERMUTATIONER):
-        rng.shuffle(rb2)
-        if abs(_pearson(ra, rb2)) >= abs(rho) - 1e-12:
+        rng.shuffle(blokke)
+        if abs(_pearson(ra, [v for bl in blokke for v in bl])) >= abs(rho) - 1e-12:
             mindst_saa_stor += 1
     return rho, (mindst_saa_stor + 1) / (PERMUTATIONER + 1)
+
+
+def _fra_normalen(alle: list[dict], kol: str) -> list[float | None]:
+    """For hver uge: værdien minus medianen af de NABO_UGER nærmeste uger før og efter (mindst 4 med data).
+    De seneste uger har kun naboer bagud."""
+    ud = []
+    for i, u in enumerate(alle):
+        naboer = alle[max(0, i - NABO_UGER):i] + alle[i + 1:i + 1 + NABO_UGER]
+        hist = [w[kol] for w in naboer if w[kol] is not None]
+        ud.append(None if u[kol] is None or len(hist) < 4 else u[kol] - median(hist))
+    return ud
 
 
 def _afvigelse(kol: str, v: float | None, historik: list[float]) -> dict | None:
@@ -127,11 +147,13 @@ def lav(conn: sqlite3.Connection, uge_mandag: date | None = None) -> dict:
             afvigelser[kol] = {"forklaring": forklaring, **a}
 
     # Uger med under 5 dages Garmin-data er for hullede til at korrelere på.
-    brugbare = [u for u in alle[: idx + 1] if (u["garmin_dage"] or 0) >= 5]
+    op_til = alle[: idx + 1]
+    brugbar = [(u["garmin_dage"] or 0) >= 5 for u in op_til]
+    normal = {kol: _fra_normalen(op_til, kol) for kol in {k for h in HYPOTESER for k in h[:2]}}
     grænse_stærk = 0.05 / len(HYPOTESER)
     sammenhaenge = []
     for x, y, spoergsmaal in HYPOTESER:
-        par = [(u[x], u[y]) for u in brugbare if u[x] is not None and u[y] is not None]
+        par = [(a, b) for a, b, ok in zip(normal[x], normal[y], brugbar) if ok and a is not None and b is not None]
         res = {"x": x, "y": y, "spoergsmaal": spoergsmaal, "n_uger": len(par)}
         if len(par) < MIN_UGER_KORRELATION:
             res["status"] = f"for få uger ({len(par)} af {MIN_UGER_KORRELATION})"
@@ -155,8 +177,10 @@ def lav(conn: sqlite3.Connection, uge_mandag: date | None = None) -> dict:
         "metode": (
             "Afvigelse: robust z = (værdi − median) / (1,4826·MAD) over baseline-ugerne (er MAD 0, bruges "
             "1,2533 · gennemsnitlig afvigelse; er alle ugerne ens, er enhver anden værdi tydelig); "
-            f"|z| ≥ {Z_GRAENSE} er tydelig. Sammenhæng: Spearman med permutationstest, "
-            f"kun uger med ≥5 dages Garmin-data. 'stærk' = p < {grænse_stærk:.4f} "
+            f"|z| ≥ {Z_GRAENSE} er tydelig. Sammenhæng: Spearman på ugens afvigelse fra medianen af de "
+            f"{NABO_UGER} nærmeste uger på hver side (så en fælles udvikling over tid ikke tæller), med blok-permutation i "
+            f"blokke af {BLOK_UGER} uger; mindst {MIN_UGER_KORRELATION} uger og kun uger med ≥5 dages Garmin-data. "
+            f"'stærk' = p < {grænse_stærk:.4f} "
             f"(0,05 delt på {len(HYPOTESER)} hypoteser) og |rho| ≥ 0,3; 'antydning' = p < 0,05. "
             "Korrelation er ikke årsag."
         ),

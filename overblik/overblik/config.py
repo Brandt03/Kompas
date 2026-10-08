@@ -17,6 +17,10 @@ DB_PATH = _path("LIV_DB", "~/.overblik/liv.db")
 # garmin-coach's SQLite. Læses kun, skrives aldrig.
 GARMIN_DB = _path("LIV_GARMIN_DB", "~/.garmin-coach/coach.db")
 
+# Træningsbelastning pr. dag, regnet af garmin-coach (TRIMP, styrkepas via Hevy) og skrevet af dens `site byg`.
+# Belastningen regnes kun dér; her lægges dagene sammen til uger.
+BELASTNING_JSON = _path("LIV_BELASTNING_JSON", "~/.garmin-coach/site/belastning.json")
+
 # Sures eksport, som launchd skriver hvert 5. minut mens Sure kører.
 SURE_JSON = _path("LIV_SURE_JSON", "~/kompas/okonomi/dashboard/public/data.json")
 
