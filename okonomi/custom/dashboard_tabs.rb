@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only (runs inside Sure, so it is licensed like Sure)
+#
 # Adds our own tabs to Sure's left menu (right after Budgets/Plan) and shows the Caddy-served dashboard pages
 # inside Sure's own layout:
 #   Forbrug    /forbrug-side    -> https://localhost/forbrug/
