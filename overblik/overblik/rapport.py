@@ -7,7 +7,7 @@ from __future__ import annotations
 import random
 import sqlite3
 from datetime import date, timedelta
-from statistics import median
+from statistics import mean, median
 
 from .db import KOLONNER
 from .kilder import mandag
@@ -84,11 +84,16 @@ def _afvigelse(kol: str, v: float | None, historik: list[float]) -> dict | None:
     if v is None or len(historik) < 4:
         return None
     med = median(historik)
-    mad = median(abs(x - med) for x in historik) * 1.4826
-    z = (v - med) / mad if mad > 0 else 0.0
+    # Er over halvdelen af ugerne ens (fx 0 kr. på café i de fleste uger), er MAD 0. Så bruges den gennemsnitlige
+    # afvigelse fra medianen (·1,2533 giver samme skala for normalfordelte data). Er også den 0, er alle ugerne
+    # ens, og enhver anden værdi er tydelig; z er så None i stedet for uendelig. Før blev z sat til 0, så en uge
+    # med 900 kr. efter otte uger med 0 kr. aldrig blev markeret.
+    skala = median(abs(x - med) for x in historik) * 1.4826 or mean(abs(x - med) for x in historik) * 1.2533
+    z = (v - med) / skala if skala > 0 else (0.0 if v == med else None)
+    tydelig = z is None or abs(z) >= Z_GRAENSE
     retning = "over" if v > med else "under" if v < med else "som"
     vurdering = None
-    if abs(z) >= Z_GRAENSE:
+    if tydelig:
         if kol in HOEJ_ER_GODT:
             vurdering = "godt" if v > med else "skidt"
         elif kol in LAV_ER_GODT:
@@ -97,9 +102,9 @@ def _afvigelse(kol: str, v: float | None, historik: list[float]) -> dict | None:
         "vaerdi": v,
         "normal": round(med, 2),
         "normal_interval": [round(min(historik), 2), round(max(historik), 2)],
-        "robust_z": round(z, 2),
+        "robust_z": round(z, 2) if z is not None else None,
         "retning": retning,
-        "tydelig": abs(z) >= Z_GRAENSE,
+        "tydelig": tydelig,
         "vurdering": vurdering,
     }
 
@@ -148,7 +153,8 @@ def lav(conn: sqlite3.Connection, uge_mandag: date | None = None) -> dict:
         "afvigelser": afvigelser,
         "sammenhaenge": sammenhaenge,
         "metode": (
-            "Afvigelse: robust z = (værdi − median) / (1,4826·MAD) over baseline-ugerne; "
+            "Afvigelse: robust z = (værdi − median) / (1,4826·MAD) over baseline-ugerne (er MAD 0, bruges "
+            "1,2533 · gennemsnitlig afvigelse; er alle ugerne ens, er enhver anden værdi tydelig); "
             f"|z| ≥ {Z_GRAENSE} er tydelig. Sammenhæng: Spearman med permutationstest, "
             f"kun uger med ≥5 dages Garmin-data. 'stærk' = p < {grænse_stærk:.4f} "
             f"(0,05 delt på {len(HYPOTESER)} hypoteser) og |rho| ≥ 0,3; 'antydning' = p < 0,05. "

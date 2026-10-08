@@ -24,6 +24,8 @@ import json
 import os
 import re
 import sys
+import tempfile
+import threading
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -35,7 +37,12 @@ OVERSIGT = MAPPE / "oversigt.csv"
 BESLUTNINGER = MAPPE / "data" / "beslutninger.jsonl"
 PORT = int(os.environ.get("KARRIERE_PORT", "8766"))
 TILLADT_ORIGIN = "https://kompas.localhost"
-
+# Kun de navne, Kompas selv bruger. Ellers kan en fremmed side, der peger sit eget domæne på 127.0.0.1
+# (DNS rebinding), læse /api/data med CV og profil, fordi browseren tror, det er dens egen side.
+TILLADTE_VAERTER = {"kompas.localhost", f"127.0.0.1:{PORT}", f"localhost:{PORT}"}
+# Serveren svarer på flere forespørgsler ad gangen, men skrivningerne læser, ændrer og skriver hele filer,
+# så de tages én ad gangen. Ellers kan to statusændringer lige efter hinanden overskrive hinanden.
+SKRIVELAAS = threading.Lock()
 # Status i oversigt.csv. Agenten skriver "vurderet"; resten sætter du.
 # Opslag, hvor de læser ansøgninger eller holder samtaler løbende, så stillingen kan blive besat før fristen.
 # Bruges, når agentens vurdering ikke selv siger det (ældre kørsler).
@@ -192,9 +199,15 @@ def data() -> dict:
 # ── skrivning ───────────────────────────────────────────────────────
 
 def _skriv_atomisk(sti: Path, tekst: str) -> None:
-    tmp = sti.with_name(sti.name + ".tmp")
-    tmp.write_text(tekst, encoding="utf-8")
-    os.replace(tmp, sti)
+    # Eget, unikt midlertidigt navn ved siden af filen, så to skrivninger aldrig deler .tmp-fil
+    fd, tmp = tempfile.mkstemp(dir=sti.parent, prefix=f".{sti.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(tekst)
+        os.replace(tmp, sti)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
 
 
 def sæt_status(jid: str, status: str, note: str | None) -> dict:
@@ -275,7 +288,18 @@ class Handler(BaseHTTPRequestHandler):
     def _json(self, kode: int, obj) -> None:
         self._send(kode, json.dumps(obj, ensure_ascii=False))
 
+    def _kendt_vaert(self) -> bool:
+        vaert = (self.headers.get("Host") or "").lower()
+        vaert = re.sub(r":(443|80)$", "", vaert)
+        if vaert in TILLADTE_VAERTER:
+            return True
+        print(f"afvist vært: {vaert[:80]} ({self.command} {urlparse(self.path).path[:40]})", file=sys.stderr)
+        self._json(403, {"fejl": "ukendt vært"})
+        return False
+
     def do_GET(self):
+        if not self._kendt_vaert():
+            return
         url = urlparse(self.path)
         sti, q = url.path, parse_qs(url.query)
         try:
@@ -299,22 +323,30 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(500, {"fejl": str(e)})
 
     def do_POST(self):
+        if not self._kendt_vaert():
+            return
         # Kun Kompas må skrive. En fremmed side kan ikke sende JSON på tværs af origins uden en CORS-preflight,
         # som serveren aldrig godkender, og Origin-tjekket fanger resten.
         if self.headers.get("Origin") != TILLADT_ORIGIN or not (self.headers.get("Content-Type") or "").startswith("application/json"):
             return self._json(403, {"fejl": "kun fra Kompas"})
         try:
-            længde = int(self.headers.get("Content-Length") or 0)
+            rå = (self.headers.get("Content-Length") or "0").strip()
+            if not rå.isdigit():  # også negative tal, som ellers ville læse til forbindelsen lukker
+                return self._json(400, {"fejl": "ugyldig Content-Length"})
+            længde = int(rå)
             if længde > 200_000:
                 return self._json(413, {"fejl": "for stort"})
             krop = json.loads(self.rfile.read(længde) or b"{}")
+            if not isinstance(krop, dict):
+                raise ValueError("forventede et JSON-objekt")
             sti = urlparse(self.path).path
-            if sti == "/api/status":
-                return self._json(200, sæt_status(str(krop.get("id", "")), str(krop.get("status", "")), krop.get("note")))
-            if sti == "/api/profil":
-                return self._json(200, gem_profil(str(krop.get("tekst", ""))))
-            if sti == "/api/taerskel":
-                return self._json(200, sæt_tærskel(int(krop.get("vaerdi"))))
+            with SKRIVELAAS:
+                if sti == "/api/status":
+                    return self._json(200, sæt_status(str(krop.get("id", "")), str(krop.get("status", "")), krop.get("note")))
+                if sti == "/api/profil":
+                    return self._json(200, gem_profil(str(krop.get("tekst", ""))))
+                if sti == "/api/taerskel":
+                    return self._json(200, sæt_tærskel(int(krop.get("vaerdi"))))
             return self._json(404, {"fejl": "ikke fundet"})
         except KeyError as e:
             return self._json(404, {"fejl": f"opslaget {e} står ikke i oversigt.csv"})
@@ -326,6 +358,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
+    ThreadingHTTPServer.request_queue_size = 64  # standarden på 5 afviser forbindelser, når mange kommer på én gang
     srv = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
     print(f"Karriere på http://127.0.0.1:{PORT} (Caddy: https://kompas.localhost/karriere/)", file=sys.stderr)
     try:

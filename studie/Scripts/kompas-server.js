@@ -23,7 +23,6 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
-const vm = require("vm");
 const { execFile } = require("child_process");
 
 const hjem = s => s.replace(/^~(?=$|\/)/, os.homedir());
@@ -34,6 +33,11 @@ const PORT = +(process.env.STUDIE_PORT || 8767);
 const ORIGIN = "https://kompas.localhost";
 // Telefonen kommer ind gennem Tailscale med sin egen adresse (https://<mac>.<tailnet>.ts.net), sat i LaunchAgent'en
 const ORIGINS = [ORIGIN, ...String(process.env.STUDIE_ORIGINS || "").split(",").map(s => s.trim()).filter(Boolean)];
+// Kun de navne, Kompas selv bruger: kompas.localhost, telefonens Tailscale-navn og de lokale porte. Ellers kan en
+// fremmed side, der peger sit eget domæne på 127.0.0.1 (DNS rebinding), læse svarene, fordi browseren tror, det er
+// dens egen side. 8768 er Caddys blok til telefonen. Afviste navne logges.
+const VAERTER = new Set(["kompas.localhost", `127.0.0.1:${PORT}`, `localhost:${PORT}`, "127.0.0.1:8768", "localhost:8768",
+  ...ORIGINS.map(o => { try { return new URL(o).host; } catch { return null; } }).filter(Boolean)]);
 const LOG = path.join(DATA, "genkald-log.jsonl");
 // Fagene (id → mappe). Alfa og Beta har genkald og begreber; Gamma har drills og afleveringer.
 const FAG = { alfa: "Alfa", beta: "Beta", gamma: "Gamma" };
@@ -340,17 +344,107 @@ async function drillsListe() {
   }
   return ud;
 }
+// ── drill-gæt: kun værdier, aldrig kode ──────────────────────────────
+// Et gæt er en JavaScript-værdi: tal (også NaN, Infinity og -0), tekst i "…", '…' eller `…` (uden ${…}),
+// true/false/null/undefined og lister og objekter af dem. Gættet læses her og skrives ind i drill-filen i
+// serverens egen form (skrivVærdi), så filen, Node kører, aldrig indeholder brugerens rå tekst. Gættet blev
+// før prøvekørt med vm, men vm er ikke en sandkasse: et "gæt" kunne nå process og køre kode i serveren.
+const ORD = { undefined: undefined, null: null, true: true, false: false, NaN: NaN, Infinity: Infinity };
+function læsVærdi(tekst) {
+  let i = 0, dybde = 0;
+  const fejl = besked => { throw new Error(besked); };
+  const mellemrum = () => { while (i < tekst.length && /\s/.test(tekst[i])) i++; };
+  if (tekst.length > 2000) fejl("gættet er for langt");
+  function værdi() {
+    mellemrum();
+    if (++dybde > 20) fejl("for mange lister i lister");
+    const c = tekst[i];
+    const v = c === '"' || c === "'" || c === "`" ? streng(c) : c === "[" ? liste() : c === "{" ? objekt() : talEllerOrd();
+    dybde--;
+    return v;
+  }
+  function streng(q) {
+    let ud = "";
+    for (i++; i < tekst.length && tekst[i] !== q; ) {
+      let c = tekst[i++];
+      if (q === "`" && c === "$" && tekst[i] === "{") fejl("${…} er kode, ikke en værdi");
+      if (c === "\\") {
+        const e = tekst[i++];
+        const hex = n => {
+          const h = tekst.slice(i, i + n);
+          if (!new RegExp(`^[0-9a-fA-F]{${n}}$`).test(h)) fejl("ugyldig escape");
+          i += n;
+          return String.fromCharCode(parseInt(h, 16));
+        };
+        c = e === undefined ? fejl("teksten slutter midt i en \\") : e === "u" ? hex(4) : e === "x" ? hex(2)
+          : { n: "\n", t: "\t", r: "\r", b: "\b", f: "\f", v: "\v", 0: "\0" }[e] ?? e;
+      }
+      ud += c;
+    }
+    if (tekst[i] !== q) fejl(`teksten mangler sit afsluttende ${q}`);
+    i++;
+    return ud;
+  }
+  function liste() {
+    const ud = [];
+    for (i++, mellemrum(); tekst[i] !== "]"; ) {
+      if (i >= tekst.length) fejl("listen mangler sit ]");
+      ud.push(værdi()); mellemrum();
+      if (tekst[i] === ",") { i++; mellemrum(); } else if (tekst[i] !== "]") fejl("mangler , eller ] i listen");
+    }
+    i++;
+    return ud;
+  }
+  function objekt() {
+    const ud = {};
+    for (i++, mellemrum(); tekst[i] !== "}"; ) {
+      if (i >= tekst.length) fejl("objektet mangler sit }");
+      let nøgle;
+      if (tekst[i] === '"' || tekst[i] === "'") nøgle = streng(tekst[i]);
+      else {
+        const m = /^(?:[A-Za-z_$][\w$]*|\d+)/.exec(tekst.slice(i));
+        if (!m) fejl("ugyldig nøgle i objektet");
+        nøgle = m[0]; i += nøgle.length;
+      }
+      if (nøgle === "__proto__") fejl("__proto__ kan ikke bruges som nøgle");
+      mellemrum(); if (tekst[i] !== ":") fejl("mangler : efter en nøgle"); i++;
+      ud[nøgle] = værdi(); mellemrum();
+      if (tekst[i] === ",") { i++; mellemrum(); } else if (tekst[i] !== "}") fejl("mangler , eller } i objektet");
+    }
+    i++;
+    return ud;
+  }
+  function talEllerOrd() {
+    const tal = /^[+-]?(?:Infinity|(?:\d[\d_]*(?:\.[\d_]*)?|\.\d[\d_]*)(?:[eE][+-]?\d+)?)/.exec(tekst.slice(i));
+    if (tal) { i += tal[0].length; return Number(tal[0].replace(/_/g, "")); }
+    const ord = /^[A-Za-z_$][\w$]*/.exec(tekst.slice(i));
+    if (ord && Object.prototype.hasOwnProperty.call(ORD, ord[0])) { i += ord[0].length; return ORD[ord[0]]; }
+    fejl(ord ? `${ord[0]} er ikke en værdi` : `uventet tegn ${JSON.stringify(tekst[i] ?? "")}`);
+  }
+  const v = værdi(); mellemrum();
+  if (i < tekst.length) fejl("der står mere end én værdi");
+  return v;
+}
+function skrivVærdi(v) {
+  if (v === undefined) return "undefined";
+  if (typeof v === "number") return Object.is(v, -0) ? "-0" : String(v);   // NaN, Infinity og -Infinity skrives som sig selv
+  if (typeof v === "string") return JSON.stringify(v);
+  if (v === null || typeof v === "boolean") return String(v);
+  if (Array.isArray(v)) return `[${v.map(skrivVærdi).join(", ")}]`;
+  const par = Object.keys(v).map(k => `${/^[A-Za-z_$][\w$]*$/.test(k) ? k : JSON.stringify(k)}: ${skrivVærdi(v[k])}`);
+  return par.length ? `{ ${par.join(", ")} }` : "{}";
+}
+
 async function gemDrill({ fil, linje, beskrivelse, gaet }, meta = {}) {
   const f = drillFil(fil);
   gaet = String(gaet || "").trim();
   if (!gaet || /[\r\n]/.test(gaet)) throw new Error("skriv dit gæt på én linje");
   if (gaet === "TOM") throw new Error("det er jo ikke et gæt");
-  // En fejltype uden anførselstegn (ReferenceError) er en gyldig global i JavaScript, men ment som tekst
+  // En fejltype uden anførselstegn (ReferenceError) er ment som tekst
   if (/^[A-Z]\w*Error$/.test(gaet)) gaet = `"${gaet}"`;
-  // Gættet skal være en værdi, JavaScript kan læse for sig selv. Ellers går hele drill-filen ned.
-  try { vm.runInNewContext(`(${gaet})`, {}, { timeout: 200 }); } catch (e) {
-    const hint = e.name === "ReferenceError" ? ` Tekst skal stå i anførselstegn: "${gaet}".` : ` Tekst skal stå i anførselstegn, fx "number".`;
-    throw new Error(`gættet kan ikke læses som JavaScript (${e.message}).${hint}`);
+  try { gaet = skrivVærdi(læsVærdi(gaet)); } catch (e) {
+    const hint = /er ikke en værdi/.test(e.message) ? ` Tekst skal stå i anførselstegn: "${gaet}".` : ` Tekst skal stå i anførselstegn, fx "number".`;
+    throw new Error(`gættet kan ikke læses som en værdi (${e.message}).${hint}`);
   }
   const tekst = læs(f);
   // Er linjen flyttet (fx efter en rettelse i VS Code), findes tjekket på beskrivelsen, hvis den er entydig
@@ -729,6 +823,8 @@ function send(res, kode, obj) {
 }
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, "http://x"), sti = url.pathname.replace(/^\/studie\/api/, "");
+  const vaert = String(req.headers.host || "").toLowerCase().replace(/:(?:443|80)$/, "");
+  if (!VAERTER.has(vaert)) { console.error(`afvist vært: ${vaert.slice(0, 80)} (${req.method} ${sti.slice(0, 40)})`); return send(res, 403, { fejl: "ukendt vært" }); }
   try {
     if (req.method === "GET") {
       if (sti === "/genkald") return send(res, 200, genkaldListe());
