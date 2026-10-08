@@ -72,8 +72,8 @@ flowchart LR
 - **Local first.** Everything is served by Caddy on `localhost`, kept fresh by macOS LaunchAgents every 30
   minutes, and backed up daily. Nothing is hosted anywhere.
 - **Read-only by default.** Only three things can write through the pages, and only what I type or click:
-  job decisions, flashcard answers, and marking a deadline done. Each writing server binds to `127.0.0.1` and
-  checks the request's origin.
+  job decisions, flashcard answers, and marking a deadline done. Each server binds to `127.0.0.1`, answers only
+  to Kompas' own host names (against DNS rebinding), and accepts writes only from Kompas' own origin.
 - **Phone without a server.** The study pages work offline on my phone as a small PWA. It downloads today's
   cards while my Mac is reachable over Tailscale, and syncs the answers back later without duplicates.
 - **AI where judgement is needed.** Scheduled Claude routines do the parts that need judgement: the weekly
@@ -111,7 +111,8 @@ the demo (its menu items show a short explanation instead).
 
 - One row per ISO week across training, money and study, built from Garmin data, the Sure extract and the
   calendar.
-- Flags unusual weeks with a robust z-score (median/MAD) against the previous 8 weeks.
+- Flags unusual weeks with a robust z-score (median/MAD) against the previous 8 weeks, with a fallback when
+  most weeks are identical (say, nothing spent on cafés), so one unusual week still stands out.
 - Instead of mining every pair of columns for correlations, it tests 11 fixed hypotheses with Spearman's rank
   correlation and a permutation test, Bonferroni-corrected, so it doesn't "discover" noise.
 
@@ -128,8 +129,10 @@ the demo (its menu items show a short explanation instead).
   service worker serves the pages from cache.
 - **No dependencies.** Plain Node.js with its own small markdown renderer and a mini XML reader that turns my
   Word course notes into HTML with images.
-- **Careful writes.** Only Kompas may write (Origin and JSON content-type checks), files are written atomically
-  (temp file + rename), and the answer key is only shown after an attempt.
+- **Careful writes.** Only Kompas may write (Host, Origin and JSON content-type checks), files are written
+  atomically (temp file + rename), and the answer key is only shown after an attempt. A drill guess is parsed as
+  a plain value (numbers, strings, lists, objects, `NaN`, `undefined` …) and written back in the server's own
+  form, so a guess can never run as code.
 
 ### [karriere/](karriere/): job agent (Python + a Claude routine)
 
@@ -141,8 +144,9 @@ the demo (its menu items show a short explanation instead).
   anything or contacts anyone.
 - I decide in Kompas (want to apply, or not interested and why). The decisions are logged and read by the next
   run, which uses them as a signal and suggests changes to the profile or filters without making them itself.
-- A small standard-library HTTP server with exactly three narrow writes (status, profile, threshold), atomic
-  file writes, Origin/Content-Type checks against CSRF, and path-traversal guards.
+- A small standard-library HTTP server with exactly three narrow writes (status, profile, threshold), taken one
+  at a time under a lock with atomic file writes, Host checks against DNS rebinding, Origin/Content-Type checks
+  against CSRF, and path-traversal guards.
 
 ### [okonomi/](okonomi/): money, on top of Sure (shell, SQL, JavaScript, a little Ruby)
 
