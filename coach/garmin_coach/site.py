@@ -25,7 +25,7 @@ import os
 import shutil
 import sqlite3
 import sys
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 from . import metrics
@@ -158,6 +158,21 @@ def coach(conn: sqlite3.Connection) -> dict:
     }
 
 
+def belastning(conn: sqlite3.Connection) -> dict:
+    """Træningsbelastning pr. dag for hele historikken, regnet ét sted (metrics.daily_loads: Banister-TRIMP ud fra
+    puls, styrkepas ud fra Hevy-sæt kalibreret til TRIMP). Til andre projekter, så de ikke regner deres egen
+    belastning: pr. dag (livsoverblik lægger dagene sammen til uger) og pr. pas. En dag uden pas er 0, og dage før
+    første pas er ikke med."""
+    ath = metrics.athlete(conn)
+    ctx = metrics.load_context(conn, ath)
+    aktiviteter = conn.execute("SELECT * FROM activities ORDER BY date").fetchall()
+    dage = metrics.daily_loads(conn, date.fromisoformat(aktiviteter[0]["date"]), date.today(), ath, ctx) if aktiviteter else {}
+    return {"metode": "TRIMP (Banister ud fra puls; styrkepas ud fra Hevy-sæt kalibreret til TRIMP)",
+            "dage": {d: round(v, 1) for d, v in dage.items()},
+            "pas": {str(r["activity_id"]): round(metrics.session_load(r, ath, ctx), 1) for r in aktiviteter},
+            "genereret": _now()}
+
+
 def byg(conn: sqlite3.Connection, out: Path = SITE_DIR) -> dict:
     out.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(PAGE, out / "index.html.tmp")
@@ -166,8 +181,8 @@ def byg(conn: sqlite3.Connection, out: Path = SITE_DIR) -> dict:
         if (PAGE.parent / navn).exists():
             shutil.copyfile(PAGE.parent / navn, out / f"{navn}.tmp")
             os.replace(out / f"{navn}.tmp", out / navn)
-    # Søvn og Coach må ikke vælte resten af siden, hvis data er for tynde til en beregning
-    for navn, f in (("soevn.json", soevn), ("coach.json", coach)):
+    # Søvn, Coach og belastningen må ikke vælte resten af siden, hvis data er for tynde til en beregning
+    for navn, f in (("soevn.json", soevn), ("coach.json", coach), ("belastning.json", belastning)):
         try:
             data = f(conn)
         except Exception as e:  # noqa: BLE001

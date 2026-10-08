@@ -932,7 +932,7 @@ function renderHyp(r){
   return `<section class="group"><div class="group-head"><h2>Sammenhænge</h2><span class="muted">${r.rapport.sammenhaenge.length} faste hypoteser</span></div>
     <div class="card"><div class="hyp">${rows}</div>
     <div class="legend"><span>Søjlen er rho fra −1 (venstre) til +1 (højre).</span><span><i style="background:var(--accent)"></i>Stærk</span><span><i style="background:var(--warn)"></i>Antydning</span><span><i style="background:var(--muted)"></i>Ingen sammenhæng</span></div>
-    <p class="note">Spearman-korrelation med permutationstest. Stærk kræver p under 0,05 delt på antal hypoteser og |rho| ≥ 0,3. Korrelation er ikke årsag.</p></div></section>`;
+    <p class="note">Spearman-korrelation på ugens afvigelse fra de nærmeste uger, med blok-permutation. Stærk kræver p under 0,05 delt på antal hypoteser og |rho| ≥ 0,3. Korrelation er ikke årsag.</p></div></section>`;
 }
 
 // Uge for uge: de seneste 16 uger frem til den valgte, valgt uge i mørkt.

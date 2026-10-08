@@ -14,7 +14,7 @@ KOLONNER: list[tuple[str, str]] = [
     ("garmin_dage", "dage med Garmin-data"),
     ("traening_timer", "træningstimer i alt"),
     ("traening_pas", "antal træningspas"),
-    ("belastning", "sum af Garmins træningsbelastning (styrkepas mangler tal)"),
+    ("belastning", "træningsbelastning, TRIMP fra garmin-coach (styrkepas via Hevy)"),
     ("hrv_snit", "gns. HRV om natten, ms"),
     ("hvilepuls_snit", "gns. hvilepuls, bpm"),
     ("soevn_timer_snit", "gns. søvn pr. nat, timer"),

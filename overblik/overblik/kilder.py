@@ -27,6 +27,12 @@ def garmin(fra: date) -> tuple[dict, str | None]:
     conn = sqlite3.connect(f"{config.GARMIN_DB.resolve().as_uri()}?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
     data_til = conn.execute("SELECT max(date) FROM daily").fetchone()[0]
+    # Belastningen regnes ét sted, i garmin-coach, og læses her pr. dag. Garmins egen training load bruges ikke:
+    # den mangler på styrkepas og ligger på en anden skala end coachens TRIMP. Mangler filen, er belastningen ukendt.
+    try:
+        belastning_pr_dag = json.loads(config.BELASTNING_JSON.read_text()).get("dage") or {}
+    except (OSError, ValueError):
+        belastning_pr_dag = None
 
     # Mandagen i SQL: træk 6 dage fra og ryk frem til næste mandag.
     uge = "date(date, '-6 days', 'weekday 1')"
@@ -50,19 +56,22 @@ def garmin(fra: date) -> tuple[dict, str | None]:
             # En uge med døgndata men ingen pas er en uge uden træning.
             "traening_timer": 0.0,
             "traening_pas": 0,
-            "belastning": 0.0,
+            "belastning": 0.0 if belastning_pr_dag is not None else None,
         }
     for r in conn.execute(
-        f"""SELECT {uge} AS m, count(*) AS pas, sum(duration_s) / 3600.0 AS timer,
-                   coalesce(sum(garmin_load), 0) AS load
+        f"""SELECT {uge} AS m, count(*) AS pas, sum(duration_s) / 3600.0 AS timer
             FROM activities WHERE date >= ? GROUP BY m""",
         [fra.isoformat()],
     ):
         if r["m"] in ud:
-            ud[r["m"]].update(
-                traening_pas=r["pas"], traening_timer=_r(r["timer"], 2), belastning=_r(r["load"], 0)
-            )
+            ud[r["m"]].update(traening_pas=r["pas"], traening_timer=_r(r["timer"], 2))
     conn.close()
+    for dag, v in (belastning_pr_dag or {}).items():
+        m = mandag(date.fromisoformat(dag)).isoformat()
+        if m in ud and ud[m]["belastning"] is not None:
+            ud[m]["belastning"] += v
+    for u in ud.values():
+        u["belastning"] = _r(u["belastning"], 0)
     return ud, data_til
 
 

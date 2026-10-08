@@ -210,7 +210,7 @@ function hyp(r) {
   }).join("");
   return `<section class="card panel"><div class="panel-head"><h2>Sammenhænge</h2><span class="meta">${r.rapport.sammenhaenge.length} faste hypoteser</span></div>
     <div class="hyp">${rows}</div>
-    <p class="meta" style="margin:10px 0 0;line-height:1.5">Søjlen er rho fra −1 (venstre) til +1 (højre). Spearman-korrelation med permutationstest; stærk kræver p under 0,05 delt på antal hypoteser og |rho| ≥ 0,3. Korrelation er ikke årsag.</p></section>`;
+    <p class="meta" style="margin:10px 0 0;line-height:1.5">Søjlen er rho fra −1 (venstre) til +1 (højre). Spearman-korrelation på ugens afvigelse fra de nærmeste uger, med blok-permutation; stærk kræver p under 0,05 delt på antal hypoteser og |rho| ≥ 0,3. Korrelation er ikke årsag.</p></section>`;
 }
 
 function trend(r) {

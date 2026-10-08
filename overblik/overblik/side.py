@@ -61,11 +61,17 @@ def _dage(g: sqlite3.Connection, m: date) -> list[dict]:
 
 
 def _pas(g: sqlite3.Connection, m: date) -> list[dict]:
+    # Belastningen pr. pas er garmin-coach's (TRIMP), samme tal som ugens sum. Mangler den, står den som None.
+    try:
+        belastning = json.loads(config.BELASTNING_JSON.read_text()).get("pas") or {}
+    except (OSError, ValueError):
+        belastning = {}
     return [
         {"dato": r["date"], "start": r["start_local"][11:16], "sport": r["sport"], "navn": r["name"],
-         "minutter": round((r["duration_s"] or 0) / 60), "belastning": None if r["garmin_load"] is None else round(r["garmin_load"])}
+         "minutter": round((r["duration_s"] or 0) / 60),
+         "belastning": None if belastning.get(str(r["activity_id"])) is None else round(belastning[str(r["activity_id"])])}
         for r in g.execute(
-            """SELECT date, start_local, sport, name, duration_s, garmin_load FROM activities
+            """SELECT activity_id, date, start_local, sport, name, duration_s FROM activities
                WHERE date BETWEEN ? AND ? ORDER BY start_local""",
             [m.isoformat(), (m + timedelta(days=6)).isoformat()])
     ]

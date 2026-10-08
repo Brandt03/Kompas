@@ -113,8 +113,13 @@ the demo (its menu items show a short explanation instead).
   calendar.
 - Flags unusual weeks with a robust z-score (median/MAD) against the previous 8 weeks, with a fallback when
   most weeks are identical (say, nothing spent on cafés), so one unusual week still stands out.
-- Instead of mining every pair of columns for correlations, it tests 11 fixed hypotheses with Spearman's rank
-  correlation and a permutation test, Bonferroni-corrected, so it doesn't "discover" noise.
+- Instead of mining every pair of columns for correlations, it tests 11 fixed hypotheses, Bonferroni-corrected.
+  Each week is compared with its neighbours (4 weeks on each side) before testing, so a shared drift over the
+  semester doesn't count as a link, and p-values come from a block permutation (blocks of 3 weeks), because
+  neighbouring weeks resemble each other. In simulations this cut false "strong" links from 39 % to under 1 %
+  for drifting series, and from 100 % to 0 % for a shared seasonal pattern, while still finding a real
+  week-to-week link 90 % of the time.
+- Training load comes from coach (TRIMP), the same number everywhere.
 
 ### [studie/](studie/): study planner and flashcards (Node.js)
 
