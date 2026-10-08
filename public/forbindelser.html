@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Forbindelser</title>
+<!-- Alt, Kompas henter fra og kører på, og om det virker. Læser kun /kompas/forbindelser.json, som
+     bin/forbindelser.py skriver hver halve time (fra opdater.sh). Siden regner ikke status selv. -->
+<link rel="stylesheet" href="/kompas/assets/tokens.css">
+<link rel="stylesheet" href="/kompas/assets/page.css">
+<style>
+  .badge.warn { background: var(--warning-tint); color: var(--warning); }
+  .rows { display: grid; }
+  .row { display: grid; grid-template-columns: 78px minmax(0, 1fr) minmax(0, 1.25fr); gap: 4px 16px; align-items: start;
+    padding: 12px 0; border-top: 1px solid var(--divider); }
+  .row:first-child { border-top: 0; padding-top: 2px; }
+  .row .badge { justify-self: start; margin-top: 1px; }
+  .row .n b { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; }
+  .row .n b a { color: var(--text-subdued); display: inline-flex; }
+  .row .n b a:hover { color: var(--text-primary); }
+  .row .n small { display: block; color: var(--text-subdued); font-size: 12.5px; margin-top: 2px; }
+  .row .t { color: var(--text-secondary); font-size: 13.5px; line-height: 1.5; }
+  .row .t time { display: block; color: var(--text-subdued); font-size: 12.5px; }
+  .row .h { grid-column: 2 / -1; font-size: 12.5px; color: var(--text-secondary); line-height: 1.5; background: var(--surface-inset);
+    border-radius: 8px; padding: 7px 10px; margin-top: 4px; }
+  code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
+  .h code, td code { background: var(--surface-inset); padding: 1px 5px; border-radius: 5px; word-break: break-all; }
+  .h code { background: var(--container); }
+  .kode { position: relative; }
+  .kode pre { margin: 0; background: var(--surface-inset); border-radius: 10px; padding: 12px 14px; overflow-x: auto; line-height: 1.5; }
+  .kode button { position: absolute; top: 8px; right: 8px; }
+  .btn { display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 8px; padding: 6px 10px; font: inherit; font-size: 12.5px;
+    background: var(--container); color: var(--text-primary); box-shadow: var(--shadow-border-xs); cursor: pointer; }
+  .btn:hover { background: var(--container-hover); }
+  .guide h3 { font-size: 13.5px; font-weight: 600; margin: 18px 0 4px; display: flex; align-items: center; gap: 8px; }
+  .guide h3:first-of-type { margin-top: 0; }
+  .guide p { margin: 0 0 10px; color: var(--text-secondary); font-size: 13.5px; line-height: 1.55; }
+  table.v { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  table.v th, table.v td { text-align: left; padding: 8px 8px; border-top: 1px solid var(--divider); vertical-align: middle; }
+  table.v th { border-top: 0; color: var(--text-subdued); font-weight: 500; font-size: 12.5px; padding-top: 0; }
+  table.v td.ver { font-variant-numeric: tabular-nums; color: var(--text-secondary); white-space: nowrap; }
+  table.v td:first-child { white-space: nowrap; }
+  @media (max-width: 760px) {
+    .row { grid-template-columns: 70px minmax(0, 1fr); }
+    .row .t { grid-column: 2; }
+    table.v .til { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="page">
+    <div><h1>Forbindelser</h1><p class="sub">Hvad Kompas henter fra og kører på, og om det virker</p></div>
+    <span class="meta" id="tjekket"></span>
+  </header>
+  <div class="stack" id="root"><div class="card empty">Henter …</div></div>
+</div>
+
+<script src="/kompas/assets/icons.js"></script>
+<script src="/kompas/assets/liv.js"></script>
+<script>
+const MERKE = {
+  ok: ["good", "check", "Virker"], advarsel: ["warn", "clock", "Tjek"], fejl: ["bad", "x", "Fejl"], info: ["", "minus", "Info"],
+};
+const merke = s => { const [k, i, t] = MERKE[s] || MERKE.info; return `<span class="badge ${k}">${icon(i, 12)}${t}</span>`; };
+
+// "for 12 min siden", "for 3 t siden", "i går kl. 23.14", "for 4 dage siden"
+function siden(s) {
+  if (!s) return "";
+  const t = new Date(s), min = Math.round((Date.now() - t) / 6e4);
+  if (min < 1) return "lige nu";
+  if (min < 60) return `for ${min} min siden`;
+  if (min < 12 * 60) return `for ${Math.round(min / 60)} t siden`;
+  const dage = Math.round((new Date(new Date().toDateString()) - new Date(t.toDateString())) / 864e5);
+  const kl = `kl. ${String(t.getHours()).padStart(2, "0")}.${String(t.getMinutes()).padStart(2, "0")}`;
+  return dage === 0 ? `i dag ${kl}` : dage === 1 ? `i går ${kl}` : dage < 14 ? `for ${dage} dage siden` : dayMonth(t);
+}
+// "i dag kl. 18.00", "i morgen kl. 7.30", "søndag kl. 18.00", ellers datoen
+function kommende(s) {
+  const t = new Date(s), dage = Math.round((new Date(t.toDateString()) - new Date(new Date().toDateString())) / 864e5);
+  const kl = `kl. ${String(t.getHours()).padStart(2, "0")}.${String(t.getMinutes()).padStart(2, "0")}`;
+  return dage === 0 ? `i dag ${kl}` : dage === 1 ? `i morgen ${kl}` : dage < 7 ? `${weekday(t)} ${kl}` : `${dayMonth(t)} ${kl}`;
+}
+// Hjælpeteksten: `kode` i backticks vises som kode
+const hjaelp = s => esc(s).replace(/`([^`]+)`/g, "<code>$1</code>");
+
+function gruppe(g) {
+  return `<section class="card panel">
+    <div class="panel-head"><h2>${esc(g.titel)}</h2><span class="meta">${esc(g.undertitel || "")}</span></div>
+    <div class="rows">${g.punkter.map(p => `<div class="row">
+      ${merke(p.status)}
+      <div class="n"><b>${esc(p.navn)}${p.link ? ` <a href="${esc(p.link)}" ${p.link.startsWith("http") ? 'target="_blank" rel="noopener"' : 'target="_top"'} title="Åbn">${icon(p.link.startsWith("http") ? "external-link" : "arrow-right", 13)}</a>` : ""}</b>
+        <small>${esc(p.type)} · ${esc(p.projekt)}</small></div>
+      <div class="t">${esc(p.tekst)}${p.sidst || p.naeste ? `<time${p.sidst ? ` datetime="${esc(p.sidst)}" title="${esc(stamp(p.sidst))}"` : ""}>${[
+        p.sidst ? (p.naeste ? "kørte " : "") + siden(p.sidst) : "", p.naeste ? `næste ${kommende(p.naeste)}` : ""].filter(Boolean).join(" · ")}</time>` : ""}</div>
+      ${p.hjaelp ? `<div class="h">${hjaelp(p.hjaelp)}</div>` : ""}
+    </div>`).join("")}</div>
+  </section>`;
+}
+
+function kode(id, tekst) {
+  return `<div class="kode"><pre><code id="${id}">${esc(tekst)}</code></pre><button type="button" class="btn" data-kopier="${id}">${icon("copy", 13)}Kopiér</button></div>`;
+}
+
+function guide(m) {
+  const desktop = JSON.stringify({ mcpServers: { [m.navn]: { command: m.command, args: m.args, env: m.env } } }, null, 2);
+  const code = [`claude mcp add ${m.navn} --scope user`, ...Object.entries(m.env).map(([k, v]) => `  -e ${k}=${v}`),
+    `  -- ${m.command} ${m.args.join(" ")}`].join(" \\\n");
+  return `<section class="card panel guide">
+    <div class="panel-head"><h2>Claude og dine træningsdata</h2><span class="meta">MCP-guide</span></div>
+    <p>garmin-coach er en lokal MCP-server. Den lader Claude slå op i din træning, søvn og kalender med færdigregnede tal, så
+      Claude ikke skal regne på rå data. Konfigurationen indeholder kun stier; kalender-adresser og nøgler bliver i
+      <code>~/kompas/coach/.env</code>.</p>
+    <h3>Claude-appen ${merke(m.desktop ? "ok" : "info")}</h3>
+    <p>Sæt det ind under <code>mcpServers</code> i Claude → Indstillinger → Udvikler → Rediger konfiguration
+      (<code>claude_desktop_config.json</code>), og genstart Claude. Så virker serveren i appen, både i Chat og i Code.</p>
+    ${kode("mcp-desktop", desktop)}
+    <h3><code>claude</code> i Terminal ${merke(m.code ? "ok" : "info")}</h3>
+    <p>Kun hvis du også bruger Claude Code fra Terminal: kør det én gang. <code>--scope user</code> gør serveren
+      tilgængelig i alle dine projekter.</p>
+    ${kode("mcp-code", code)}
+    <h3>Prøv det</h3>
+    <p>Spørg fx "Hvordan har min restitution været den sidste uge?" eller "Hvad bør jeg træne i dag?". Claude henter
+      selv tallene gennem værktøjerne.</p>
+  </section>`;
+}
+
+function vaerktoejer(vs) {
+  return `<section class="card panel">
+    <div class="panel-head"><h2>Værktøjer på Mac'en</h2><span class="meta">${vs.filter(v => v.installeret).length} af ${vs.length} installeret</span></div>
+    <table class="v"><thead><tr><th>Værktøj</th><th class="til">Bruges til</th><th>Version</th><th></th></tr></thead><tbody>
+    ${vs.map(v => `<tr><td>${merke(v.status)} ${esc(v.navn)}</td><td class="til" style="color:var(--text-secondary)">${esc(v.til)}</td>
+      <td class="ver">${v.version ? esc(v.version) : "–"}</td>
+      <td>${v.installeret ? "" : v.kommando.startsWith("http") ? `<a class="link" href="${esc(v.kommando)}" target="_blank" rel="noopener">Hent ${icon("external-link", 13)}</a>`
+        : `<code>${esc(v.kommando)}</code>`}</td></tr>`).join("")}
+    </tbody></table>
+  </section>`;
+}
+
+function render(d) {
+  const alle = d.grupper.flatMap(g => g.punkter);
+  const fejl = alle.filter(p => p.status === "fejl"), tjek = alle.filter(p => p.status === "advarsel");
+  const mangler = d.vaerktoejer.filter(v => v.status === "fejl");
+  const problemer = [...fejl, ...tjek].map(p => p.navn).concat(mangler.map(v => v.navn));
+  document.getElementById("tjekket").textContent = `Tjekket ${siden(d.genereret)} · opdateres hver halve time`;
+  document.getElementById("root").innerHTML = `
+    <section class="card banner ${problemer.length ? "warn" : "good"}">
+      <span class="bi">${icon(problemer.length ? "activity" : "check", 16)}</span>
+      <div><div class="bl">${problemer.length ? "Skal tjekkes" : "Alt virker"}</div>
+        <p>${problemer.length ? `${esc(problemer.join(", "))}. Se hvordan under hver enkelt.`
+          : `${alle.filter(p => p.status === "ok").length} forbindelser virker, og alle værktøjer er installeret.`}</p></div>
+    </section>
+    ${d.grupper.map(gruppe).join("")}
+    ${d.mcp ? guide(d.mcp) : ""}
+    ${vaerktoejer(d.vaerktoejer)}
+    <p class="meta">Kompas kører på macOS. Statussen skrives af <code>${esc(d.kilde)}</code>; siden læser den kun.</p>`;
+}
+
+document.addEventListener("click", async e => {
+  const b = e.target.closest("[data-kopier]");
+  if (!b) return;
+  try { await navigator.clipboard.writeText(document.getElementById(b.dataset.kopier).textContent); b.innerHTML = `${icon("check", 13)}Kopieret`; }
+  catch (err) { b.textContent = "Kunne ikke kopiere"; }
+  setTimeout(() => { b.innerHTML = `${icon("copy", 13)}Kopiér`; }, 2000);
+});
+
+async function hent() {
+  try {
+    const r = await fetch("/kompas/forbindelser.json", { cache: "no-store" });
+    if (!r.ok) throw new Error(r.status);
+    render(await r.json());
+  } catch (e) {
+    document.getElementById("root").innerHTML = `<div class="card empty">Der er ingen status endnu. Den skrives af
+      <code>bin/forbindelser.py</code>, når opdateringen kører. Kør den nu med <code>/usr/bin/python3 ~/kompas/bin/forbindelser.py</code></div>`;
+  }
+}
+hent();
+setInterval(hent, 5 * 60000);
+</script>
+</body>
+</html>

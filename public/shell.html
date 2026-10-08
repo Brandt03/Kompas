@@ -133,7 +133,7 @@
 // `nyt` is a key for the page's newest content (a new weekly review, a new plan). When it changes, the menu
 // shows a dot until the page is opened. Which key you last saw is remembered in this browser only.
 const HOME = "/kompas/";
-let NAV = [{ items: [{ label: "I dag", icon: "sun", src: HOME }] }];
+let NAV = [{ items: [{ label: "I dag", icon: "sun", src: HOME }, { label: "Forbindelser", icon: "plug", src: "/kompas/forbindelser.html" }] }];
 let PAGES = NAV[0].items;
 
 const $ = id => document.getElementById(id);

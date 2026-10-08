@@ -2,7 +2,7 @@
 
 Overvåger studiejob og praktikopslag i Region Hovedstaden på Jobindex, vurderer dem mod dit CV og dine fag med en fast rubrik og viser de bedste match i Kompas. Den søger aldrig selv: du beslutter, hvad du vil søge, og holder selv styr på dine ansøgninger.
 
-**Kører automatisk** hver dag kl. 07:30 som en planlagt opgave i Claude-appen ("Jobagent – studiejob og praktik" under *Scheduled*). Opgavens prompt står i `rutine.md` og peger blot på `AGENT.md`. Er appen lukket på det tidspunkt, kører opgaven, næste gang appen åbnes.
+**Kører automatisk** mandag og torsdag kl. 12:00 som en planlagt opgave i Claude-appen ("Karriere" under *Planlagte opgaver*). Opgavens prompt står i `rutine.md` og peger blot på `AGENT.md`. Er appen lukket på det tidspunkt, kører opgaven, næste gang appen åbnes.
 
 ## Hvor ligger hvad
 | Fil/mappe | Hvad |

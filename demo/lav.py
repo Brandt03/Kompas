@@ -16,7 +16,7 @@ from pathlib import Path
 
 DEMO = Path(__file__).resolve().parent
 UD = DEMO / "ud"
-OMRAADER = ["form", "studie", "karriere", "forbrug"]
+OMRAADER = ["form", "studie", "karriere", "forbrug", "kompas"]
 
 
 def lav(ud: Path = UD, idag: date | None = None) -> None:
