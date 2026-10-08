@@ -1,5 +1,7 @@
 # Kompas
 
+[![CI](https://github.com/Brandt03/Kompas/actions/workflows/ci.yml/badge.svg)](https://github.com/Brandt03/Kompas/actions/workflows/ci.yml)
+
 **A personal dashboard that brings my finances, studies, training and job search together on one local page.**
 
 Kompas runs entirely on my own Mac at `https://kompas.localhost`. Five small projects, written in Python and
@@ -46,7 +48,7 @@ flowchart LR
     J[Job listings]
     N[Course notes]
   end
-  subgraph Projects["Projects (each its own repo)"]
+  subgraph Projects["Projects (folders here; separate repos on my Mac)"]
     coach[coach<br/>Python]
     liv[overblik<br/>Python]
     okonomi[okonomi<br/>shell + JS]
@@ -80,7 +82,9 @@ flowchart LR
   study plan, the 14-day training review, the weekly life review and scoring job listings. They only write
   files that the projects then show; they never send or submit anything.
 
-The full architecture is in [docs/arkitektur.md](docs/arkitektur.md) (Danish).
+The full architecture is in [docs/arkitektur.md](docs/arkitektur.md) (Danish). On my Mac each project is its own git
+repository; this public repository gathers them as folders, cleaned of personal data, so its history starts at
+publication.
 
 ## Try the demo
 
@@ -167,6 +171,22 @@ the demo (its menu items show a short explanation instead).
   to taxable income, what an overshoot costs to pay back, and which months it pays to opt out of the grant.
 - One app starts everything (Caddy, LaunchAgents, Docker, Sure, bank sync, export), and one closes it again,
   with a verified `pg_dump` backup and 30-day rotation on the way out.
+
+## Tests
+
+Every push runs [CI](.github/workflows/ci.yml): the demo is generated and served on Python 3.9 and 3.13, coach's
+smoke test runs against its real dependencies, and [tests/](tests/) checks the parts that matter most:
+
+- **Overblik's statistics:** a week that stands out from identical weeks is flagged, a shared seasonal pattern is
+  not reported as a link, and a real week-to-week link is still found.
+- **Karriere's server:** foreign host names are refused (DNS rebinding), writes need Kompas' own origin, a negative
+  `Content-Length` is rejected, and 30 simultaneous status changes all end up in the file.
+- **Studie's drill guesses** are parsed as values: known code-injection attempts are refused.
+
+```bash
+python3 -m unittest discover -s tests
+node tests/test_drill_gaet.js
+```
 
 ## Running it for real
 
