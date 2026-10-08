@@ -87,6 +87,19 @@ class KarriereServer(unittest.TestCase):
                       b"Content-Type: application/json\r\nContent-Length: -1\r\n\r\n")
             self.assertIn(b" 400 ", s.recv(200).split(b"\r\n")[0])
 
+    def _status(self, jid):
+        with open(self.mappe / "oversigt.csv", encoding="utf-8") as f:
+            rækker = list(csv.reader(f, delimiter=";"))
+        i_id, i_st = rækker[0].index("id"), rækker[0].index("status")
+        return next(r[i_st] for r in rækker[1:] if r[i_id] == jid)
+
+    def test_note_der_ikke_er_tekst_aendrer_intet(self):
+        # Før skrev serveren status og fejlede bagefter på note.strip(), så beslutningen aldrig blev logget
+        før = self._status("t005")
+        self.assertEqual(self._req("POST", "/api/status", {"id": "t005", "status": "søgt", "note": 123})[0], 400)
+        self.assertEqual(self._status("t005"), før)
+        self.assertFalse((self.mappe / "data" / "beslutninger.jsonl").exists())
+
     def test_samtidige_statusaendringer_gaar_ikke_tabt(self):
         ids = [f"t{n:03d}" for n in range(30)]
         svar = []

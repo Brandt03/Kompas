@@ -213,6 +213,9 @@ def _skriv_atomisk(sti: Path, tekst: str) -> None:
 def sæt_status(jid: str, status: str, note: str | None) -> dict:
     if status not in STATUS:
         raise ValueError(f"ukendt status: {status}")
+    # Tjekkes før noget skrives: ellers ændres status i oversigt.csv, men beslutningen logges aldrig
+    if note is not None and not isinstance(note, str):
+        raise ValueError("note skal være tekst")
     tekst = OVERSIGT.read_text(encoding="utf-8")
     læser = csv.reader(io.StringIO(tekst), delimiter=";")
     rækker = list(læser)

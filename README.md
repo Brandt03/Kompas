@@ -148,10 +148,11 @@ Sure itself is not part of the demo (its menu items show a short explanation ins
   service worker serves the pages from cache.
 - **No dependencies.** Plain Node.js with its own small markdown renderer and a mini XML reader that turns my
   Word course notes into HTML with images.
-- **Careful writes.** Only Kompas may write (Host, Origin and JSON content-type checks), files are written
-  atomically (temp file + rename), and the answer key is only shown after an attempt. A drill guess is parsed as
-  a plain value (numbers, strings, lists, objects, `NaN`, `undefined` …) and written back in the server's own
-  form, so a guess can never run as code.
+- **Careful writes.** Only Kompas may write (Host, Origin and JSON content-type checks), and files are written
+  atomically (a unique temp file + rename). A drill guess is parsed as a plain value (numbers, strings, lists,
+  objects, `NaN`, `undefined` …) and written back in the server's own form, so a guess can never run as code.
+- **Answer first, then the key.** The pages only ask for the answer key after an attempt. That is a habit the
+  interface keeps, not a lock: `GET /facit` and `/eksamen/facit` return the key whenever they are asked.
 
 ### [karriere/](karriere/): job agent (Python + a Claude routine)
 
@@ -191,11 +192,16 @@ smoke test runs against its real dependencies, and [tests/](tests/) checks the p
   not reported as a link, and a real week-to-week link is still found.
 - **Karriere's server:** foreign host names are refused (DNS rebinding), writes need Kompas' own origin, a negative
   `Content-Length` is rejected, and 30 simultaneous status changes all end up in the file.
+- **Coach's numbers** against known answers: Banister TRIMP, ACWR (1.0 for even load, 1.6 when the last week
+  doubles), HRV as standard deviations from the baseline, and gaps that stay gaps instead of turning into zeros.
 - **Studie's drill guesses** are parsed as values: known code-injection attempts are refused.
+- **Studie's spaced repetition:** the intervals follow the log (3/7/21/60/120 days, back to the start after ✗), and
+  answers synced from the phone are saved once, even when the same answer is sent twice.
 
 ```bash
 python3 -m unittest discover -s tests
 node tests/test_drill_gaet.js
+node tests/test_studie_repetition.js
 ```
 
 ## Running it for real

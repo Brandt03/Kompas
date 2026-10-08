@@ -22,6 +22,7 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 const os = require("os");
 const { execFile } = require("child_process");
 
@@ -45,7 +46,8 @@ const MARK = { sad: "✓", halvt: "~", blankt: "✗" };
 const DRILLS = path.join(ROD, FAG.gamma, "vscode", "Drills");
 
 const læs = f => fs.readFileSync(f, "utf8");
-function skriv(f, tekst) { const tmp = f + ".tmp"; fs.writeFileSync(tmp, tekst); fs.renameSync(tmp, f); }
+// Atomisk som Karriere (mkstemp): et unikt midlertidigt navn ved siden af filen, så to skrivninger aldrig deler det
+function skriv(f, tekst) { const tmp = path.join(path.dirname(f), `.${path.basename(f)}.${process.pid}.${crypto.randomBytes(6).toString("hex")}.tmp`); fs.writeFileSync(tmp, tekst, { flag: "wx" }); fs.renameSync(tmp, f); }
 const idag = (d = new Date()) => { return `${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}`; };
 function logFoersoeg(post) { fs.appendFileSync(LOG, JSON.stringify({ tid: new Date().toISOString(), ...post }) + "\n"); eksporterSnart(); }
 // Efter en gemning køres Kompas-eksporten, så Fag-siden og I dag viser de nye tal. Flere gemninger
@@ -316,32 +318,65 @@ async function drillsCachet() {
   if (!drillCache || Date.now() - drillCache.tid > 60000) drillCache = { tid: Date.now(), data: await drillsListe() };
   return drillCache.data;
 }
+// Alle drill-filer med deres tjek og stubbe, som Genkald-fanen viser dem
 async function drillsListe() {
-  const ud = [];
   const filer = fs.readdirSync(DRILLS).filter(n => /^kap\d+.*\.js$/.test(n)).sort();
-  for (const fil of filer) {
-    const f = path.join(DRILLS, fil), tekst = læs(f), linjer = tekst.split("\n");
-    const titel = ((linjer[0] || "").match(/^\/\/\s*(.*)$/) || [])[1] || fil;
-    const kørsel = await koerDrill(f), hvorfor = forklaringer(fil);
-    // Afsnittet et kald står i: nærmeste "// ── navn ──"-linje over det
-    const afsnitVed = n => { for (let k = n - 1; k >= 0; k--) { const a = linjer[k].match(/^\/\/ ── (.*?) ─/); if (a) return a[1]; } return ""; };
-    const kald = tjekKald(tekst), defs = definitioner(tekst);
-    const tjek = kald.map(t => {
-      if (t.fejl) return { linje: t.linje, afsnit: afsnitVed(t.linje), beskrivelse: t.desc || linjer[t.linje - 1].slice(0, 80), udtryk: null, gaet: null, status: "vscode" };
-      const tom = t.gaet === "TOM";
-      return { linje: t.linje, afsnit: afsnitVed(t.linje), beskrivelse: t.desc, udtryk: t.udtryk, kontekst: kontekst(t.udtryk, t.linje, defs, kald), gaet: tom ? null : t.gaet,
-        status: tom ? "tom" : kørsel.fejl[t.desc] ? "forkert" : kørsel.crash ? "ukendt" : "rigtig", javascript: kørsel.fejl[t.desc]?.js ?? null,
-        forklaring: tom ? null : hvorfor[forklaringNoegle(t.desc)] || null };
-    });
-    const stubbe = [];
-    linjer.forEach((l, i) => {
-      if (/DIN KODE HER/.test(l)) {
-        let j = i; while (j > 0 && !/^function |^const \w+ = /.test(linjer[j])) j--;
-        stubbe.push({ linje: i + 1, navn: (linjer[j].match(/^(?:function\s+|const\s+)(\w+)/) || [])[1] || "stub" });
-      }
-    });
-    ud.push({ fil, titel, sti: f, tjek, stubbe, opsum: kørsel.opsum, crash: kørsel.crash });
+  const ud = [];
+  for (const fil of filer) ud.push(await drillFilInfo(fil));
+  return ud;
+}
+
+async function drillFilInfo(fil) {
+  const f = path.join(DRILLS, fil);
+  const tekst = læs(f), linjer = tekst.split("\n");
+  const titel = ((linjer[0] || "").match(/^\/\/\s*(.*)$/) || [])[1] || fil;
+  const kørsel = await koerDrill(f);
+  const ctx = { linjer, kald: tjekKald(tekst), defs: definitioner(tekst), kørsel, hvorfor: forklaringer(fil) };
+  return {
+    fil, titel, sti: f,
+    tjek: ctx.kald.map(t => tjekInfo(t, ctx)),
+    stubbe: stubbe(linjer),
+    opsum: kørsel.opsum,
+    crash: kørsel.crash,
+  };
+}
+
+// Afsnittet et kald står i: nærmeste "// ── navn ──"-linje over det
+function afsnitVed(linjer, n) {
+  for (let k = n - 1; k >= 0; k--) {
+    const a = linjer[k].match(/^\/\/ ── (.*?) ─/);
+    if (a) return a[1];
   }
+  return "";
+}
+
+// Ét tjek: et kald, der ikke kan læses, løses i VS Code; ellers er det tomt, rigtigt, forkert eller ukendt
+function tjekInfo(t, { linjer, kald, defs, kørsel, hvorfor }) {
+  const afsnit = afsnitVed(linjer, t.linje);
+  if (t.fejl) {
+    return { linje: t.linje, afsnit, beskrivelse: t.desc || linjer[t.linje - 1].slice(0, 80), udtryk: null, gaet: null, status: "vscode" };
+  }
+  const tom = t.gaet === "TOM";
+  const status = tom ? "tom" : kørsel.fejl[t.desc] ? "forkert" : kørsel.crash ? "ukendt" : "rigtig";
+  return {
+    linje: t.linje, afsnit, beskrivelse: t.desc, udtryk: t.udtryk,
+    kontekst: kontekst(t.udtryk, t.linje, defs, kald),
+    gaet: tom ? null : t.gaet,
+    status,
+    javascript: kørsel.fejl[t.desc]?.js ?? null,
+    forklaring: tom ? null : hvorfor[forklaringNoegle(t.desc)] || null,
+  };
+}
+
+// Funktioner, du selv skal skrive: linjer med "DIN KODE HER" og navnet på funktionen, de står i
+function stubbe(linjer) {
+  const ud = [];
+  linjer.forEach((l, i) => {
+    if (!/DIN KODE HER/.test(l)) return;
+    let j = i;
+    while (j > 0 && !/^function |^const \w+ = /.test(linjer[j])) j--;
+    ud.push({ linje: i + 1, navn: (linjer[j].match(/^(?:function\s+|const\s+)(\w+)/) || [])[1] || "stub" });
+  });
   return ud;
 }
 // ── drill-gæt: kun værdier, aldrig kode ──────────────────────────────
@@ -793,7 +828,10 @@ async function sync({ poster }) {
       const d = p.data || {};
       const r = p.type === "repetition" ? gemRepetition(d, meta) : p.type === "begreb" ? gemBegreb(d, meta)
         : p.type === "drill" ? await gemDrill(d, meta) : (() => { throw new Error("ukendt type"); })();
-      ud.push(r.status === "ukendt" ? { id, ok: false, fejl: r.fejl } : { id, ok: true, ...r });
+      if (r.status === "ukendt") { ud.push({ id, ok: false, fejl: r.fejl }); continue; }
+      // Står samme id to gange i én sending, gemmes det kun første gang
+      set.set(id, { type: p.type, rigtig: r.status === "rigtig" });
+      ud.push({ id, ok: true, ...r });
     } catch (e) { ud.push({ id, ok: false, fejl: e.message }); }
   }
   return { resultater: ud };

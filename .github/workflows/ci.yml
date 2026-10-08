@@ -44,7 +44,7 @@ jobs:
             echo "$u $kode"
             test "$kode" = 200
           done
-      - name: Tests (Overbliks statistik, Karriere-serverens sikkerhed)
+      - name: Tests (Overbliks statistik, coachens beregninger, Karriere-serverens sikkerhed)
         run: python -m unittest discover -s tests -v
 
   coach:
@@ -70,3 +70,5 @@ jobs:
         run: for f in studie/Scripts/*.js studie/Scripts/kompas/*.js; do node --check "$f"; done
       - name: Drill-gæt køres aldrig som kode
         run: node tests/test_drill_gaet.js
+      - name: Gentagelsesplan og sync uden dubletter
+        run: node tests/test_studie_repetition.js

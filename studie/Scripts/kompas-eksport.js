@@ -491,7 +491,7 @@ function fagnoter(forrige) {
       const { uger, billeder } = fagnoterUger(fil, f.id);
       const dir = path.join(UD, "fagnoter", f.id);
       if (forrige?.[f.id]?.stempel !== stempel || !findes(dir)) {
-        const tmp = dir + ".tmp";
+        const tmp = `${dir}.${process.pid}.tmp`;   // to eksporter på én gang (opdater.sh og en gemning) deler ikke mappen
         fs.rmSync(tmp, { recursive: true, force: true });
         fs.mkdirSync(tmp, { recursive: true });
         for (const b of billeder) fs.writeFileSync(path.join(tmp, b.slice(6)), execFileSync("unzip", ["-p", fil, `word/${b}`], { maxBuffer: 256 << 20 }));
@@ -581,7 +581,7 @@ function main() {
   };
 
   fs.mkdirSync(UD, { recursive: true });
-  const skriv = (navn, indhold) => { const tmp = path.join(UD, navn + ".tmp"); fs.writeFileSync(tmp, indhold); fs.renameSync(tmp, path.join(UD, navn)); };
+  const skriv = (navn, indhold) => { const tmp = path.join(UD, `${navn}.${process.pid}.tmp`); fs.writeFileSync(tmp, indhold); fs.renameSync(tmp, path.join(UD, navn)); };
   for (const n of ls(SIDER).filter(n => /\.(html|js|css|webmanifest|png)$/.test(n))) skriv(n, fs.readFileSync(path.join(SIDER, n)));
   skriv("studie.json", JSON.stringify(data));
   // Kalenderen til Ugeoverblik på telefonen. På Mac'en læser siden overbliks liv.json (/form/liv.json), men den
