@@ -26,7 +26,7 @@ Mappe: den mappe, denne fil ligger i (i Kompas `~/kompas/karriere`)
    - Find ud af, om de læser ansøgninger, indkalder eller holder samtaler **løbende** (fx "vi holder samtaler løbende", "vi behandler ansøgninger løbende", "interviews on a rolling basis"). Så kan stillingen blive besat før fristen. Det trækker ikke ned i scoren, men skal fremgå af rapporten og vurderingen.
    - Giv en **matchscore 0–100** efter rubrikken nedenfor.
 4. Opslag, der scorer ≥ tærsklen, er dagens **bedste match**. Sortér dem med de højeste først, og ved lige score først dem med løbende samtaler og derefter den tidligste frist.
-5. Skriv rapporten, gem vurderingerne, opdater `oversigt.csv`, og flyt behandlede køfiler til `data/behandlet/`.
+5. Skriv rapporten, en `data/vurderinger/<id>.json` pr. vurderet opslag og rækkerne i `oversigt.csv`, og flyt behandlede køfiler til `data/behandlet/`. Trinnet er færdigt, når hvert opslag fra køen har en række i `oversigt.csv` og en vurderingsfil, og `data/koe/` er tom.
 
 ## Rubrik for matchscore
 | Del | Point | Hvad der vurderes |
@@ -49,7 +49,7 @@ Mappe: den mappe, denne fil ligger i (i Kompas `~/kompas/karriere`)
 ## Bedste match
 | Score | Stilling | Virksomhed | Frist | Link |
 ...
-Holder de samtaler løbende, så skriv det i Frist-kolonnen, fx `2026-10-14 · **løbende samtaler**`. Det gælder også i den anden tabel.
+Holder de samtaler løbende, så skriv det i Frist-kolonnen, fx `2026-10-14 · **løbende samtaler**`. Det gælder i alle tabeller med en Frist-kolonne.
 For hver (i samme rækkefølge som tabellen, under `### <Virksomhed> – <stilling> (<score>)`): 2–3 punkter "Hvorfor match" og 1–2 punkter "Huller/risici".
 
 ## Vurderet, men under tærsklen
@@ -69,8 +69,8 @@ For hver (i samme rækkefølge som tabellen, under `### <Virksomhed> – <stilli
 ### `oversigt.csv`
 Opret med header, hvis den ikke findes. Tilføj én række pr. vurderet opslag (semikolon-separeret, UTF-8):
 `dato;id;virksomhed;stilling;type;score;frist;status;link`
-`status` er altid `vurderet`. Brugeren opdaterer selv til `vil søge`, `søgt`, `samtale`, `afslag` osv.
-Ændr aldrig eksisterende rækker, da brugeren redigerer dem.
+`status` er altid `vurderet`. Resten (`vil søge`, `fravalgt`, `søgt`, …) sætter brugeren på Kompas (trin 2b).
+Ændr aldrig eksisterende rækker; dem ændrer Kompas.
 
 ## Afslutning
 Afslut med en kort besked (3–6 linjer) med antal nye opslag, antal over tærsklen, de 3 bedste match med score og frist (skriv "løbende samtaler" ved dem, hvor det gælder), og stien til rapporten.

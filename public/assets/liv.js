@@ -1,5 +1,7 @@
-// Shared helpers for the portal's own pages. The data is overblik's liv.json, which `liv eksport` writes
-// next to Form & Fokus (served at /form/liv.json). Nothing is calculated here beyond formatting.
+// Shared helpers for the projects' pages (Kompas, Studie, Karriere, Form & Fokus): escaping, number and date
+// formats, countdowns, calendar events' course fields, and loadLiv() for overblik's liv.json (served at /form/liv.json).
+// Every name here is a global the pages call directly, so renaming one means changing the pages too.
+// Nothing is calculated here beyond formatting.
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 const nf = d => new Intl.NumberFormat("da-DK", { minimumFractionDigits: d, maximumFractionDigits: d });
 const fmt = (x, d = 0) => (x == null ? "–" : nf(d).format(x));
@@ -27,20 +29,11 @@ async function loadLiv() {
 }
 const latestReview = liv => [...(liv.reviews || [])].sort((a, b) => a.uge.localeCompare(b.uge)).pop() || null;
 
-// "Gamma – consectetur (C) - KURS103.C - Lecture (On Campus)" -> parts
-const KINDS = { Lecture: "Forelæsning", Exercise: "Øvelse", Supervision: "Vejledning", Workshop: "Workshop", Exam: "Eksamen" };
-const MODES = [[/Pre-recorded/i, "forudindspillet"], [/Online/i, "online"], [/Off .*Campus/i, "uden for campus"], [/On Campus/i, "campus"]];
+// Et kalenderpunkt fra liv.json -> { ...e, fag, kode, art, form } som tekst. garmin-coach har allerede delt
+// undervisningen fra universitetets skema op (feltet `fag`); titlerne tolkes kun dér. Andre punkter får null.
 function parseEvent(e) {
-  const out = { ...e, fag: null, kode: null, art: null, form: null };
-  if (e.type !== "undervisning") return out;
-  const parts = e.titel.split(" - ");
-  out.fag = parts[0].replace(/\s*\([A-Z]{1,3}\)\s*$/, "").trim();
-  out.kode = (parts.find(p => /^[A-Z]{4}\d/.test(p)) || "").split(".")[0] || null;
-  const last = parts[parts.length - 1];
-  const kind = Object.keys(KINDS).find(k => last.startsWith(k));
-  out.art = kind ? KINDS[kind] : null;
-  out.form = (MODES.find(([re]) => re.test(last)) || [])[1] || null;
-  return out;
+  const f = e.fag || {};
+  return { ...e, fag: f.navn ?? null, kode: f.kode ?? null, art: f.art ?? null, form: f.form ?? null };
 }
 const hours = e => {
   if (!e.start || !e.slut) return 0;

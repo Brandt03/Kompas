@@ -2,6 +2,7 @@
 //
 // En lille lokal server, der lader siden læse og skrive DIT arbejde i semestermappen. Den kan kun:
 //   - skrive dit svar og din markering [✓]/[~]/[✗] ind under et spørgsmål i */Genkald/genkald-*.md
+//     (karakteren 1-4, som repetitionen planlægges efter, står kun i genkald-log.jsonl)
 //   - skrive din definition (og for Beta: "Hvad det får dig til at se") i */Genkald/begreber.md
 //   - erstatte TOM med DIT gæt i en tjek(...)-linje i Gamma/vscode/Drills/kap*.js og køre filen
 // På farten (mobil.html) henter en pakke med dagens kort, så du kan svare uden net, og sender svarene
@@ -148,9 +149,10 @@ function facit(fag, fil, nr) {
 
 const SIKKERHED = ["sikker", "usikker", "gaet"];
 // meta: { tid, sync_id } for svar, der er givet på telefonen og sendes senere (se /sync)
-function gemGenkald({ fag, fil, nr, svar, mark, sikkerhed }, meta = {}) {
+function gemGenkald({ fag, fil, nr, svar, mark, karakter, sikkerhed }, meta = {}) {
   const f = genkaldFil(fag, fil);
-  if (mark != null && !MARK[mark]) throw new Error("ukendt markering");
+  const bed = mark != null || karakter != null ? bedømmelse({ mark, karakter }) : null;
+  mark = bed?.mark;
   const { linjer, blokke: bs } = blokke(læs(f));
   const b = bs.find(x => x.nr === +nr);
   if (!b) throw new Error(`spørgsmål ${nr} findes ikke i ${fil}`);
@@ -168,7 +170,7 @@ function gemGenkald({ fag, fil, nr, svar, mark, sikkerhed }, meta = {}) {
   if (!bag.length) bag = [""];
   const ny = [...linjer.slice(0, b.start), ...krop, ...bag, ...linjer.slice(b.slut)];
   skriv(f, ny.join("\n"));
-  logFoersoeg({ ...meta, type: "genkald", noegle: `${fag}/${fil}#${nr}`, mark: mark || null,
+  logFoersoeg({ ...meta, type: "genkald", noegle: `${fag}/${fil}#${nr}`, mark: mark || null, ...(bed ? { karakter: bed.karakter } : {}),
     ...(SIKKERHED.includes(sikkerhed) ? { sikkerhed } : {}) });
   return { gemt: true };
 }
@@ -603,10 +605,10 @@ function afslutEksamen({ fag, id, svar, marks, start, slut, tilstand }) {
   eksporterSnart();
   return { gemt: path.relative(ROD, fil) };
 }
-function gemEksamenResultat({ fag, id, nr, mark, sikkerhed }, meta = {}) {
+function gemEksamenResultat({ fag, id, nr, mark, karakter, sikkerhed }, meta = {}) {
   eksFil(fag, id);
-  if (!RES[mark]) throw new Error("ukendt markering");
-  logFoersoeg({ ...meta, type: "eksamen", noegle: `${fag}/${id}#${+nr}`, mark: RES[mark], ...(SIKKERHED.includes(sikkerhed) ? { sikkerhed } : {}) });
+  const bed = bedømmelse({ mark, karakter });
+  logFoersoeg({ ...meta, type: "eksamen", noegle: `${fag}/${id}#${+nr}`, ...bed, ...(SIKKERHED.includes(sikkerhed) ? { sikkerhed } : {}) });
   return { gemt: true };
 }
 
@@ -633,42 +635,106 @@ const ugeFor = (afsnit, fil) => +((afsnit || "").match(/Uge\s+(\d+)/i) || fil.ma
 //   genkald  alle spørgsmål i genkald-*.md (nye kommer med nogle få ad gangen)
 //   begreb   definitioner, du selv har skrevet i begreber.md (overhøres)
 //   drill    tjek-opgaver, du har gættet forkert mindst én gang
-// Interval efter et forsøg: ✓ → 3, 7, 21, 60, 120 dage (stiger for hver ✓ i træk), ~ → 2 dage, ✗ → 1 dag.
-const INTERVAL = [3, 7, 21, 60, 120], NYE_PR_DAG = 5, MAKS_KORT = 25, DAG = 864e5;
+// Hvornår et kort kommer igen, regnes med FSRS-6 (se nedenfor) ud fra karaktererne i loggen.
+const NYE_PR_DAG = 5, MAKS_KORT = 25, DAG = 864e5;
 const RES = { sad: "sad", halvt: "halvt", blankt: "blankt", "✓": "sad", "~": "halvt", "✗": "blankt" };
+// Karakter efter et forsøg, som i FSRS: 1 blankt (Again), 2 halvt (Hard), 3 sad (Good), 4 let (Easy).
+// "Let" er sad uden at tænke sig om; i genkald-*.md står den som [✓] ligesom sad.
+// Poster fra før karaktererne (og prøveeksamener, der rettes med ✓/~/✗) har kun mark: sad → 3.
+const KARAKTER_MARK = { 1: "blankt", 2: "halvt", 3: "sad", 4: "sad" }, MARK_KARAKTER = { blankt: 1, halvt: 2, sad: 3 };
+// { mark, karakter } fra en side: karakteren vinder; en gammel side på telefonen sender kun mark
+function bedømmelse({ mark, karakter }) {
+  if (karakter != null) {
+    if (!KARAKTER_MARK[karakter]) throw new Error("ukendt karakter");
+    return { mark: KARAKTER_MARK[karakter], karakter: +karakter };
+  }
+  if (!RES[mark]) throw new Error("ukendt markering");
+  return { mark: RES[mark], karakter: MARK_KARAKTER[RES[mark]] };
+}
+
+// ── FSRS-6 ──
+// Standardparametrene fra py-fsrs/fsrs-rs. Når loggen har nogle hundrede gennemgange, kan de
+// erstattes af dine egne fra FSRS' optimizer (den læser samme slags historik: kort, tid, karakter).
+const W = [0.212, 1.2931, 2.3065, 8.2956, 6.4133, 0.8334, 3.0194, 0.001, 1.8722, 0.1666, 0.796,
+  1.4835, 0.0614, 0.2629, 1.6483, 0.6014, 1.8729, 0.5425, 0.0912, 0.0658, 0.1542];
+// MÅL: sandsynligheden for at kunne et kort, når det kommer igen. MÅL_EKSAMEN: på eksamensdagen.
+const MÅL = 0.9, MÅL_EKSAMEN = 0.95;
+// Et kort "sidder", når du med 90 % sandsynlighed stadig kan det om tre uger
+const LÆRT = 21;
+// Eksamensdatoerne pr. fag-id, fra din eksamensplan. Et fag uden eksamen planlægges kun efter MÅL.
+// Udfyld med dine egne, fx { alfa: new Date(2027, 0, 14).getTime(), gamma: new Date(2027, 0, 21).getTime() }.
+const EKSAMEN = {};
+const FALD = -W[20], FAKTOR = 0.9 ** (1 / FALD) - 1;
+const klem = (x, a, b) => Math.min(b, Math.max(a, x));
+// Sandsynligheden for at kunne kortet t dage efter sidste gennemgang, og antal dage til den er r
+const husker = (t, s) => (1 + FAKTOR * t / s) ** FALD;
+const dageTil = (s, r) => s / FAKTOR * (r ** (1 / FALD) - 1);
+const d0 = g => W[4] - Math.exp(W[5] * (g - 1)) + 1;
+// Ny tilstand { s: stabilitet i dage, d: sværhed 1-10 } efter karakter g, `dage` hele dage efter sidste gennemgang
+function fsrs(st, g, dage) {
+  if (!st) return { s: klem(W[g - 1], 0.001, 36500), d: klem(d0(g), 1, 10) };
+  const { s, d } = st;
+  let ns;
+  if (dage < 1) {   // igen samme dag
+    let op = Math.exp(W[17] * (g - 3 + W[18])) * s ** -W[19];
+    if (g >= 3) op = Math.max(op, 1);
+    ns = s * op;
+  } else {
+    const r = husker(dage, s);
+    ns = g === 1
+      ? Math.min(W[11] * d ** -W[12] * ((s + 1) ** W[13] - 1) * Math.exp(W[14] * (1 - r)), s / Math.exp(W[17] * W[18]))
+      : s * (1 + Math.exp(W[8]) * (11 - d) * s ** -W[9] * (Math.exp(W[10] * (1 - r)) - 1) * (g === 2 ? W[15] : 1) * (g === 4 ? W[16] : 1));
+  }
+  const nd = W[7] * d0(4) + (1 - W[7]) * (d - W[6] * (g - 3) * (10 - d) / 9);
+  return { s: klem(ns, 0.001, 36500), d: klem(nd, 1, 10) };
+}
+// Dage til næste gang. Ville kortet først komme efter eksamen, men under MÅL_EKSAMEN på eksamensdagen,
+// kommer det i stedet, når det falder til MÅL_EKSAMEN (altid senest dagen før eksamen).
+function næsteInterval(t, s, fag) {
+  let dage = Math.max(1, Math.round(dageTil(s, MÅL)));
+  const eks = EKSAMEN[fag];
+  if (eks && t < eks && t + dage * DAG > eks) {
+    const før = Math.max(1, Math.round(dageTil(s, MÅL_EKSAMEN)));
+    if (t + før * DAG <= eks) dage = før;
+  }
+  return dage;
+}
 
 // I tidsorden: svar fra telefonen kommer først i loggen, når de er sendt, men med det tidspunkt, du gav dem
 function logPoster() {
   try { return læs(LOG).split("\n").filter(Boolean).map(l => JSON.parse(l)).sort((a, b) => String(a.tid).localeCompare(String(b.tid))); } catch { return []; }
 }
-// Hændelser pr. kort i tidsorden: { tid, res, sikkerhed }
+// Hændelser pr. kort i tidsorden: { t, res, g (karakter 1-4), sikkerhed }
 function hændelser(poster) {
   const ud = {};
   const put = (k, h) => (ud[k] ||= []).push(h);
+  const bedømt = (p, t) => ({ t, res: RES[p.mark], g: KARAKTER_MARK[p.karakter] ? +p.karakter : MARK_KARAKTER[RES[p.mark]], sikkerhed: p.sikkerhed });
   const sidsteDrillFejl = {};
   for (const p of poster) {
     const t = Date.parse(p.tid);
-    if (p.type === "genkald" && p.mark) put(`genkald:${p.noegle}`, { t, res: RES[p.mark], sikkerhed: p.sikkerhed });
+    if (p.type === "genkald" && p.mark) put(`genkald:${p.noegle}`, bedømt(p, t));
     else if (p.type === "begreb") put(`begreb:${p.noegle}`, { t, res: "ny" });
-    else if (p.type === "overhoer") put(`begreb:${p.noegle}`, { t, res: RES[p.mark], sikkerhed: p.sikkerhed });
+    else if (p.type === "overhoer") put(`begreb:${p.noegle}`, bedømt(p, t));
     else if (p.type === "drill") {
       // Et rigtigt gæt lige efter et forkert er set i facit, ikke husket; det tæller ikke
-      if (!p.rigtig) { sidsteDrillFejl[p.noegle] = t; put(`drill:${p.noegle}`, { t, res: "blankt" }); }
-      else if (!(sidsteDrillFejl[p.noegle] && t - sidsteDrillFejl[p.noegle] < DAG)) put(`drill:${p.noegle}`, { t, res: "sad", foerste: true });
-    } else if (p.type === "drill-rep") put(`drill:${p.noegle}`, { t, res: RES[p.mark], sikkerhed: p.sikkerhed });
-    else if (p.type === "eksamen" && p.mark) put(`eksamen:${p.noegle}`, { t, res: RES[p.mark], sikkerhed: p.sikkerhed });
+      if (!p.rigtig) { sidsteDrillFejl[p.noegle] = t; put(`drill:${p.noegle}`, { t, res: "blankt", g: 1 }); }
+      else if (!(sidsteDrillFejl[p.noegle] && t - sidsteDrillFejl[p.noegle] < DAG)) put(`drill:${p.noegle}`, { t, res: "sad", g: 3, foerste: true });
+    } else if (p.type === "drill-rep") put(`drill:${p.noegle}`, bedømt(p, t));
+    else if (p.type === "eksamen" && p.mark) put(`eksamen:${p.noegle}`, bedømt(p, t));
   }
   return ud;
 }
-function planlæg(hs) {
-  let niveau = 0, forfald = null, sidst = null;
+// Genafspiller kortets historik gennem FSRS: { s, d, forfald, sidst }. En nyskrevet definition
+// starter begrebet forfra som nyt kort, der kommer dagen efter.
+function planlæg(hs, fag) {
+  let st = null, forfald = null, sidst = null;
   for (const h of hs) {
-    sidst = h;
-    if (h.res === "sad") { niveau++; forfald = h.t + INTERVAL[Math.min(niveau, INTERVAL.length) - 1] * DAG; }
-    else if (h.res === "halvt") { niveau = Math.max(0, niveau - 1); forfald = h.t + 2 * DAG; }
-    else { niveau = 0; forfald = h.t + DAG; }   // blankt, eller nyskrevet definition
+    if (h.res === "ny") { st = null; sidst = null; forfald = h.t + DAG; continue; }
+    st = fsrs(st, h.g, sidst == null ? 0 : Math.floor((h.t - sidst) / DAG));
+    sidst = h.t;
+    forfald = h.t + næsteInterval(h.t, st.s, fag) * DAG;
   }
-  return { niveau, forfald, sidst: sidst?.t ?? null };
+  return { s: st?.s ?? null, d: st?.d ?? null, forfald, sidst };
 }
 
 async function repetitionsKort() {
@@ -679,7 +745,7 @@ async function repetitionsKort() {
   for (const f of genkaldListe()) for (const q of f.spoergsmaal) {
     const noegle = `${f.fag}/${f.fil}#${q.nr}`, hs = H[`genkald:${noegle}`] || [];
     // Markeret i filen, men ikke i loggen (fx i VS Code): forfalden nu
-    const p = hs.length ? planlæg(hs) : q.mark ? { niveau: 0, forfald: 0, sidst: null } : null;
+    const p = hs.length ? planlæg(hs, f.fag) : q.mark ? { s: null, d: null, forfald: 0, sidst: null } : null;
     const uge = ugeFor(q.afsnit, f.fil);
     alle.push({ type: "genkald", noegle, fag: f.fag, uge, laest: !!L[f.fag]?.[uge], kicker: `${FAG[f.fag]} · ${f.uger} · ${q.afsnit}`, titel: `Spørgsmål ${q.nr}`,
       spoergsmaal: q.tekst, ny: !p, ...(p || {}) });
@@ -688,7 +754,7 @@ async function repetitionsKort() {
   for (const fag of Object.keys(B)) for (const b of B[fag].begreber) {
     if (!b.definition) continue;
     const noegle = `${fag}/begreb/${b.begreb}`, hs = H[`begreb:${noegle}`] || [];
-    const p = hs.length ? planlæg(hs) : { niveau: 0, forfald: 0, sidst: null };
+    const p = hs.length ? planlæg(hs, fag) : { s: null, d: null, forfald: 0, sidst: null };
     alle.push({ type: "begreb", noegle, fag, kicker: `${FAG[fag]} · begreb · ${b.afsnit}`, titel: b.begreb,
       spoergsmaal: `Forklar **${b.begreb}** med dine egne ord${B[fag].hoved_se ? ", og sig hvad det får dig til at se i en organisation" : ""}.`, ...p });
   }
@@ -697,7 +763,7 @@ async function repetitionsKort() {
     const noegle = `drill/${k.fil}#${t.beskrivelse}`, hs = H[`drill:${noegle}`] || [];
     if (!hs.some(h => h.res === "blankt")) continue;   // kun dem, du har taget fejl af
     alle.push({ type: "drill", noegle, fag: "gamma", kicker: `${FAG.gamma} · drill · ${k.titel}`, titel: t.beskrivelse.replace(/\s+←.*$/, ""),
-      spoergsmaal: "Hvad giver udtrykket?", udtryk: t.udtryk, kontekst: t.kontekst, ...planlæg(hs) });
+      spoergsmaal: "Hvad giver udtrykket?", udtryk: t.udtryk, kontekst: t.kontekst, ...planlæg(hs, "gamma") });
   }
 
   // Eksamensopgaver, du ikke havde helt rigtigt, repeteres som kort
@@ -708,7 +774,7 @@ async function repetitionsKort() {
     try { const e = parseEksamen(læs(eksFil(fag, id))); titel = e.titel; for (const sek of e.sektioner) q ||= sek.spoergsmaal.find(x => x.nr === +nr) && { ...sek.spoergsmaal.find(x => x.nr === +nr), sek: sek.titel, intro: sek.intro }; } catch { continue; }
     if (!q) continue;
     alle.push({ type: "eksamen", noegle: k.slice(8), fag, kicker: `${EKS_FAG[fag]} · eksamen · ${titel.replace(/^\w+ — /, "")} · ${q.sek}`, titel: `Opgave ${nr}`,
-      spoergsmaal: (fag === "gamma" && q.intro ? q.intro + "\n\n" : "") + q.tekst, ...planlæg(hs) });
+      spoergsmaal: (fag === "gamma" && q.intro ? q.intro + "\n\n" : "") + q.tekst, ...planlæg(hs, fag) });
   }
   const forfaldne = alle.filter(k => !k.ny && k.forfald <= dagSlut.getTime()).sort((a, b) => a.forfald - b.forfald);
   const nyeIdag = new Set(poster.filter(p => p.type === "genkald" && p.mark && Date.parse(p.tid) >= idagStart.getTime()).map(p => p.noegle));
@@ -728,13 +794,21 @@ async function repetitionsKort() {
   for (const hs of Object.values(H)) for (const h of hs) if (h.sikkerhed && kal[h.sikkerhed] && RES[h.res]) { kal[h.sikkerhed].n++; kal[h.sikkerhed][h.res]++; }
   const klaretIdag = poster.filter(p => ["genkald", "overhoer", "drill-rep"].includes(p.type) && p.mark && Date.parse(p.tid) >= idagStart.getTime()).length;
   const næste = alle.filter(k => !k.ny && k.forfald > dagSlut.getTime()).sort((a, b) => a.forfald - b.forfald)[0];
+  // Til eksamen: hvor sandsynligt du kan de kort, du har gennemgået, på eksamensdagen, hvis du ikke repeterer mere
+  const eksamen = {};
+  for (const [fag, eks] of Object.entries(EKSAMEN)) {
+    if (eks < idagStart.getTime()) continue;
+    const rs = alle.filter(k => k.fag === fag && k.s != null).map(k => husker((eks - k.sidst) / DAG, k.s));
+    eksamen[fag] = { dato: new Date(eks).toLocaleDateString("sv-SE"), kort: rs.length,
+      forventet: rs.length ? Math.round(100 * rs.reduce((a, r) => a + r, 0) / rs.length) : null, under_maal: rs.filter(r => r < MÅL_EKSAMEN).length };
+  }
 
   return {
-    kort: kø.map(({ forfald, sidst, ...k }) => ({ ...k, id: `${k.type}:${k.noegle}`, forfald: forfald ? new Date(forfald).toISOString() : null, sidst: sidst ? new Date(sidst).toISOString() : null })),
+    kort: kø.map(({ forfald, sidst, s, d, ...k }) => ({ ...k, id: `${k.type}:${k.noegle}`, stabilitet: s != null ? +s.toFixed(1) : null, svaerhed: d != null ? +d.toFixed(1) : null, forfald: forfald ? new Date(forfald).toISOString() : null, sidst: sidst ? new Date(sidst).toISOString() : null })),
     statistik: { forfaldne: forfaldne.length, nye: nye.length, nye_venter_paa_laesning: venter.length,
       nye_klar: alle.filter(k => k.ny && k.laest).length, klaret_i_dag: klaretIdag, i_alt: alle.length,
-      laert: alle.filter(k => !k.ny && k.niveau >= 2).length, naeste: næste ? new Date(næste.forfald).toISOString() : null,
-      kalibrering: kal, minutter: Math.max(1, Math.round(kø.length * 0.75)) },
+      laert: alle.filter(k => !k.ny && k.s >= LÆRT).length, naeste: næste ? new Date(næste.forfald).toISOString() : null,
+      kalibrering: kal, minutter: Math.max(1, Math.round(kø.length * 0.75)), eksamen, maal_eksamen: MÅL_EKSAMEN },
   };
 }
 async function repetitionSvar(noegle) {
@@ -763,23 +837,23 @@ async function repetitionSvar(noegle) {
   }
   throw new Error("ukendt kort");
 }
-function gemRepetition({ noegle, mark, sikkerhed, svar }, meta = {}) {
+function gemRepetition({ noegle, mark, karakter, sikkerhed, svar }, meta = {}) {
   noegle = String(noegle || "");
-  if (!RES[mark]) throw new Error("ukendt markering");
+  const bed = bedømmelse({ mark, karakter });
   if (sikkerhed != null && !SIKKERHED.includes(sikkerhed)) throw new Error("ukendt sikkerhed");
   const type = noegle.split(":")[0], rest = noegle.slice(noegle.indexOf(":") + 1);
   if (type === "genkald") {
     const m = rest.match(/^(alfa|beta)\/(genkald-[\w-]+\.md)#(\d+)$/);
     if (!m) throw new Error("ukendt kort");
-    return gemGenkald({ fag: m[1], fil: m[2], nr: +m[3], svar, mark: RES[mark], sikkerhed }, meta);
+    return gemGenkald({ fag: m[1], fil: m[2], nr: +m[3], svar, karakter: bed.karakter, sikkerhed }, meta);
   }
   if (type === "eksamen") {
     const m = rest.match(/^(\w+)\/([\w-]+)#(\d+)$/);
     if (!m) throw new Error("ukendt kort");
-    return gemEksamenResultat({ fag: m[1], id: m[2], nr: +m[3], mark, sikkerhed }, meta);
+    return gemEksamenResultat({ fag: m[1], id: m[2], nr: +m[3], karakter: bed.karakter, sikkerhed }, meta);
   }
   if (type !== "begreb" && type !== "drill") throw new Error("ukendt kort");
-  logFoersoeg({ ...meta, type: type === "begreb" ? "overhoer" : "drill-rep", noegle: rest, mark: RES[mark], ...(sikkerhed ? { sikkerhed } : {}) });
+  logFoersoeg({ ...meta, type: type === "begreb" ? "overhoer" : "drill-rep", noegle: rest, ...bed, ...(sikkerhed ? { sikkerhed } : {}) });
   return { gemt: true };
 }
 

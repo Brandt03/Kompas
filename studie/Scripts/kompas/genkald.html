@@ -90,6 +90,12 @@ let fane = (location.hash.slice(1) || "idag"), G = null, B = null, D = null, S =
 let rCur = null, rVist = false, rSik = null, rSvar = null, gSik = null;
 // Kalibrering: vælg hvor sikker du er, før svaret vises
 const SIK = [["sikker", "Sikker"], ["usikker", "Usikker"], ["gaet", "Gætter / kan ikke"]];
+// Karakter efter et forsøg, som i FSRS: 4 let, 3 sad, 2 halvt, 1 blankt. Let og Sad står begge som [✓] i filen.
+const KAR = [[4, "sad", "✓ Let", "Sad med det samme, uden at tænke dig om"], [3, "sad", "✓ Sad", "Sad, men du skulle tænke dig om"],
+  [2, "halvt", "~ Halvt", "Noget af det, eller kun med besvær"], [1, "blankt", "✗ Blankt", "Kunne det ikke"]];
+const KAR_DRILL = [[4, "sad", "✓ Let", "Vidste det med det samme"], [3, "sad", "✓ Rigtigt", "Rigtigt, men du skulle tænke dig om"], [1, "blankt", "✗ Forkert", "Forkert"]];
+const karKnapper = (data, kar = KAR) => kar.map(([g, m, t, h]) => `<button type="button" class="btn m-${m}" data-${data}="${g}" title="${h}">${t}</button>`).join("");
+const karMark = g => KAR.find(x => x[0] === +g)[1];
 const sikKnapper = (kræverTekst) => `<div class="row"><span class="meta">Hvor sikker er du?</span>${SIK.map(([k, t], i) =>
   `<button type="button" class="btn${i ? " ghost" : ""}" data-sik="${k}"${kræverTekst && k !== "gaet" ? " data-krav" : ""}>${t}</button>`).join("")}<span class="spacer"></span><span class="meta">så vises svaret</span></div>`;
 let gFag = "alfa", gFil = "alle", gCur = null, gVist = false, gFacit = null;
@@ -121,6 +127,16 @@ function kalibrering(k) {
   const s = k.sikker, over = s?.n >= 5 && pct(s.sad, s.n) < 75;
   return `<div style="display:grid;gap:8px">${rows}</div>${over ? `<p class="meta" style="margin:10px 0 0;color:var(--warning)">Når du er sikker, sidder det kun ${pct(s.sad, s.n)} % af gangene. Brug fejlene til at finde de emner, hvor du overvurderer dig selv.</p>` : ""}`;
 }
+// Hvor meget af det, du har gennemgået, du kan på eksamensdagen, hvis du stopper med at repetere nu
+function tilEksamen(st) {
+  const rk = Object.entries(st.eksamen || {}).filter(([, e]) => e.kort);
+  if (!rk.length) return "";
+  return `<section class="card panel"><div class="panel-head"><h2>Til eksamen</h2><span class="meta">hvis du ikke repeterer mere</span></div>
+    <div style="display:grid;gap:8px">${rk.map(([f, e]) => `<div class="row" style="gap:10px"><span style="width:120px">${FAGNAVN[f]} · ${dayMonth(new Date(e.dato)).replace(/\.$/, "")}</span>
+      <span class="meter" style="flex:1;height:8px;border-radius:4px;background:var(--surface-inset);overflow:hidden"><i style="display:block;height:100%;width:${e.forventet}%;background:var(--mark)"></i></span>
+      <span class="meta" style="width:130px;text-align:right">${e.forventet} % af ${e.kort} kort</span></div>`).join("")}</div>
+    ${rk.some(([, e]) => e.under_maal) ? `<p class="meta" style="margin:10px 0 0">${rk.filter(([, e]) => e.under_maal).map(([f, e]) => `${e.under_maal} ${FAGNAVN[f]}-kort`).join(" og ")} er under ${Math.round(100 * st.maal_eksamen)} % på eksamensdagen. De kommer i Dagens kort inden da.</p>` : ""}</section>`;
+}
 function renderIdag() {
   const st = R.statistik, k = R.kort[0];
   const ialt = st.klaret_i_dag + R.kort.length;
@@ -128,7 +144,7 @@ function renderIdag() {
   const typeChip = t => `<span class="mk" style="min-width:auto;padding:0 8px">${TYPENAVN[t]}</span>`;
   root().innerHTML = `
     <div class="bar"><span class="meta">${R.kort.length ? `<b style="color:var(--text-primary)">${R.kort.length} kort tilbage</b> i dag · ca. ${Math.max(1, Math.round(R.kort.length * 0.75))} min` : "Færdig for i dag"} · ${st.klaret_i_dag} klaret</span>
-      <span class="spacer"></span><span class="meta">${st.laert} af ${st.i_alt} kort sidder (✓ to gange i træk)</span></div>
+      <span class="spacer"></span><span class="meta">${st.laert} af ${st.i_alt} kort sidder (90 % om tre uger)</span></div>
     <div class="meter" style="height:6px;border-radius:3px;background:var(--surface-inset);overflow:hidden;margin:-4px 0 4px"><i style="display:block;height:100%;width:${pct(st.klaret_i_dag, ialt)}%;background:var(--mark)"></i></div>
     ${k ? `<section class="card q">
       <div class="kicker">${typeChip(k.type)}<span>${esc(k.kicker)}</span>${k.ny ? `<span class="mk">ny</span>` : ""}</div>
@@ -141,17 +157,16 @@ function renderIdag() {
           ${rSvar?.form === "md" ? `<div class="md">${md(rSvar.svar || "Der er ingen facit.")}</div>` : rSvar?.form === "kode" ? `<pre style="margin:0;font:13px ui-monospace,Menlo,monospace">${esc(rSvar.svar ?? "")}</pre>` : `<div>${esc(rSvar?.svar || "")}</div>`}
           ${rSvar?.se ? `<div class="lbl" style="margin-top:10px">Hvad det får dig til at se</div><div>${esc(rSvar.se)}</div>` : ""}
           ${rSvar?.forklaring ? `<div class="lbl" style="margin-top:10px">Hvorfor</div><div class="md">${md(rSvar.forklaring)}</div>` : ""}</div>
-        <div class="row"><span class="meta">Hvordan gik det?</span>${k.type === "drill"
-          ? `<button type="button" class="btn m-sad" data-rmark="sad">✓ Rigtigt</button><button type="button" class="btn m-blankt" data-rmark="blankt">✗ Forkert</button>`
-          : `<button type="button" class="btn m-sad" data-rmark="sad">✓ Sad</button><button type="button" class="btn m-halvt" data-rmark="halvt">~ Halvt</button><button type="button" class="btn m-blankt" data-rmark="blankt">✗ Blankt</button>`}
+        <div class="row"><span class="meta">Hvordan gik det?</span>${karKnapper("rkar", k.type === "drill" ? KAR_DRILL : KAR)}
           <span class="spacer"></span><span class="meta">du sagde: ${esc(SIK.find(([s]) => s === rSik)?.[1] || "")}</span></div>`
       : `${sikKnapper(false)}<div class="row"><span class="spacer"></span><button type="button" class="btn quiet" id="r-spring">Tag den senere</button></div>`}
     </section>` : `<div class="card empty">Du er igennem dagens kort.${st.naeste ? ` Næste kort kommer ${dayMonth(new Date(st.naeste)).replace(/\.$/, "")}.` : ""}<br>Vil du mere, så tag nye spørgsmål under Genkald eller skriv begreber under Begreber.</div>`}
     ${st.nye_venter_paa_laesning ? `<a class="card panel" href="fag.html" style="display:flex;gap:12px;align-items:center;text-decoration:none;color:inherit">
       <span class="mk" style="min-width:auto;padding:0 8px">${st.nye_venter_paa_laesning}</span>
       <span style="flex:1">nye genkaldsspørgsmål venter, til du markerer deres uge som læst under <b>Fag → Styr på</b>.</span>${icon("arrow-right", 14)}</a>` : ""}
+    ${tilEksamen(st)}
     <section class="card panel"><div class="panel-head"><h2>Kalibrering</h2><span class="meta">hvor tit sad det, når du sagde …</span></div>${kalibrering(st.kalibrering)}</section>
-    <p class="hint">Kort, der sidder, kommer igen efter 3, 7, 21, 60 og 120 dage. Halvt: igen om 2 dage. Blankt eller forkert: i morgen. Drills er dem, du har gættet forkert på mindst én gang; begreber er dem, du selv har defineret. Op til 5 nye genkaldsspørgsmål om dagen.</p>`;
+    <p class="hint">Kortene planlægges med FSRS: hvert kort kommer igen, når du regnes for at kunne det med 90 % sandsynlighed, så lette kort venter længere end svære. Ville et kort i et fag med eksamen først komme efter eksamen, men du kan det med under ${Math.round(100 * st.maal_eksamen)} % på eksamensdagen, kommer det før. Let: sad med det samme. Sad: du skulle tænke dig om. Drills er dem, du har gættet forkert på mindst én gang; begreber er dem, du selv har defineret. Op til 5 nye genkaldsspørgsmål om dagen.</p>`;
   const ta = document.getElementById("r-svar");
   if (ta) { ta.oninput = () => kladde.gem("r:" + k.id, ta.value); if (!rVist) ta.focus(); }
 }
@@ -160,10 +175,10 @@ async function rVisSvar(sik) {
   try { rSvar = await hent(`/repetition/svar?noegle=${encodeURIComponent(k.id)}`); rSik = sik; rVist = true; renderIdag(); }
   catch (e) { toast(`Kunne ikke hente svaret: ${e.message}`); }
 }
-async function rMarker(mark) {
-  const k = R.kort[0], svar = document.getElementById("r-svar")?.value || "";
+async function rMarker(karakter) {
+  const k = R.kort[0], svar = document.getElementById("r-svar")?.value || "", mark = karMark(karakter);
   try {
-    await post("/repetition", { noegle: k.id, mark, sikkerhed: rSik, svar: k.type === "genkald" ? svar : undefined });
+    await post("/repetition", { noegle: k.id, karakter: +karakter, sikkerhed: rSik, svar: k.type === "genkald" ? svar : undefined });
     kladde.gem("r:" + k.id, "");
     R.kort.shift(); R.statistik.klaret_i_dag++;
     const kal = R.statistik.kalibrering[rSik]; if (kal) { kal.n++; kal[mark]++; }
@@ -202,7 +217,7 @@ function renderGenkald() {
       ${q.svar ? `<details><summary>Dit forrige svar${q.dato ? ` (${esc(q.dato)})` : ""}</summary><div class="forrige">${esc(q.svar)}</div></details>` : ""}
       <textarea id="svar" placeholder="Skriv dit svar fra hukommelsen, før du ser facit …">${esc(kladde.hent(k))}</textarea>
       ${gVist ? `<div class="facit"><div class="lbl">Facit</div><div class="md">${gFacit ? md(gFacit) : "Der er ingen facit til dette spørgsmål."}</div></div>
-        <div class="row"><span class="meta">Hvordan gik det?</span><button type="button" class="btn m-sad" data-mark="sad">✓ Sad</button><button type="button" class="btn m-halvt" data-mark="halvt">~ Halvt</button><button type="button" class="btn m-blankt" data-mark="blankt">✗ Blankt</button>
+        <div class="row"><span class="meta">Hvordan gik det?</span>${karKnapper("gkar")}
           <span class="spacer"></span><span class="meta">gemmes i ${esc(q.fil)}</span></div>`
       : `${sikKnapper(true)}<div class="row"><span class="spacer"></span><button type="button" class="btn quiet" id="spring">Spring over</button></div>`}
     </section>` : `<div class="card empty">Ingen spørgsmål her.</div>`}
@@ -218,10 +233,10 @@ async function gVisFacit(sik) {
   const r = await hent(`/facit?fag=${gCur.fag}&fil=${encodeURIComponent(gCur.fil)}&nr=${gCur.nr}`);
   gFacit = r.facit; gVist = true; renderGenkald();
 }
-async function gMarker(mark) {
+async function gMarker(karakter) {
   const k = `${gCur.fag}/${gCur.fil}#${gCur.nr}`, svar = document.getElementById("svar").value;
   try {
-    await post("/genkald", { fag: gCur.fag, fil: gCur.fil, nr: gCur.nr, svar, mark, sikkerhed: gSik });
+    await post("/genkald", { fag: gCur.fag, fil: gCur.fil, nr: gCur.nr, svar, karakter: +karakter, sikkerhed: gSik });
     R = null;
     kladde.gem(k, "");
     const forrige = gCur; G = await hent("/genkald");
@@ -351,10 +366,10 @@ root().addEventListener("click", e => {
   else if (t.dataset.fil) { gCur = { fil: t.dataset.fil, nr: +t.dataset.nr }; gVist = false; gFacit = null; renderGenkald(); window.scrollTo({ top: 0, behavior: "smooth" }); }
   else if (t.dataset.sik && fane === "genkald") gVisFacit(t.dataset.sik);
   else if (t.dataset.sik && fane === "idag") rVisSvar(t.dataset.sik);
-  else if (t.dataset.rmark) rMarker(t.dataset.rmark);
+  else if (t.dataset.rkar) rMarker(t.dataset.rkar);
   else if (t.id === "r-spring") { R.kort.push(R.kort.shift()); rNulstil(); renderIdag(); }
   else if (t.id === "spring") { gCur = gNaeste(gCur); gVist = false; gFacit = null; renderGenkald(); }
-  else if (t.dataset.mark) gMarker(t.dataset.mark);
+  else if (t.dataset.gkar) gMarker(t.dataset.gkar);
   else if (t.dataset.bfag) { bFag = t.dataset.bfag; bCur = null; huskValg(); renderBegreber(); }
   else if (t.dataset.btil) { bTilstand = t.dataset.btil; bCur = null; bRet = null; renderBegreber(); }
   else if (t.dataset.begreb != null) { const x = B[bFag].begreber.find(y => y.begreb === t.dataset.begreb); bTilstand = x.definition ? "overhoer" : "udfyld"; bCur = x.begreb; bVist = false; renderBegreber(); window.scrollTo({ top: 0, behavior: "smooth" }); }

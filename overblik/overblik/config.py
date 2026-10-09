@@ -24,9 +24,6 @@ BELASTNING_JSON = _path("LIV_BELASTNING_JSON", "~/.garmin-coach/site/belastning.
 # Sures eksport, som launchd skriver hvert 5. minut mens Sure kører.
 SURE_JSON = _path("LIV_SURE_JSON", "~/kompas/okonomi/dashboard/public/data.json")
 
-# Kalenderbegivenheder, hvis titel indeholder kursuskodens præfiks (fx "KURS101"), tæller som undervisning.
-KURSUSKODE = os.environ.get("LIV_KURSUSKODE", "KURS")
-
 # Selvstudie logges med CalTask som kalenderbegivenheder, fx "Selvstudie · Alfa".
 SELVSTUDIE_PRAEFIKS = os.environ.get("LIV_SELVSTUDIE_PRAEFIKS", "Selvstudie ·")
 # Dagen logningen begyndte. Uger før er ukendte, ikke 0 timer.

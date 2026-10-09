@@ -241,7 +241,10 @@ def opslag(sql: str) -> dict:
     rpe). hevy_workouts.activity_id peger på passet i activities; set_type
     er warmup/normal/dropset/failure, og rpe er NULL når den ikke er udfyldt.
     calendar_events(uid, start_local, end_local, start_utc, end_utc, summary,
-    all_day). Datoer er ISO-strenge.
+    all_day, fag_navn, fag_kode, fag_art, fag_form, kalender). kalender er
+    kalenderens navn fra feedet. fag_* er udfyldt for
+    undervisning fra skemaet (fagets navn og kode, art som "Forelæsning", form som
+    "campus") og NULL for alt andet. Datoer er ISO-strenge.
 
     Tider: start_local/end_local er lokal tid uden offset ('2026-09-23T08:00'),
     så time(), date() og strftime() giver det klokkeslæt der står i

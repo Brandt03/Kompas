@@ -7,7 +7,7 @@
 //   *.html, *.js     siderne selv, kopieret fra Scripts/kompas/ (også På fartens manifest og ikoner)
 //
 // Scriptet LÆSER kun. Det ændrer aldrig arbejdsfiler (begreber, genkald, drills, afleveringer) og
-// løser intet. Status tælles på samme måde som køreplanen gør det (afsnit 3 i rutinen).
+// løser intet. Status tælles på samme måde som køreplanen gør det (afsnit 2, punkt 3 i rutinen).
 //
 // Kør:  node Scripts/kompas-eksport.js          (fra semestermappen, eller med fuld sti)
 //       node Scripts/kompas-eksport.js --ud <mappe>
@@ -346,7 +346,7 @@ function fagStatus(f) {
 }
 
 // ── fagnoter (Word) ──────────────────────────────────────────────────
-// Køreplan-rutinen udfylder en uge i Fagnoter-dokumentet, når ugen er slut og slides er lagt op (afsnit 7).
+// Køreplan-rutinen udfylder en uge i Fagnoter-dokumentet, når ugen er slut og slides er lagt op (afsnit 6).
 // Ugeblokkene ("Uge NN — …" som Overskrift 2) læses her som html til Fag-siden, og billederne kopieres til
 // <UD>/fagnoter/<fag>/. Dokumentet læses kun (unzip -p). Kan det ikke læses, beholdes sidste eksport.
 
@@ -472,7 +472,7 @@ function fagnoterUger(fil, fagId) {
   }
   const ud = {};
   for (const [uge, u] of Object.entries(uger)) {
-    // Rutinen regner en uge for udfyldt, når blokken har en "Modeller"-label (afsnit 7 i køreplan-rutinen)
+    // Rutinen regner en uge for udfyldt, når blokken har en "Modeller"-label (afsnit 6 i køreplan-rutinen)
     ud[uge] = { titel: u.titel, udfyldt: u.afsnit.some(a => a.label === "Modeller"),
       kun_bog: u.afsnit.some(a => /Slides til uge \d+ var ikke uploadet/i.test(a.ren || "")), html: wHtml(u.afsnit) };
   }

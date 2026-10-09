@@ -7,6 +7,7 @@ import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
+from .skema import FELTER, fag_kolonner
 from .config import CONFIG
 
 SCHEMA = """
@@ -70,6 +71,11 @@ CREATE TABLE IF NOT EXISTS calendar_events (
     end_utc      TEXT,
     summary      TEXT,
     all_day      INTEGER DEFAULT 0,
+    fag_navn     TEXT,
+    fag_kode     TEXT,
+    fag_art      TEXT,
+    fag_form     TEXT,
+    kalender     TEXT,
     PRIMARY KEY (uid, start_local)
 );
 CREATE INDEX IF NOT EXISTS idx_cal_start ON calendar_events(start_local);
@@ -124,6 +130,8 @@ def connect(db_path: Path | None = None) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.executescript(SCHEMA)
     _migrate_calendar_times(conn)
+    _migrate_calendar_fag(conn)
+    _migrate_calendar_kalender(conn)
     return conn
 
 
@@ -166,6 +174,39 @@ def _migrate_calendar_times(conn: sqlite3.Connection) -> None:
             (start_local, end_local, start_utc, end_utc, r["uid"], r["start_local"]),
         )
     if rows:
+        conn.commit()
+
+
+def gem_fag(conn: sqlite3.Connection, uid: str, start_local: str, summary: str | None) -> bool:
+    """Skriv fag-felterne (se skema.py) for én begivenhed, også tomme, så en titel, der ikke længere er
+    undervisning fra skemaet, ikke beholder de gamle. Svarer, om begivenheden er undervisning fra skemaet."""
+    fag = fag_kolonner(summary)
+    sæt = ", ".join(f"{k} = ?" for k in fag)
+    conn.execute(f"UPDATE calendar_events SET {sæt} WHERE uid = ? AND start_local = ?",
+                 (*fag.values(), uid, start_local))
+    return fag["fag_navn"] is not None
+
+
+def _migrate_calendar_fag(conn: sqlite3.Connection) -> None:
+    """Tilføj fag-kolonnerne, og udfyld dem for gemte begivenheder, der mangler dem. Kører ved hver opstart, så
+    en afbrudt udfyldning bliver færdig næste gang; kun rækker, der ligner en titel fra skemaet, tjekkes."""
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(calendar_events)")}
+    nye = [f"fag_{k}" for k in FELTER if f"fag_{k}" not in cols]
+    for col in nye:
+        conn.execute(f"ALTER TABLE calendar_events ADD COLUMN {col} TEXT")
+    rows = conn.execute(
+        "SELECT uid, start_local, summary FROM calendar_events "
+        "WHERE fag_navn IS NULL AND summary LIKE '% - %.% - %'"
+    ).fetchall()
+    udfyldt = sum(gem_fag(conn, r["uid"], r["start_local"], r["summary"]) for r in rows)
+    if nye or udfyldt:
+        conn.commit()
+
+
+def _migrate_calendar_kalender(conn: sqlite3.Connection) -> None:
+    """Kalenderens navn pr. begivenhed. Gemte begivenheder står uden, til kalenderen hentes igen."""
+    if "kalender" not in {r[1] for r in conn.execute("PRAGMA table_info(calendar_events)")}:
+        conn.execute("ALTER TABLE calendar_events ADD COLUMN kalender TEXT")
         conn.commit()
 
 

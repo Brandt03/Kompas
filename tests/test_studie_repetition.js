@@ -1,4 +1,4 @@
-// Studies gentagelsesplan (intervaller ud fra loggen) og telefonens sync uden dubletter.
+// Studies gentagelsesplan (FSRS ud fra loggen) og telefonens sync uden dubletter.
 // Planen hentes direkte fra serveren; sync testes mod en server på en tom, midlertidig semestermappe.
 //   node tests/test_studie_repetition.js
 "use strict";
@@ -9,36 +9,55 @@ const { spawn } = require("child_process");
 
 const SERVER = path.join(__dirname, "..", "studie", "Scripts", "kompas-server.js");
 const src = fs.readFileSync(SERVER, "utf8");
-const kode = src.slice(src.indexOf("const INTERVAL ="), src.indexOf("async function repetitionsKort"));
-const { planlæg, hændelser, INTERVAL, DAG } = new Function(`${kode}; return { planlæg, hændelser, INTERVAL, DAG };`)();
+const t0 = Date.parse("2026-09-01T10:00:00Z");
+// Planen hentes fra serveren; `eksamen` giver "alfa" en eksamensdag (serveren selv har ingen datoer)
+const lav = (eksamen = null) => new Function(`${src.slice(src.indexOf("const NYE_PR_DAG ="), src.indexOf("async function repetitionsKort"))
+  .replace("const EKSAMEN = {};", eksamen ? `const EKSAMEN = { alfa: ${eksamen} };` : "const EKSAMEN = {};")};
+  return { planlæg, hændelser, husker, dageTil, W, DAG, MÅL, MÅL_EKSAMEN };`)();
+const { planlæg, hændelser, husker, dageTil, W, DAG, MÅL, MÅL_EKSAMEN } = lav();
 let fejl = 0;
 const tjek = (navn, ok, detalje = "") => { if (!ok) { fejl++; console.log("FEJL", navn, detalje); } };
 
 // ── planen ──
-const t0 = Date.parse("2026-09-01T10:00:00Z");
-const efter = (dage, res) => ({ t: t0 + dage * DAG, res });
+const efter = (dage, g) => ({ t: t0 + dage * DAG, res: ["blankt", "halvt", "sad", "sad"][g - 1], g });
+const dageTilForfald = p => (p.forfald - p.sidst) / DAG;
 
-// ✓ i træk giver 3, 7, 21, 60 og 120 dage, og derefter bliver det ved 120
-let hs = [], dag = 0;
-const forventet = [3, 7, 21, 60, 120, 120];
-forventet.forEach((interval, i) => {
-  hs.push(efter(dag, "sad"));
-  const p = planlæg(hs);
-  tjek(`✓ nr. ${i + 1}`, p.niveau === i + 1 && p.forfald === t0 + (dag + interval) * DAG, JSON.stringify(p));
-  dag += interval;
-});
-tjek("intervallerne er dem, README'en lover", JSON.stringify(INTERVAL) === "[3,7,21,60,120]");
+// FSRS' definition: stabiliteten er antallet af dage, til du kan kortet med 90 % sandsynlighed
+tjek("husker(s, s) er 90 %", Math.abs(husker(7, 7) - 0.9) < 1e-12 && Math.abs(husker(30, 30) - 0.9) < 1e-12);
 
-// ~ trækker ét niveau ned og giver 2 dage; ✗ starter forfra med 1 dag, og næste ✓ giver 3 dage igen
-hs = [efter(0, "sad"), efter(3, "sad"), efter(10, "halvt")];
-let p = planlæg(hs);
-tjek("~ efter to ✓", p.niveau === 1 && p.forfald === t0 + 12 * DAG, JSON.stringify(p));
-hs.push(efter(12, "blankt"));
-p = planlæg(hs);
-tjek("✗ nulstiller", p.niveau === 0 && p.forfald === t0 + 13 * DAG, JSON.stringify(p));
-hs.push(efter(13, "sad"));
-p = planlæg(hs);
-tjek("✓ efter ✗ giver 3 dage", p.niveau === 1 && p.forfald === t0 + 16 * DAG, JSON.stringify(p));
+// Første gennemgang: stabiliteten er standardparameteren for karakteren, og intervallet er den, rundet (mindst 1 dag)
+for (const [g, dage] of [[1, 1], [2, 1], [3, 2], [4, 8]]) {
+  const p = planlæg([efter(0, g)]);
+  tjek(`første gang, karakter ${g}`, p.s === W[g - 1] && dageTilForfald(p) === dage, JSON.stringify(p));
+}
+
+// Til tiden: sad igen og igen giver stadig længere intervaller
+let hs = [efter(0, 3)], forrige = 0, voksende = true;
+for (let i = 0; i < 5; i++) {
+  const p = planlæg(hs), d = dageTilForfald(p);
+  if (d <= forrige) voksende = false;
+  forrige = d;
+  hs.push(efter((hs.at(-1).t - t0) / DAG + d, 3));
+}
+tjek("sad til tiden giver voksende intervaller", voksende, String(forrige));
+
+// Efter samme historik: let > sad > halvt > blankt, og blankt sænker stabiliteten
+const basis = [efter(0, 3), efter(2, 3)];
+const efterKarakter = g => planlæg([...basis, efter(12, g)]);
+const [b, h, sd, l] = [1, 2, 3, 4].map(efterKarakter);
+tjek("let > sad > halvt > blankt", dageTilForfald(l) > dageTilForfald(sd) && dageTilForfald(sd) > dageTilForfald(h) &&
+  dageTilForfald(h) >= dageTilForfald(b), JSON.stringify([b, h, sd, l].map(dageTilForfald)));
+tjek("blankt sænker stabiliteten", b.s < planlæg(basis).s, JSON.stringify([b.s, planlæg(basis).s]));
+
+// Eksamen mellem kortets 95 %- og 90 %-punkt: kortet kommer, når det falder til 95 %, så det sidder på eksamensdagen.
+// Et fag uden eksamen følger 90 %.
+const lang = [efter(0, 4), efter(8, 4)], uden = planlæg(lang);
+const d95 = Math.round(dageTil(uden.s, MÅL_EKSAMEN)), d90 = Math.round(dageTil(uden.s, MÅL));
+const eksDag = uden.sidst + Math.floor((d95 + d90) / 2) * DAG;
+const medEks = lav(eksDag).planlæg(lang, "alfa"), udenEks = lav(eksDag).planlæg(lang, "beta");
+tjek("eksamen lige efter 95 %-punktet", d95 < d90, JSON.stringify([d95, d90]));
+tjek("med eksamen kommer kortet ved 95 %", dageTilForfald(medEks) === d95 && medEks.forfald <= eksDag, JSON.stringify([dageTilForfald(medEks), d95]));
+tjek("uden eksamen følger kortet 90 %", dageTilForfald(udenEks) === d90, JSON.stringify([dageTilForfald(udenEks), d90]));
 
 // Et rigtigt drill-gæt lige efter et forkert er set i facit og tæller ikke som husket; et døgn senere tæller det
 const iso = d => new Date(t0 + d * DAG).toISOString();
@@ -87,5 +106,5 @@ const post = (id, d) => ({ id, tid: iso(d), type: "repetition", data: { noegle: 
     fs.rmSync(rod, { recursive: true, force: true });
   }
   if (fejl) { console.log(`${fejl} fejl`); process.exit(1); }
-  console.log("Gentagelsesplanen og sync uden dubletter opførte sig rigtigt");
+  console.log("FSRS-planen og sync uden dubletter opførte sig rigtigt");
 })();

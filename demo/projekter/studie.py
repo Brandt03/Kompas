@@ -979,7 +979,7 @@ class Studie:
                "statistik": {"forfaldne": len(forfaldne), "nye": len(nye), "nye_venter_paa_laesning": len(venter),
                              "nye_klar": len([k for k in alle if k.get("ny") and k["laest"]]), "klaret_i_dag": 3,
                              "i_alt": len(alle), "laert": len([k for k in alle if not k.get("ny") and k.get("niveau", 0) >= 2]),
-                             "naeste": self.iso(naeste) if naeste else None, "kalibrering": kalibrering,
+                             "naeste": self.iso(naeste) if naeste else None, "kalibrering": kalibrering, "eksamen": {}, "maal_eksamen": 0.95,
                              "minutter": max(1, round(len(koe) * 0.75))}}
         return rep, svar
 

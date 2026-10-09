@@ -75,6 +75,7 @@ for h, dur_h, title in [
         "summary": title,
         "all_day": 0,
     }, pk=["uid", "start_local"])
+    db.gem_fag(conn, f"evt-{h}", s.strftime("%Y-%m-%dT%H:%M"), title)  # som kalenderhentningen
 upsert(conn, "calendar_events", {
     "uid": "fest", "start_local": f"{t_iso}T00:00",
     "end_local": f"{(tomorrow + timedelta(days=1)).isoformat()}T00:00",
@@ -139,13 +140,27 @@ day = metrics.schedule(conn, days_ahead=3)["dage"][1]
 assert "møder" not in day
 assert day["begivenheder"] == 4, day
 assert day["program"][0] == {"tid": "heldag", "titel": "Semesterstartsfest"}
-assert {"tid": "09:00–10:00", "titel": "Gamma – consectetur · Lecture (On Campus)"} in day["program"]
+assert {"tid": "09:00–10:00", "titel": "Gamma – consectetur · Lecture (On Campus)", "fag": {
+            "navn": "Gamma – consectetur", "kode": "KURS103", "art": "Forelæsning", "form": "campus"}} in day["program"]
 assert {"tid": "15:00–16:00", "titel": "1:1"} in day["program"]
 # Heldag tæller ikke med i optaget tid, første start eller sidste slut
 assert day["optaget_timer"] == 4.0, day
 assert (day["første_møde"], day["sidste_slut"]) == ("09:00", "16:00"), day
 assert all(d["program"] == [] for i, d in enumerate(metrics.schedule(conn, 3)["dage"]) if i != 1)
 print("  → titler, heldag og tider i SQL og værktøj stemmer overens")
+
+# Fag-felterne: en titel, der ikke længere er undervisning fra skemaet, beholder ikke de gamle, og opstarten
+# udfylder skemarækker, der mangler dem (fx efter en afbrudt udfyldning)
+fag_af = lambda uid: conn.execute("SELECT fag_navn, fag_art FROM calendar_events WHERE uid = ?", (uid,)).fetchone()[:]
+s11 = f"{t_iso}T11:00"
+db.gem_fag(conn, "evt-11", s11, "Aflyst")
+assert fag_af("evt-11") == (None, None), fag_af("evt-11")
+db.gem_fag(conn, "evt-11", s11, "Alfa – lorem ipsum (A) - KURS101.A - Exercise (On Campus)")
+conn.execute("UPDATE calendar_events SET fag_navn = NULL, fag_kode = NULL, fag_art = NULL, fag_form = NULL WHERE uid = 'evt-9'")
+db._migrate_calendar_fag(conn)
+assert fag_af("evt-9") == ("Gamma – consectetur", "Forelæsning"), fag_af("evt-9")
+assert fag_af("evt-11") == ("Alfa – lorem ipsum", "Øvelse"), fag_af("evt-11")
+print("  → fag-felterne følger titlen, og manglende felter udfyldes ved opstart")
 
 # Zonedata hvor grænserne skifter midt i perioden: den ældste halvdel af
 # passene har zone 5 fra 178, den nyeste halvdel fra 183. Tærsklen er 178.
@@ -530,9 +545,16 @@ try:
     assert conn.execute("SELECT uid FROM calendar_events").fetchall()[0][0] == "ok-1"
     assert conn.execute("SELECT COUNT(*) FROM calendar_events").fetchone()[0] == 1
     assert metrics.get_state(conn, "calendar_covered_from") == (today - timedelta(days=14)).isoformat()
+    # Hver begivenhed får kalenderens navn fra feedet, eller "Kalender N" når feedet ikke har et
+    navngivet = ics.replace(b"PRODID:-//t//EN\r\n", b"PRODID:-//t//EN\r\nX-WR-CALNAME:Skema\r\n").replace(b"UID:ok-1", b"UID:ok-2")
+    ingest_calendar._load = lambda src: navngivet if src == "navngivet" else ics
+    ingest_calendar.CONFIG.ics_sources = ["unavngivet", "navngivet"]
+    ingest_calendar.sync_calendar(conn)
+    kal = dict(conn.execute("SELECT uid, kalender FROM calendar_events").fetchall())
+    assert kal == {"ok-1": "Kalender 1", "ok-2": "Skema"}, kal
 finally:
     ingest_calendar._load, ingest_calendar.CONFIG.ics_sources = orig_load, orig_sources
-print("\nKALENDER-SYNC\n  → et fejlende feed sletter intet; fuld sync rydder vinduet")
+print("\nKALENDER-SYNC\n  → et fejlende feed sletter intet; fuld sync rydder vinduet; kalendernavnet gemmes")
 
 # Backfill: dage med målinger springes over, og efter MAX_FAILURES dage i
 # træk uden svar stoppes der med de hentede dage gemt.

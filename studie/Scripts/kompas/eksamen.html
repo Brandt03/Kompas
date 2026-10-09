@@ -81,6 +81,9 @@
 const API = "/studie/api";
 const FAGNAVN = { alfa: "Alfa", gamma: "Gamma", beta: "Beta" };
 const SIK = [["sikker", "Sikker"], ["usikker", "Usikker"], ["gaet", "Gætter / kan ikke"]];
+// Karakter efter en øvelsesopgave, som i FSRS: 4 let, 3 sad, 2 halvt, 1 blankt. Rettelsen efter en prøveeksamen bruger kun ✓/~/✗.
+const KAR = [[4, "sad", "✓ Let", "Sad med det samme, uden at tænke dig om"], [3, "sad", "✓ Sad", "Sad, men du skulle tænke dig om"],
+  [2, "halvt", "~ Halvt", "Noget af det, eller kun med besvær"], [1, "blankt", "✗ Blankt", "Kunne det ikke"]];
 let L = null, S = null, fag = (location.hash.slice(1) || "alfa"), tilstand = "liste";
 let E = null, set = null, svar = {}, marks = {}, start = null, facit = null, tick = null;
 let oCur = 0, oVist = false, oSik = null, oFacit = null;
@@ -262,7 +265,7 @@ function renderOevelse() {
         ${mundtlig ? `<div class="row"><button type="button" class="btn ghost" data-ur="20">${icon("clock", 14)}Forbered 20 min</button><button type="button" class="btn ghost" data-ur="7">${icon("clock", 14)}Svar højt 7 min</button><span class="timer" id="ur" style="font-size:18px"></span></div>` : ""}
         <textarea class="${erKode(q) ? "kode" : ""}" data-q="${q.nr}" spellcheck="${erKode(q) ? "false" : "true"}" placeholder="${mundtlig ? "Din disposition: 3–4 hovedpunkter med begreber …" : erKode(q) ? "Din kode …" : "Dit svar …"}">${esc(svar[q.nr] || "")}</textarea>`}
       ${oVist ? `<div class="facit"><div class="lbl">${mundtlig ? "Disposition" : fag === "gamma" ? "Tjekliste" : "Facit"}</div><div class="md">${oFacit ? md(oFacit) : "Der er ingen facit til denne opgave endnu."}</div></div>
-        <div class="row"><span class="meta">Hvordan gik det?</span>${[["sad", "✓ Sad"], ["halvt", "~ Halvt"], ["blankt", "✗ Blankt"]].map(([k, t]) => `<button type="button" class="btn m-${k}" data-omk="${k}">${t}</button>`).join("")}
+        <div class="row"><span class="meta">Hvordan gik det?</span>${KAR.map(([g, k, t, h]) => `<button type="button" class="btn m-${k}" data-okar="${g}" title="${h}">${t}</button>`).join("")}
           <span class="spacer"></span><span class="meta">du sagde: ${esc(SIK.find(([s]) => s === oSik)?.[1] || "")}</span></div>`
       : `<div class="row"><span class="meta">Hvor sikker er du?</span>${SIK.map(([k, t], i) => `<button type="button" class="btn${i ? " ghost" : ""}" data-osik="${k}">${t}</button>`).join("")}<span class="spacer"></span><span class="meta">så vises ${mundtlig ? "dispositionen" : fag === "gamma" ? "tjeklisten" : "facit"}</span></div>`}
     </section>
@@ -293,8 +296,8 @@ document.addEventListener("click", async e => {
     else if (b.id === "gem-res") await gemResultat();
     else if (b.id === "tilbage") { clearInterval(ur); L = await hent("/eksamen"); renderListe(); }
     else if (b.dataset.osik) { const q = alleQ()[oCur]; oFacit = (await hent(`/eksamen/facit?fag=${fag}&id=${encodeURIComponent(set.id)}&nr=${q.nr}`)).facit; oSik = b.dataset.osik; oVist = true; renderOevelse(); }
-    else if (b.dataset.omk) { const q = alleQ()[oCur]; await post("/eksamen/resultat", { fag, id: set.id, nr: q.nr, mark: b.dataset.omk, sikkerhed: oSik });
-      toast(b.dataset.omk === "sad" ? "✓ gemt" : "Gemt – den kommer igen i Dagens kort"); if (oCur < alleQ().length - 1) oCur++; oVist = false; oSik = null; oFacit = null; renderOevelse(); window.scrollTo(0, 0); }
+    else if (b.dataset.okar) { const q = alleQ()[oCur]; await post("/eksamen/resultat", { fag, id: set.id, nr: q.nr, karakter: +b.dataset.okar, sikkerhed: oSik });
+      toast(+b.dataset.okar >= 3 ? "✓ gemt" : "Gemt – den kommer igen i Dagens kort"); if (oCur < alleQ().length - 1) oCur++; oVist = false; oSik = null; oFacit = null; renderOevelse(); window.scrollTo(0, 0); }
     else if (b.id === "oforrige" || b.id === "onaeste") { oCur += b.id === "onaeste" ? 1 : -1; oVist = false; oSik = null; oFacit = null; renderOevelse(); window.scrollTo(0, 0); }
     else if (b.dataset.ur) startUr(+b.dataset.ur);
   } catch (x) { toast(`Noget gik galt: ${x.message}`); }

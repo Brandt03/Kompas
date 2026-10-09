@@ -77,24 +77,46 @@ def _pas(g: sqlite3.Connection, m: date) -> list[dict]:
     ]
 
 
-def _type(titel: str) -> str:
-    if config.KURSUSKODE in titel:
+def _type(titel: str, fag_kode: str | None) -> str:
+    if fag_kode:  # undervisning fra skemaet, som garmin-coach har genkendt
         return "undervisning"
     if titel.startswith(config.SELVSTUDIE_PRAEFIKS):
         return "selvstudie"
     return "andet"
 
 
+# Undervisningens felter fra skemaet, som garmin-coach gemmer, når den henter kalenderen. Titlerne tolkes kun dér.
+_FAG = ("navn", "kode", "art", "form")
+_FAG_SQL = ", ".join(f"fag_{k}" for k in _FAG)
+
+
+def _fag(r: sqlite3.Row) -> dict | None:
+    return {k: r[f"fag_{k}"] for k in _FAG} if r["fag_navn"] else None
+
+
 def _kalender(g: sqlite3.Connection, m: date) -> list[dict]:
     return [
         {"dato": r["start_local"][:10], "start": None if r["all_day"] else r["start_local"][11:16],
          "slut": None if r["all_day"] or not r["end_local"] else r["end_local"][11:16],
-         "titel": r["summary"] or "", "heldag": bool(r["all_day"]), "type": _type(r["summary"] or "")}
+         "titel": r["summary"] or "", "heldag": bool(r["all_day"]), "type": _type(r["summary"] or "", r["fag_kode"]),
+         "fag": _fag(r), "kalender": r["kalender"]}
         for r in g.execute(
-            """SELECT start_local, end_local, summary, all_day FROM calendar_events
+            f"""SELECT start_local, end_local, summary, all_day, kalender, {_FAG_SQL} FROM calendar_events
                WHERE date(start_local) BETWEEN ? AND ? ORDER BY start_local""",
             [m.isoformat(), (m + timedelta(days=6)).isoformat()])
     ]
+
+
+def _med_fag(g: sqlite3.Connection, rs: list[dict]) -> None:
+    """Reviews gemt, før kalenderen havde fag-felterne, får dem fra garmin-coach ved eksporten, så siderne
+    aldrig selv tolker titler. Det gemte review i databasen røres ikke."""
+    fag = {(r["start_local"][:10], None if r["all_day"] else r["start_local"][11:16], r["summary"]): _fag(r)
+           for r in g.execute(f"SELECT start_local, summary, all_day, {_FAG_SQL} FROM calendar_events "
+                              "WHERE fag_navn IS NOT NULL")}
+    for doc in rs:
+        for e in (doc.get("kalender") or []) + (doc.get("kommende") or []):
+            if "fag" not in e:
+                e["fag"] = fag.get((e["dato"], e["start"], e["titel"]))
 
 
 def snapshot(conn: sqlite3.Connection, m: date) -> dict:
@@ -156,6 +178,7 @@ def eksport(conn: sqlite3.Connection, mappe: Path = config.SITE_DIR) -> dict:
     kalender = {} if g is None else {
         m.isoformat(): _kalender(g, m) for m in (denne - timedelta(days=7), denne, denne + timedelta(days=7))}
     if g is not None:
+        _med_fag(g, rs)
         g.close()
     ud = {
         "genereret": datetime.now().isoformat(timespec="seconds"),

@@ -140,8 +140,9 @@ Sure itself is not part of the demo (its menu items show a short explanation ins
 - **The files are the database.** The server reads and writes my own markdown notes (answers, ✓/~/✗ marks,
   definitions) and JavaScript drills. A guess is written into the drill file, the file is run with Node, and
   JavaScript itself decides whether the guess was right. If the file breaks, it is restored.
-- **Spaced repetition without hidden state.** Today's cards are computed from an append-only JSONL log, with
-  intervals of 3/7/21/60/120 days. New questions only come from weeks I have marked as read, and the page shows
+- **Spaced repetition without hidden state.** Today's cards are computed from an append-only JSONL log and
+  scheduled with FSRS-6: a card comes back when I'm predicted to recall it with 90 % probability, and before an exam
+  when it would otherwise be below 95 % on the day. New questions only come from weeks I have marked as read, and the page shows
   how often an answer was actually right when I said I was sure.
 - **Offline first on the phone.** *På farten* downloads a package of today's cards over Tailscale, queues
   answers without a connection, and sends them later. Each answer has an id, so sending twice is harmless. A
@@ -195,7 +196,8 @@ smoke test runs against its real dependencies, and [tests/](tests/) checks the p
 - **Coach's numbers** against known answers: Banister TRIMP, ACWR (1.0 for even load, 1.6 when the last week
   doubles), HRV as standard deviations from the baseline, and gaps that stay gaps instead of turning into zeros.
 - **Studie's drill guesses** are parsed as values: known code-injection attempts are refused.
-- **Studie's spaced repetition:** the intervals follow the log (3/7/21/60/120 days, back to the start after ✗), and
+- **Studie's spaced repetition:** FSRS gives known answers for first reviews, longer intervals for easier grades, and
+  pulls a card forward before an exam; and
   answers synced from the phone are saved once, even when the same answer is sent twice.
 
 ```bash

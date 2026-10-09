@@ -6,7 +6,7 @@
 <title>I dag</title>
 <!-- Forsiden i Kompas: dagen på tværs af projekterne. Læser kun, hvad projekterne selv skriver:
      /form/coach.json og soevn.json (garmin-coach), /form/liv.json (overblik), /studie/studie.json og
-     /studie/api/genkald (studie), /karriere/api/data (jobagent). Mangler et projekt, udelades dets kort. -->
+     /studie/api/repetition (studie), /karriere/api/data (jobagent). Mangler et projekt, udelades dets kort. -->
 <link rel="stylesheet" href="/kompas/assets/tokens.css">
 <link rel="stylesheet" href="/kompas/assets/page.css">
 <style>
@@ -144,18 +144,15 @@ function varighed(h) {
   const m = Math.round(h * 60), t = Math.floor(m / 60), r = m % 60;
   return t && r ? `${t} t ${r} min` : t ? `${t} t` : `${r} min`;
 }
-const FAG = { alfa: ["Alfa", "var(--c1)"], beta: ["Beta", "var(--c2)"], gamma: ["Gamma", "var(--c3)"] };
-const ART = [[/Lecture/, "Forelæsning"], [/Exercise/, "Øvelse"], [/Supervision/, "Vejledning"], [/Off .*Campus/, "Uden for campus"]];
 const MON = ["jan", "feb", "mar", "apr", "maj", "jun", "jul", "aug", "sep", "okt", "nov", "dec"];
 
-// "Gamma – consectetur · Exercise (On Campus)" → fag, art, farve. Titler uden kursus er "andet".
-function klassificer(titel) {
-  const [navn, rest = ""] = titel.split(" · ");
-  const f = FAG[navn.split(" ")[0].toLowerCase()];
-  if (f) {
-    const art = (ART.find(([re]) => re.test(rest)) || [])[1] || "Undervisning";
-    const form = /Pre-recorded/.test(rest) ? "forudindspillet" : /Online/.test(rest) ? "online" : /On Campus/.test(rest) ? "campus" : "";
-    return { navn: navn.replace(/\s*\([A-Z]{1,3}\)$/, ""), kort: f[0], art, form, farve: f[1], type: "undervisning" };
+// Et punkt i dagens program → navn, kort, art, form, farve. garmin-coach har allerede delt undervisningen fra
+// universitetets skema op (`fag`); kortnavn og farve kommer fra Studies fagliste, så de følger semesteret. Resten er "andet".
+const førsteOrd = s => s.split(" ")[0].toLowerCase();
+function klassificer({ titel, fag: k }, fagliste) {
+  if (k) {
+    const i = fagliste.findIndex(f => førsteOrd(f.navn) === førsteOrd(k.navn)), f = fagliste[i];
+    return { navn: k.navn, kort: f?.kort || "", art: k.art || "Undervisning", form: k.form || "", farve: f ? `var(--c${i + 1})` : "var(--gray-400)", type: "undervisning" };
   }
   if (/^Selvstudie · /.test(titel)) return { navn: titel.replace(/^Selvstudie · /, ""), kort: "Selvstudie", art: "Selvstudie", form: "", farve: "var(--c7)", type: "selvstudie" };
   return { navn: titel, kort: "", art: "", form: "", farve: "var(--gray-400)", type: "andet" };
@@ -172,14 +169,14 @@ function ring(v) {
 }
 
 // Dagens program fra garmin-coach, plus frie huller på mindst en time mellem 7 og 22
-function dagen(coach) {
+function dagen(coach, studie) {
   const idag = iso(new Date());
   const dag = coach?.kalender?.dage?.find(d => d.dato === idag);
   if (!dag) return null;
   const evs = (dag.program || []).map(p => {
     const hel = !/\d/.test(p.tid || "");
     const [a, b] = hel ? [null, null] : p.tid.split("–").map(hm);
-    return { ...klassificer(p.titel), titel: p.titel, a, b, hel };
+    return { ...klassificer(p, studie?.fag || []), titel: p.titel, a, b, hel };
   });
   const timed = evs.filter(e => !e.hel).sort((x, y) => x.a - y.a);
   const fri = []; let cur = 7;
@@ -207,7 +204,7 @@ function frister(studie) {
 function render({ coach, soevn, liv, studie, genkald, karriere }) {
   const nu = new Date(), h = nuH(), idag = iso(nu);
   const r = coach?.restitution, sn = r?.seneste_døgn || {}, nat = soevn?.naetter?.find(n => n.dato === idag);
-  const D = dagen(coach);
+  const D = dagen(coach, studie);
   const næste = D?.timed.find(e => e.b > h);
   const iGang = D?.timed.find(e => e.a <= h && e.b > h);
   const fr = frister(studie);
@@ -309,7 +306,7 @@ function tegnDagen(D, raad) {
     const pill = nu ? `<span class="pill nu">Nu</span>` : om != null && om <= 90 ? `<span class="pill snart">om ${om < 60 ? om + " min" : `${Math.floor(om / 60)} t${om % 60 ? ` ${om % 60} min` : ""}`}</span>` : done ? `<span class="pill">Færdig</span>` : "";
     return `<div class="ev${done ? " done" : ""}${nu ? " nu" : ""}" style="--k:${e.farve}" title="${esc(e.titel)}">
       <span class="t">${e.hel ? "Hele dagen" : `${kl(e.a)}–${kl(e.b)}`}</span><span class="sw"></span>
-      <span class="n"><b>${esc(e.kort ? `${e.kort} · ${e.art}` : e.navn)}</b><small>${esc(e.kort ? e.navn + (e.form ? ` · ${e.form}` : "") : e.type === "andet" ? "i kalenderen" : "")}</small></span>${pill}</div>`;
+      <span class="n"><b>${esc(e.kort ? `${e.kort} · ${e.art}` : e.navn)}</b><small>${esc(e.kort ? e.navn + (e.form ? ` · ${e.form}` : "") : e.type === "undervisning" ? [e.art, e.form].filter(Boolean).join(" · ") : e.type === "andet" ? "i kalenderen" : "")}</small></span>${pill}</div>`;
   }).join("") || `<p class="meta">Intet i kalenderen i dag.</p>`;
 }
 
@@ -322,7 +319,7 @@ async function hent() {
   render(DATA);
 }
 hent();
-setInterval(() => { if (DATA?.coach) tegnDagen(dagen(DATA.coach), DATA.coach.dagens_raad?.dato === iso(new Date()) ? DATA.coach.dagens_raad : null); }, 60000);
+setInterval(() => { if (DATA?.coach) tegnDagen(dagen(DATA.coach, DATA.studie), DATA.coach.dagens_raad?.dato === iso(new Date()) ? DATA.coach.dagens_raad : null); }, 60000);
 setInterval(hent, 10 * 60000);
 </script>
 </body>

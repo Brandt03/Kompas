@@ -14,6 +14,7 @@ import statistics
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 
+from .skema import FELTER, short_title
 from .config import CONFIG
 from .db import get_state
 
@@ -785,7 +786,7 @@ def periode_rapport(conn: sqlite3.Connection, start: str, slut: str) -> dict:
         forbehold.append("Kalenderdata dækker ikke hele perioden, så studie er udeladt.")
     else:
         ev = conn.execute(
-            """SELECT summary, start_local, all_day,
+            """SELECT summary, start_local, all_day, fag_kode,
                       (julianday(end_local) - julianday(start_local)) * 24 t
                FROM calendar_events WHERE date(start_local) BETWEEN ? AND ?
                ORDER BY start_local""", (S, E),
@@ -803,7 +804,7 @@ def periode_rapport(conn: sqlite3.Connection, start: str, slut: str) -> dict:
                     pr_fag[fag] = pr_fag.get(fag, 0) + t
                     selv_t += t
                     sessioner += 1
-            elif not e["all_day"] and _SKEMA_TITEL.match(summ.strip()):
+            elif not e["all_day"] and e["fag_kode"]:
                 undervisning += t
             else:
                 d = date.fromisoformat(e["start_local"][:10])
@@ -1293,7 +1294,7 @@ def schedule(conn: sqlite3.Connection, days_ahead: int = 7) -> dict:
         timed = [r for r in rows if not r["all_day"] and r["start_local"][:10] == iso]
 
         blocks = []
-        program = [{"tid": "heldag", "titel": short_title(r["summary"])} for r in all_day]
+        program = [_punkt("heldag", r) for r in all_day]
         for e in timed:
             try:
                 s = datetime.fromisoformat(e["start_local"])
@@ -1301,10 +1302,7 @@ def schedule(conn: sqlite3.Connection, days_ahead: int = 7) -> dict:
             except (TypeError, ValueError):
                 continue
             blocks.append((s, t))
-            program.append({
-                "tid": f"{s.strftime('%H:%M')}–{t.strftime('%H:%M')}",
-                "titel": short_title(e["summary"]),
-            })
+            program.append(_punkt(f"{s.strftime('%H:%M')}–{t.strftime('%H:%M')}", e))
         days.append(
             {
                 "dato": iso,
@@ -1330,16 +1328,12 @@ def schedule(conn: sqlite3.Connection, days_ahead: int = 7) -> dict:
     }
 
 
-# Titler fra universitetets skema: "Kursusnavn (A) - KURS101.A - Lecture (On Campus)"
-_SKEMA_TITEL = re.compile(r"^(?P<navn>.+?)\s*\([A-Z]{1,3}\)\s+-\s+\S+\.\S+\s+-\s+(?P<type>.+)$")
-
-
-def short_title(summary: str | None) -> str:
-    """Fjern hold- og kursuskode fra titler fra universitetets skema; andre titler røres ikke."""
-    if not summary:
-        return "(uden titel)"
-    m = _SKEMA_TITEL.match(summary.strip())
-    return f"{m['navn']} · {m['type']}" if m else summary.strip()
+def _punkt(tid: str, r: sqlite3.Row) -> dict:
+    """Et punkt i dagens program; undervisning fra skemaet får de felter, kalenderhentningen gemte, med under "fag"."""
+    punkt = {"tid": tid, "titel": short_title(r["summary"])}
+    if r["fag_navn"]:
+        punkt["fag"] = {k: r[f"fag_{k}"] for k in FELTER}
+    return punkt
 
 
 def _busy_minutes(blocks) -> float:

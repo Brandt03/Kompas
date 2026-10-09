@@ -8,6 +8,7 @@ I Google Kalender finder du den under Indstillinger → din kalender →
 
 from __future__ import annotations
 
+import json
 import logging
 import sqlite3
 import ssl
@@ -17,7 +18,7 @@ from urllib.request import urlopen
 from zoneinfo import ZoneInfo
 
 from .config import CONFIG
-from .db import connect, get_state, set_state, split_local_utc, upsert
+from .db import connect, gem_fag, get_state, set_state, split_local_utc, upsert
 
 log = logging.getLogger(__name__)
 
@@ -87,10 +88,12 @@ def sync_calendar(conn: sqlite3.Connection, days_back: int = 14, days_ahead: int
     window_end = today + timedelta(days=days_ahead)
 
     events, failed = [], 0
-    for source in CONFIG.ics_sources:
+    for nr, source in enumerate(CONFIG.ics_sources, 1):
         try:
             cal = Calendar.from_ical(_load(source))
-            events.extend(recurring_ical_events.of(cal).between(window_start, window_end))
+            # Kalenderens eget navn fra feedet (aldrig adressen, den er hemmelig), så siderne kan slå den til og fra
+            navn = str(cal.get("X-WR-CALNAME") or "").strip() or f"Kalender {nr}"
+            events.extend((e, navn) for e in recurring_ical_events.of(cal).between(window_start, window_end))
         except Exception as exc:  # noqa: BLE001
             log.error("Kunne ikke læse kalender %s: %s", source[:60], exc)
             failed += 1
@@ -112,7 +115,7 @@ def sync_calendar(conn: sqlite3.Connection, days_back: int = 14, days_ahead: int
             set_state(conn, "calendar_covered_from", window_start.isoformat())
 
     count = 0
-    for event in events:
+    for event, kalender in events:
         start_raw = event.get("DTSTART")
         end_raw = event.get("DTEND")
         if start_raw is None:
@@ -121,20 +124,24 @@ def sync_calendar(conn: sqlite3.Connection, days_back: int = 14, days_ahead: int
         end_iso, end_utc, _ = (
             _as_local(end_raw.dt, tz) if end_raw is not None else (None, None, False)
         )
+        uid = str(event.get("UID", "")) or f"nouid-{start_iso}"
+        summary = str(event.get("SUMMARY", "(uden titel)"))
         upsert(
             conn,
             "calendar_events",
             {
-                "uid": str(event.get("UID", "")) or f"nouid-{start_iso}",
+                "uid": uid,
                 "start_local": start_iso,
                 "end_local": end_iso,
                 "start_utc": start_utc,
                 "end_utc": end_utc,
-                "summary": str(event.get("SUMMARY", "(uden titel)")),
+                "summary": summary,
                 "all_day": 1 if all_day else 0,
+                "kalender": kalender,
             },
             pk=["uid", "start_local"],
         )
+        gem_fag(conn, uid, start_iso, summary)  # upsert springer tomme værdier over; fag-felterne skrives altid
         count += 1
 
     conn.commit()
@@ -144,5 +151,6 @@ def sync_calendar(conn: sqlite3.Connection, days_back: int = 14, days_ahead: int
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     c = connect()
-    print(sync_calendar(c))
+    # JSON på stdout, så Kompas' opdater.sh kan læse antallet af fejlede feeds
+    print(json.dumps(sync_calendar(c)))
     c.close()

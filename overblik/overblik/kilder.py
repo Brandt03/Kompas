@@ -129,7 +129,7 @@ def oekonomi(fra: date) -> tuple[dict, str | None]:
 def kalender(fra: date) -> tuple[dict, str | None]:
     """Undervisning og selvstudie fra kalenderen i garmin-coach.
 
-    Undervisning er begivenheder med en kursuskode (config.KURSUSKODE). Selvstudie er
+    Undervisning er undervisning fra skemaet, som garmin-coach har givet en fag_kode. Selvstudie er
     CalTask-begivenheder ("Selvstudie · Alfa"), og varigheden er den tid der blev
     logget. Kun uger som kalendervinduet dækker fra mandag af tæller med —
     ellers ville ugen tælle for lavt. Selvstudie før logningen begyndte er
@@ -143,7 +143,7 @@ def kalender(fra: date) -> tuple[dict, str | None]:
     if foerste is None:
         return {}, None
     rows = conn.execute(
-        """SELECT start_local, end_local, summary FROM calendar_events
+        """SELECT start_local, end_local, summary, fag_kode FROM calendar_events
            WHERE all_day = 0 AND end_local IS NOT NULL AND date(start_local) >= ?""",
         [fra.isoformat()],
     ).fetchall()
@@ -161,13 +161,13 @@ def kalender(fra: date) -> tuple[dict, str | None]:
             ud[m.isoformat()] |= {"selvstudie_timer": 0.0, "_dage": set()}
         m += timedelta(days=7)
 
-    for start_s, slut_s, titel in rows:
+    for start_s, slut_s, titel, fag_kode in rows:
         s, e = datetime.fromisoformat(start_s), datetime.fromisoformat(slut_s)
         uge = ud.get(mandag(s.date()).isoformat())
         if uge is None:
             continue
         timer = (e - s).total_seconds() / 3600
-        if config.KURSUSKODE in (titel or ""):
+        if fag_kode:  # undervisning fra skemaet, som garmin-coach har genkendt
             uge["undervisning_timer"] += timer
         elif (titel or "").startswith(config.SELVSTUDIE_PRAEFIKS) and "_dage" in uge and e <= nu and timer > 0:
             uge["selvstudie_timer"] += timer

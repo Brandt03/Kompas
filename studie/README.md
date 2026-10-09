@@ -110,7 +110,9 @@ Alle under `/studie/api/`. Skrivninger kræver `Content-Type: application/json` 
 
 ## Dagens kort
 
-Kortene regnes ud af `genkald-log.jsonl`; der er ingen anden tilstand. Et kort, der sad, kommer igen efter 3, 7,
-21, 60 og 120 dage; halvt efter 2 dage, blankt eller forkert dagen efter. Op til 5 nye genkaldsspørgsmål om
-dagen, og kun fra uger, der er markeret som læst. Typerne (genkald, eksamen, begreb, drill) blandes på skift, og
+Kortene regnes ud af `genkald-log.jsonl`; der er ingen anden tilstand. Hvert svar har en karakter (1 blankt,
+2 halvt, 3 sad, 4 let), og FSRS-6 med standardparametrene planlægger kortet: det kommer igen, når du regnes for at
+kunne det med 90 % sandsynlighed, så lette kort venter længere end svære. Står eksamensdatoerne i `EKSAMEN` i
+`kompas-server.js`, kommer et kort før eksamen, hvis det ellers ville være under 95 % på eksamensdagen. Op til 5
+nye genkaldsspørgsmål om dagen, og kun fra uger, der er markeret som læst. Typerne (genkald, eksamen, begreb, drill) blandes på skift, og
 siden viser, hvor tit svaret sad, når man sagde "sikker", "usikker" eller "gætter".

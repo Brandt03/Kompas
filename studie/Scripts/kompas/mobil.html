@@ -97,6 +97,10 @@ const TYPENAVN = { genkald: "Genkald", begreb: "Begreb", drill: "Drill", eksamen
 const FANENAVN = { idag: "Dagens kort", genkald: "Genkald", begreber: "Begreber", drills: "Drills", overblik: "Overblik" };
 const SIK = [["sikker", "Sikker"], ["usikker", "Usikker"], ["gaet", "Gætter"]];
 const MK = { "✓": "sad", "~": "halvt", "✗": "blankt" };
+// Karakter efter et forsøg, som i FSRS: 4 let, 3 sad, 2 halvt, 1 blankt. Let og Sad står begge som [✓] i filen.
+const KAR = [[4, "sad", "✓ Let"], [3, "sad", "✓ Sad"], [2, "halvt", "~ Halvt"], [1, "blankt", "✗ Blankt"]];
+const KAR_DRILL = [[4, "sad", "✓ Let"], [3, "sad", "✓ Rigtigt"], [1, "blankt", "✗ Forkert"]];
+const karKnapper = kar => kar.map(([g, m, t]) => `<button type="button" class="btn m-${m}" data-kar="${g}">${t}</button>`).join("");
 
 // ── lager på telefonen ──────────────────────────────────────────────
 // pakke: det, Mac'en sendte sidst. koe: svar, der ikke er sendt endnu (bliver der, til Mac'en har gemt dem).
@@ -248,9 +252,7 @@ function renderKort(f) {
         ${svar?.se ? `<div class="lbl" style="margin-top:10px">Hvad det får dig til at se</div><div>${esc(svar.se)}</div>` : ""}
         ${svar?.forklaring ? `<div class="lbl" style="margin-top:10px">Hvorfor</div><div class="md">${md(svar.forklaring)}</div>` : ""}</div>
       <div class="lbl-sm">Hvordan gik det? <span style="color:var(--text-subdued)">· du sagde ${esc(SIK.find(([x]) => x === s.sik)?.[1].toLowerCase() || "")}</span></div>
-      <div class="grid">${k.type === "drill"
-        ? `<button type="button" class="btn m-sad" data-mark="sad">✓ Rigtigt</button><button type="button" class="btn m-blankt" data-mark="blankt">✗ Forkert</button>`
-        : `<button type="button" class="btn m-sad" data-mark="sad">✓ Sad</button><button type="button" class="btn m-halvt" data-mark="halvt">~ Halvt</button><button type="button" class="btn m-blankt" data-mark="blankt">✗ Blankt</button>`}</div>`
+      ${k.type === "drill" ? `<div class="grid">${karKnapper(KAR_DRILL)}</div>` : `<div class="grid" style="grid-auto-flow:row;grid-template-columns:1fr 1fr">${karKnapper(KAR)}</div>`}`
     : `<div class="lbl-sm">Hvor sikker er du? Så vises ${k.type === "begreb" ? "din definition" : "svaret"}.</div>
       <div class="grid">${SIK.map(([x, t], i) => `<button type="button" class="btn${i ? " ghost" : ""}" data-sik="${x}">${t}</button>`).join("")}</div>
       <div class="row"><span class="spacer"></span><button type="button" class="btn quiet" data-senere>Tag den senere</button></div>`}
@@ -258,10 +260,10 @@ function renderKort(f) {
   const ta = document.getElementById("k-svar");
   ta.oninput = () => kladde.gem(kk, ta.value);
 }
-function kortMarker(f, mark) {
+function kortMarker(f, karakter) {
   const s = st[f], k = (f === "idag" ? kortTilbage() : ekstraTilbage())[0]; if (!k) return;
   const kk = `${f}:${k.id}`, svar = document.getElementById("k-svar")?.value || "";
-  iKoe("repetition", k.id, { noegle: k.id, mark, sikkerhed: s.sik, svar: k.type === "genkald" ? svar : undefined },
+  iKoe("repetition", k.id, { noegle: k.id, karakter: +karakter, sikkerhed: s.sik, svar: k.type === "genkald" ? svar : undefined },
     { titel: k.titel, type: k.type });
   // Samme kort kan stå i begge lister (fx når pakken er gammel); det tæller som gjort begge steder
   kladde.gem(kk, ""); senere = senere.filter(id => id !== k.id); s.cur = null; aaben = false;
@@ -409,7 +411,7 @@ root().addEventListener("click", e => {
   const t = e.target.closest("button"); if (!t) return;
   const f = fane === "idag" || fane === "genkald" ? fane : null;
   if (t.dataset.sik && f) { st[f].sik = t.dataset.sik; st[f].vist = true; renderKort(f); }
-  else if (t.dataset.mark && f) kortMarker(f, t.dataset.mark);
+  else if (t.dataset.kar && f) kortMarker(f, t.dataset.kar);
   else if (t.hasAttribute("data-senere") && f) { const k = (f === "idag" ? kortTilbage() : ekstraTilbage())[0]; if (k) { senere = [...senere.filter(id => id !== k.id), k.id]; renderKort(f); } }
   else if (t.dataset.bfag) { bFag = t.dataset.bfag; lager.gem("bfag", bFag); bCur = null; renderBegreber(); }
   else if (t.id === "gem-b") bGem();

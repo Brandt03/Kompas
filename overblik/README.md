@@ -12,7 +12,7 @@ ugetabel og fortolker den. Alt kører lokalt.
 |---|---|---|
 | garmin | `~/.garmin-coach/coach.db` (læses kun) | søvn, HRV, hvilepuls, stress, skridt, træning |
 | sure | `~/kompas/okonomi/dashboard/public/data.json` | take-away, café/bar, dagligvarer, variable køb |
-| kalender | garmin-coach's `calendar_events` | undervisning (begivenheder med en kursuskode, der starter med `KURS`) og selvstudie (CalTask-begivenheder der starter med `Selvstudie ·`) |
+| kalender | garmin-coach's `calendar_events` | undervisning (begivenheder, garmin-coach har givet en `fag_kode`) og selvstudie (CalTask-begivenheder der starter med `Selvstudie ·`) |
 
 **En tom celle (`–`) betyder at kilden ikke dækker ugen, ikke 0.** Selvstudie
 før `LIV_SELVSTUDIE_FRA`, dagen logningen i CalTask begyndte, er ukendt. Undervisning før kalendervinduet er ukendt.
@@ -62,7 +62,6 @@ Stier, datoer og titelmønstre kan overstyres med miljøvariabler (se `overblik/
 | `LIV_BELASTNING_JSON` | `~/.garmin-coach/site/belastning.json` | træningsbelastning pr. dag og pr. pas, skrevet af garmin-coach's `site byg` |
 | `LIV_SURE_JSON` | `~/kompas/okonomi/dashboard/public/data.json` | Sures eksport |
 | `LIV_SITE` | `~/.garmin-coach/site` | hvor `liv eksport` lægger `liv.json` |
-| `LIV_KURSUSKODE` | `KURS` | tekst i titlen, der gør en kalenderbegivenhed til undervisning (kursuskodens præfiks) |
 | `LIV_SELVSTUDIE_PRAEFIKS` | `Selvstudie ·` | titlen, CalTask-begivenheder starter med |
 | `LIV_SELVSTUDIE_FRA` | `2026-09-28` | dagen logningen af selvstudie begyndte |
 | `LIV_FRA` | `2025-06-02` | første uge, der beregnes |

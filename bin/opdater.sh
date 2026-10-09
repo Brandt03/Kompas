@@ -9,7 +9,8 @@
 #   overblik (liv.json)               hver gang
 #   Studie-eksporten                  hver gang
 #   backup af databaserne             første kørsel hver dag
-#   status til Forbindelser           hver gang (bin/forbindelser.py → public/forbindelser.json)
+#   status til Forbindelser           hver gang: trinnenes udfald i ~/.kompas/opdater-status.json, som
+#                                     bin/forbindelser.py læser og skriver videre til public/forbindelser.json
 # Sure og forbrugssiden opdateres ikke her; de kræver Docker og hører til Kompas-appen.
 set -u
 export PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
@@ -18,6 +19,18 @@ SEM="${KOMPAS_SEMESTER:-$HOME/kompas/studie}"   # semestermappen, der har Script
 STATE=$HOME/.kompas
 LOCK=$STATE/opdater.lock
 log() { print -r -- "$(date '+%F %T') $*"; }
+# trin <id> <fejltekst> <kommando …>: kører kommandoen og noterer ok/fejl under id'et til statusfilen.
+# Forbindelser kender trinnene på id'et, så det ændres begge steder; fejlteksten er kun til loggen.
+typeset -A STATUS
+trin() { local id=$1 fejltekst=$2; shift 2; if "$@"; then STATUS[$id]=ok; else STATUS[$id]=fejl; log "$fejltekst"; return 1; fi }
+garmin()   ( cd $GC && .venv/bin/python -m garmin_coach.ingest_garmin --days $dage >/dev/null )
+kalender() { local ud; ud=$(cd $GC && .venv/bin/python -m garmin_coach.ingest_calendar) || return 1
+             # Uden kalender sat op svarer den uden fejlede_feeds; trinnet er stadig ok
+             if [[ $ud =~ '"fejlede_feeds": ([0-9]+)' ]]; then feeds_fejlede=$match[1]; fi; }
+form_byg() ( cd $GC && .venv/bin/python -m garmin_coach.site byg >/dev/null )
+liv()      { $HOME/kompas/overblik/.venv/bin/liv opdater >/dev/null && $HOME/kompas/overblik/.venv/bin/liv eksport >/dev/null }
+studie()   { /usr/local/bin/node "$SEM/Scripts/kompas-eksport.js" >/dev/null }
+feeds_fejlede=null
 
 mkdir -p $STATE
 # Én kørsel ad gangen; en lås ældre end en time er efterladt af en kørsel, der døde
@@ -32,13 +45,16 @@ if [[ -f $STATE/hent-garmin-nu || ! -f $STATE/garmin-sidst ]] || (( $(date +%s) 
   [[ -f $STATE/garmin-sidst ]] && dage=$(( ($(date +%s) - $(stat -f %m $STATE/garmin-sidst)) / 86400 + 2 ))
   (( dage > 30 )) && dage=30
   rm -f $STATE/hent-garmin-nu
-  ( cd $GC && .venv/bin/python -m garmin_coach.ingest_garmin --days $dage >/dev/null ) && touch $STATE/garmin-sidst || log "Garmin fejlede ($dage dage)"
+  trin garmin "Garmin fejlede ($dage dage)" garmin && touch $STATE/garmin-sidst
 fi
-( cd $GC && .venv/bin/python -m garmin_coach.ingest_calendar >/dev/null ) || log "kalenderen fejlede"
-( cd $GC && .venv/bin/python -m garmin_coach.site byg >/dev/null ) || log "Form & Fokus-byg fejlede"
-$HOME/kompas/overblik/.venv/bin/liv opdater >/dev/null && $HOME/kompas/overblik/.venv/bin/liv eksport >/dev/null || log "overblik fejlede"
-/usr/local/bin/node "$SEM/Scripts/kompas-eksport.js" >/dev/null || log "studie-eksporten fejlede"
+trin kalender "kalenderen fejlede" kalender
+trin form-byg "Form & Fokus-byg fejlede" form_byg
+trin overblik "overblik fejlede" liv
+trin studie-eksport "studie-eksporten fejlede" studie
 $HOME/kompas/bin/backup-data.sh | while read -r l; do log "backup: $l"; done
 log "ok"
-# Status for siden Forbindelser. Efter "ok", så den læser denne kørsel i loggen
+# Status for siden Forbindelser: kun faste id'er og tal, aldrig fejltekster (kalenderens indeholder hemmelige adresser)
+par=(); for id in ${(ok)STATUS}; do par+=("\"$id\": \"$STATUS[$id]\""); done
+print -r -- "{\"slut\": \"$(date -u +%FT%TZ)\", \"trin\": {${(j:, :)par}}, \"kalenderfeeds_fejlede\": $feeds_fejlede}" \
+  > $STATE/opdater-status.tmp && mv $STATE/opdater-status.tmp $STATE/opdater-status.json
 /usr/bin/python3 $HOME/kompas/bin/forbindelser.py || log "forbindelser fejlede"

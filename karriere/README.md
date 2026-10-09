@@ -8,7 +8,7 @@ Overvåger studiejob og praktikopslag i Region Hovedstaden på Jobindex, vurdere
 | Fil/mappe | Hvad |
 |---|---|
 | `rapporter/ÅÅÅÅ-MM-DD.md` | Dagens rangerede liste med score, frist og begrundelse |
-| `oversigt.csv` | Tracker over alt vurderet. Du opdaterer selv `status` (vil søge/søgt/samtale/afslag), normalt fra Kompas |
+| `oversigt.csv` | Tracker over alt vurderet. `status` sættes på Kompas (vil søge, fravalgt, søgt, samtale, …) |
 | `profil.md` | Dine fag, erfaring og ønsker. **Det er her, du tuner matchet** |
 | `config.json` | Område, jobtyper, søgeord og tærskel for gode match (`match_taerskel`, standard 70) |
 | `AGENT.md` | Instruktionerne, Claude følger ved hver kørsel |

@@ -277,7 +277,7 @@ footer p{margin:0}
     <p>Intensitet er tid i pulszoner fra løb, cykling, roning, boldspil og klatring. Svømning er udeladt, fordi pulsen fra håndleddet i vand er upålidelig, og styrkepas er udeladt, fordi pulsen der ikke siger noget om indsatsen. Zonegrænserne er ændret over sommeren, så ældre perioder viser lidt for meget Z3.</p>
     <p>Belastning er i TRIMP-enheder for alle pas: pulsbaseret for kondition, og for styrkepas beregnet ud fra arbejdssæt i Hevy med tillæg for sæt med RPE, omregnet til samme skala. Sæt uden RPE får intet tillæg, så en periode med få RPE-registreringer viser snarere for lav end for høj belastning. Alle perioder er regnet om efter samme metode.</p>
     <p>e1RM er estimeret 1RM efter Epley ud fra dit bedste sæt med højst 12 gentagelser i Hevy. Siden viser øvelser med stang eller håndvægt, som du har lavet i mindst 3 af de seneste 6 perioder; maskiner og kabler er udeladt, fordi vægten ikke kan sammenlignes på tværs af maskiner og centre. Står der "uden RPE" ved bedste sæt, ved vi ikke hvor tæt på max det var, så e1RM kan være for lav.</p>
-    <p>Selvstudie tæller sessioner fra CalTask på mindst 5 minutter i kalenderen Selvstudie; før første logning står selvstudie som ingen data, ikke 0. Undervisning er begivenheder fra universitetets skema (titler med hold og kursuskode).</p>
+    <p>Selvstudie tæller sessioner fra CalTask på mindst 5 minutter i kalenderen Selvstudie; før første logning står selvstudie som ingen data, ikke 0. Undervisning er undervisning fra universitetets skema, som garmin-coach genkender på fagkoden.</p>
   </footer>
 </div>
 <div class="tip" id="tip" hidden></div>
@@ -499,7 +499,7 @@ function renderDist(p){
     html += s.pr_fag == null ? `<div class="card"><h3>Selvstudie pr. fag</h3><p class="empty">Selvstudie blev ikke logget i perioden.</p></div>`
       : s.pr_fag.length ? barCard("Selvstudie pr. fag", s.pr_fag.map(r=>({n:r.fag, v:r.timer})), "t")
       : `<div class="card"><h3>Selvstudie pr. fag</h3><p class="empty">Ingen studiesessioner logget i perioden.</p></div>`;
-    if (s.andre_begivenheder?.length) html += `<div class="card"><h3>Andet i kalenderen</h3><div class="bars">${s.andre_begivenheder.map(x=>`<div>${esc(x)}</div>`).join("")}</div><p class="note">Sociale arrangementer og andet uden kursuskode. Gode at kende, når en nat skal forklares.</p></div>`;
+    if (s.andre_begivenheder?.length) html += `<div class="card"><h3>Andet i kalenderen</h3><div class="bars">${s.andre_begivenheder.map(x=>`<div>${esc(x)}</div>`).join("")}</div><p class="note">Sociale arrangementer og andet, der ikke er undervisning. Gode at kende, når en nat skal forklares.</p></div>`;
   }
   return html ? `<section class="group"><div class="group-head"><h2>Fordeling i perioden</h2></div><div class="dist">${html}</div></section>` : "";
 }
@@ -720,7 +720,8 @@ const dm = s => { const {m,d} = pd(s); return `${d}. ${MON[m-1]}`; };
 const addDays = (s, n) => { const {y,m,d} = pd(s); const t = new Date(Date.UTC(y, m-1, d+n)); return t.toISOString().slice(0,10); };
 const dayIdx = (a, b) => Math.round((Date.parse(a) - Date.parse(b)) / 864e5);
 const hm = s => { const [h,m] = s.split(":").map(Number); return h + m/60; };
-const shortTitle = t => { const p = t.split(" - "); return p.length >= 3 ? p[0].replace(/\s*\([A-Z]+\)$/,"") + " · " + p[p.length-1] : t; };
+// Undervisning fra skemaet har fag-felterne fra kalenderhentningen (garmin-coach tolker titlerne); andet vises med sin titel
+const shortTitle = e => e.fag ? e.fag.navn + (e.fag.art ? " · " + e.fag.art : "") : e.titel;
 const SPORT = {strength_training:"Styrke", lap_swimming:"Svømning", running:"Løb", cycling:"Cykling", e_bike_fitness:"Elcykel-pas",
                indoor_rowing:"Roning", walking:"Gåtur", bouldering:"Klatring", indoor_climbing:"Klatring", soccer:"Fodbold", hiking:"Vandring"};
 const sportName = s => SPORT[s] || (s || "Træning").replace(/_/g, " ");
@@ -883,7 +884,7 @@ function weekGrid(m, events, pas, visFri){
       const a = Math.max(WK0, e.a), b = Math.min(WK1, e.b); if (b <= a) return;
       const ov = e.type !== "traening" && timed.some(o => o !== e && o.a < e.b && e.a < o.b);
       const pos = e.lanes > 1 ? `left:calc(${(100*e.lane/e.lanes).toFixed(1)}% + 2px);right:auto;width:calc(${(100/e.lanes).toFixed(1)}% - 4px);` : "";
-      inner += `<div class="blk ${e.type}${ov ? " overlap" : ""}" style="${pos}top:${((a-WK0)*PX).toFixed(0)}px;height:${Math.max(12, (b-a)*PX-2).toFixed(0)}px" title="${esc((e.start || "") + (e.slut ? "–" + e.slut : "") + " " + shortTitle(e.titel))}${ov ? " (overlapper)" : ""}">${esc(shortTitle(e.titel))}</div>`;
+      inner += `<div class="blk ${e.type}${ov ? " overlap" : ""}" style="${pos}top:${((a-WK0)*PX).toFixed(0)}px;height:${Math.max(12, (b-a)*PX-2).toFixed(0)}px" title="${esc((e.start || "") + (e.slut ? "–" + e.slut : "") + " " + shortTitle(e))}${ov ? " (overlapper)" : ""}">${esc(shortTitle(e))}</div>`;
     });
     cols += `<div class="wcol${d === tIso ? " today" : ""}" style="height:${H}px">${inner}</div>`;
   }

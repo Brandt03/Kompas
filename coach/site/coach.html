@@ -11,6 +11,10 @@
 <link rel="stylesheet" href="/kompas/assets/tokens.css">
 <link rel="stylesheet" href="/kompas/assets/page.css">
 <style>
+  table.uger { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.uger th { text-align: left; font-weight: 500; color: var(--text-secondary); padding: 6px 8px; border-bottom: 1px solid var(--divider); }
+  table.uger td { padding: 6px 8px; border-bottom: 1px solid var(--divider); }
+  table.uger .num { text-align: right; font-variant-numeric: tabular-nums; }
   .kv { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 14px; }
   .kv div span { display: block; color: var(--text-secondary); font-size: 12.5px; }
   .kv div b { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
@@ -62,6 +66,9 @@ const SPOERG = [
   "Hvordan går det med fokuspunkterne fra min seneste rapport?",
 ];
 
+// "Seneste 7 dage", "1 uge før", "3 uger før": samme navn i grafens tooltip og i tabellen
+const ugeNavn = w => w.uge_siden === 0 ? "Seneste 7 dage" : `${w.uge_siden} uge${w.uge_siden > 1 ? "r" : ""} før`;
+
 function render(d) {
   const root = document.getElementById("root");
   if (d.fejl) { root.innerHTML = `<div class="card empty">Kunne ikke beregne coach-data: ${esc(d.fejl)}</div>`; return; }
@@ -108,6 +115,10 @@ function render(d) {
         </div>
         ${b.acwr_fortolkning ? `<p class="meta" style="margin:8px 0 0">${esc(b.acwr_fortolkning.replace(/^./, c => c.toUpperCase()))}.</p>` : ""}
         <div id="c-load" style="margin-top:12px"></div>
+        ${(b.ugentligt || []).length ? `<details style="margin-top:10px"><summary>Ugerne som tabel</summary>
+          <table class="uger"><thead><tr><th>Uge</th><th class="num">Belastning</th><th class="num">Træningsdage</th></tr></thead>
+          <tbody>${b.ugentligt.map(w => `<tr><td>${ugeNavn(w)}</td><td class="num">${fmt(w.load)}</td><td class="num">${fmt(w["træningsdage"])}</td></tr>`).join("")}</tbody></table>
+        </details>` : ""}
       </section>
       <section class="card panel">
         <div class="panel-head"><h2>Intensitet, 28 dage</h2></div>
@@ -134,11 +145,11 @@ function render(d) {
     </section>
   `;
 
-  const weeks = [...(b.ugentligt || [])].reverse();
+  const weeks = [...(b.ugentligt || [])].reverse();  // ældste først i grafen; tabellen har nyeste først
   if (weeks.length) barChart(document.getElementById("c-load"), {
     label: "Belastning pr. uge", height: 150, fmt: v => fmt(v, 0),
     points: weeks.map(w => ({ label: w.uge_siden === 0 ? "denne" : `−${w.uge_siden}`, y: w.load,
-      tip: `<div class="th">${w.uge_siden === 0 ? "Seneste 7 dage" : `${w.uge_siden} uge${w.uge_siden > 1 ? "r" : ""} før`}</div>belastning <b>${fmt(w.load)}</b> · ${w["træningsdage"]} træningsdage` })),
+      tip: `<div class="th">${ugeNavn(w)}</div>belastning <b>${fmt(w.load)}</b> · ${w["træningsdage"]} træningsdage` })),
   });
   root.querySelectorAll(".ask button").forEach(btn => btn.onclick = async () => {
     try { await navigator.clipboard.writeText(btn.dataset.q); btn.querySelector("small").textContent = "kopieret – indsæt i Claude"; }

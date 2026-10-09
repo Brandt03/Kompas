@@ -37,7 +37,7 @@ UGEDAGE = ["mandag", "tirsdag", "onsdag", "torsdag", "fredag", "lørdag", "sønd
 ZONER = {1: 124, 2: 138, 3: 153, 4: 167, 5: 182}
 
 # Pladsholderfag i samme form som titlerne fra universitetets skema: "Alfa – lorem ipsum (A) - KURS101.A -
-# Lecture (On Campus)". Første ord bestemmer faget i Kompas, og "KURS" gør det til undervisning i overblik.
+# Lecture (On Campus)". garmin-coach genkender dem som undervisning, og første ord bestemmer faget i Kompas.
 # (navn, kode, hold, kort navn i CalTask)
 FAG = [
     ("Alfa – lorem ipsum", "KURS101", "A", "Alfa"),
@@ -296,11 +296,15 @@ def _byg_coach_db(conn: sqlite3.Connection, tl: Tidslinje, rng: random.Random) -
     kalender = _undervisning_og_kalender(tl, rng)
     social_naetter = {s.date() + timedelta(days=1) for _, s, _, titel, heldag in kalender
                       if not heldag and s.hour >= 18 and titel != ANDET["imorgen"]}
+    # Som kalenderhentningen: fag-felterne fra garmin-coachs egen tolkning af titlen og kalenderens navn
+    from garmin_coach.skema import fag_kolonner
+    kalendernavn = lambda uid: "Skema" if uid.startswith("skema-") else "Selvstudie" if uid.startswith("caltask-") else "Privat"
     conn.executemany(
-        "INSERT INTO calendar_events (uid, start_local, end_local, start_utc, end_utc, summary, all_day) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO calendar_events (uid, start_local, end_local, start_utc, end_utc, summary, all_day, "
+        "fag_navn, fag_kode, fag_art, fag_form, kalender) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [(uid, s.strftime("%Y-%m-%dT%H:%M"), e.strftime("%Y-%m-%dT%H:%M"),
-          None if heldag else _utc(s), None if heldag else _utc(e), titel, int(heldag))
+          None if heldag else _utc(s), None if heldag else _utc(e), titel, int(heldag),
+          *fag_kolonner(titel).values(), kalendernavn(uid))
          for uid, s, e, titel, heldag in kalender])
 
     alle_dage = (tl.idag - tl.start).days + 1
@@ -791,7 +795,7 @@ def lav(ud: Path, idag: date) -> None:
                                  (m.liv_config, "SITE_DIR", mappe), (m.liv_config, "BELASTNING_JSON", mappe / "belastning.json"),
                                  (m.liv_config, "FOERSTE_UGE", tl.start.isoformat()),
                                  (m.liv_config, "SELVSTUDIE_FRA", tl.selvstudie_fra.isoformat()),
-                                 (m.liv_config, "KURSUSKODE", "KURS"), (m.liv_config, "SELVSTUDIE_PRAEFIKS", "Selvstudie ·"),
+                                 (m.liv_config, "SELVSTUDIE_PRAEFIKS", "Selvstudie ·"),
                                  (m.liv_db, "DB_PATH", tmp / "liv.db")):
                 stak.enter_context(mock.patch.object(mod, felt, v))
             with _frossent_ur(nu, [m.kilder, m.rapport, m.side, m.cli]):

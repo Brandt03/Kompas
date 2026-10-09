@@ -44,6 +44,15 @@
   .vis-forbi { display: none; width: 100%; font: inherit; font-size: 13px; color: var(--text-secondary); background: var(--container-inset);
     border: 0; box-shadow: inset 0 0 0 1px var(--border-subdued); border-radius: 10px; padding: 9px 12px; cursor: pointer; margin-bottom: 8px; }
   @media (max-width: 560px) { .hide-sm { display: none; } }
+
+  /* Kalendere til og fra */
+  .kalendere { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; border: 0; padding: 0; margin: 0; min-width: 0; }
+  .kalendere legend { float: left; font-size: 12.5px; color: var(--text-secondary); margin-right: 2px; padding: 0; }
+  .kalendere label { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; padding: 5px 10px; border-radius: 999px; cursor: pointer;
+    background: var(--container-inset); box-shadow: inset 0 0 0 1px var(--border-subdued); }
+  .kalendere label.fra { color: var(--text-subdued); }
+  .kalendere input { margin: 0; accent-color: var(--nav-indicator); }
+  .kalendere .meta { margin-left: 2px; }
 </style>
 </head>
 <body>
@@ -71,6 +80,14 @@ const COLORS = ["var(--c1)", "var(--c2)", "var(--c3)", "var(--c4)", "var(--c5)",
 const OFFSET = { forrige: -7, denne: 0, naeste: 7 };
 let liv = null, studie = null, which = [0, 6].includes(new Date().getDay()) ? "naeste" : "denne", visForbi = false;
 
+// Kalendere, der er slået fra. Huskes kun i denne browser; en ny kalender er slået til.
+const SKJULTE_NØGLE = "ugeoverblik-skjulte-kalendere";
+let skjulte = new Set();
+try { skjulte = new Set(JSON.parse(localStorage.getItem(SKJULTE_NØGLE)) || []); } catch (e) {}
+const gemSkjulte = () => { try { localStorage.setItem(SKJULTE_NØGLE, JSON.stringify([...skjulte])); } catch (e) {} };
+// Begivenheder fra før kalendernavnet blev gemt, står samlet under ét punkt
+const kalenderNavn = e => e.kalender || "Uden kalendernavn";
+
 // Kalenderen, som den ser ud nu (liv eksport, hvert 30. min). Mangler den, bruges reviewets øjebliksbillede fra mandag.
 function kalenderFor(monday) {
   if (liv.kalender?.[monday]) return liv.kalender[monday];
@@ -90,10 +107,11 @@ function render() {
   document.getElementById("sub").textContent = `Uge ${isoWeek(parseDate(monday))} · ${range(monday)}`;
   const kal = kalenderFor(monday);
   if (!kal) { root.innerHTML = `<div class="card empty">Ingen kalender for uge ${isoWeek(parseDate(monday))} endnu. Kør <code>liv eksport</code> i overblik.</div>`; return; }
-  const events = kal.map(parseEvent);
-
   // same colour for a course across all weeks
   const alle = [...Object.values(liv.kalender || {}).flat(), ...(liv.reviews || []).flatMap(r => [...(r.kalender || []), ...(r.kommende || [])])].map(parseEvent);
+  // Kalenderne i de tre uger, siden viser, så listen ikke skifter med ugen; en fravalgt kalender tæller ikke med nogen steder
+  const kalendere = [...new Set([...Object.values(liv.kalender || {}).flat(), ...kal].map(kalenderNavn))].sort((a, b) => a.localeCompare(b, "da"));
+  const events = kal.map(parseEvent).filter(e => !skjulte.has(kalenderNavn(e)));
   const allFag = [...new Set(alle.filter(e => e.fag).map(e => e.fag))].sort();
   const color = f => FAG_FARVE[fagId(f)] || COLORS[allFag.indexOf(f) % COLORS.length];
 
@@ -126,7 +144,13 @@ function render() {
       <h3>${weekday(d)} <small>${dayMonth(d)}</small></h3>${blocks || `<span class="none">Fri</span>`}${chips}</section>`;
   }).join("");
 
+  const valg = kalendere.length > 1 ? `<fieldset class="kalendere"><legend>Kalendere</legend>${kalendere.map(k => {
+      const til = !skjulte.has(k);
+      return `<label class="${til ? "" : "fra"}"><input type="checkbox" data-kalender="${esc(k)}"${til ? " checked" : ""}>${esc(k)}</label>`; }).join("")}
+    ${skjulte.size ? `<span class="meta">Fravalgte kalendere tæller ikke med i tallene.</span>` : ""}</fieldset>` : "";
+
   root.innerHTML = `
+    ${valg}
     <section class="tiles" aria-label="Ugen i tal">
       <div class="card tile"><div class="label">Undervisning</div><div class="value">${fmt(teachH, 1)}<small>t</small></div>
         <div class="foot">${teach.length} moduler</div></div>
@@ -155,6 +179,11 @@ function render() {
   `;
   const vf = document.getElementById("vis-forbi");
   if (vf) vf.onclick = () => { visForbi = !visForbi; render(); };
+  root.querySelectorAll(".kalendere input").forEach(i => i.onchange = () => {
+    if (i.checked) skjulte.delete(i.dataset.kalender); else skjulte.add(i.dataset.kalender);
+    gemSkjulte(); render();
+    root.querySelector(`.kalendere input[data-kalender="${CSS.escape(i.dataset.kalender)}"]`)?.focus();
+  });
 }
 
 document.querySelectorAll(".seg button").forEach(b => b.onclick = () => { which = b.dataset.w; if (liv) render(); });
