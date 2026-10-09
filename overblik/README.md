@@ -68,6 +68,7 @@ Stier, datoer og titelmønstre kan overstyres med miljøvariabler (se `overblik/
 
 ## Det ugentlige review
 
+Reviewet skrives af den planlagte opgave "Overblik" mandag morgen efter `RUTINE.md`.
 `liv rapport` tager sidste hele uge og regner to ting ud:
 
 - **Afvigelser**: hver kolonne sammenlignes med medianen af de 8 foregående

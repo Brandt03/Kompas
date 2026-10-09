@@ -153,7 +153,7 @@ Mappen kan flyttes med `GC_SITE` (standard `~/.garmin-coach/site`).
 Kompas.app bygger siden, henter nye data i baggrunden og åbner den.
 Perioderne skrives af den planlagte opgave "Træning" hver anden lørdag (perioder
 fra lørdag til fredag) med `gem-periode`, som selv regner tallene, så kun
-vurderingen kommer fra modellen.
+vurderingen kommer fra modellen. Opgavens instruktioner står i `RUTINE.md`.
 
 Visningen "Ugen" (`/form/#ugen`) viser mandagsreviewet fra ~/kompas/overblik:
 afvigelser fra det normale, dag for dag, ugekalenderen, sammenhænge og

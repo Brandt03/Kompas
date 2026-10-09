@@ -72,7 +72,7 @@ Formaterne, koden forventer:
   `**Noter til pensum**`, `**Til rapporten**` og `**Video**`, og evt. øvelsesspørgsmål fra `*Øvelsesspørgsmål …*`
   til `*Svar …*`. Desuden `## Vigtigst i ugen`, `## Genkaldelse …` (med `*Svar*`) og `## Deadlines`
   (`| Uge | Fag | Aktivitet | Dato | Bemærkning |`). Planerne skrives af en planlagt Claude-opgave
-  (køreplan-rutinen) eller i hånden; koden læser dem kun. En frist med "Opgave N" i teksten kobles til
+  (køreplan-rutinen, instruktionerne står i `RUTINE.md`) eller i hånden; koden læser dem kun. En frist med "Opgave N" i teksten kobles til
   afleveringernes tabel, så den er færdig, når kolonnen Afleveret er udfyldt.
 - **Genkald**: `## Uge 10 — emne` og spørgsmål som `**1.** …`. Markeringen står efter nummeret
   (`**1.** [✓] …`, `[~]`, `[✗]`), dit svar nederst som `> **Mit svar** (14.03): …`. `-svar.md` har samme numre.

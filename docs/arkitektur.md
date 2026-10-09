@@ -131,7 +131,8 @@ baggrundsjobbene og værktøjerne på Mac'en, plus en MCP-guide til Claude-appen
 regnes af `bin/forbindelser.py`, som `opdater.sh` kører til sidst hver gang, og skrives til
 `public/forbindelser.json` (ikke i git). Datakilderne vises ud fra seneste vellykkede hentning, serverne spørges
 direkte, garmin-coach testes med et rigtigt MCP-håndtryk, og rutinerne læses fra Claude-appens egne tidsplaner;
-ret `RUTINE_INFO` i scriptet, så id'erne passer til dine planlagte opgaver. Scriptet læser aldrig hemmeligheder
+ret `RUTINE_INFO` i scriptet, så id'erne passer til dine planlagte opgaver. Hver planlagt opgave peger kun på sit
+projekts `RUTINE.md` (Karriere: `rutine.md` og `AGENT.md`), så instruktionerne versioneres med koden. Scriptet læser aldrig hemmeligheder
 som kalender-adresser og API-nøgler, kun om de findes, og viser aldrig rå loglinjer.
 
 ## Opsætning
