@@ -24,24 +24,16 @@ const path = require("path");
 const os = require("os");
 const { execFileSync } = require("child_process");
 const crypto = require("crypto");
+const S = require("./semester");
+const { tabel, isoDato, isoUge, mandagIUge, plusDage } = S;
 
-const hjem = s => s.replace(/^~(?=$|\/)/, os.homedir());
-const ROD = path.resolve(hjem(process.env.KOMPAS_SEMESTER || path.join(__dirname, "..")));
-// Scriptenes egne datafiler (deadlines-status.json m.fl.) ligger i semestermappens Scripts/
-const DATA = path.join(ROD, "Scripts");
+const ROD = S.ROD;
 const SIDER = path.join(__dirname, "kompas");
 const argUd = process.argv.indexOf("--ud");
+const hjem = s => s.replace(/^~(?=$|\/)/, os.homedir());
 const UD = argUd > 0 ? path.resolve(process.argv[argUd + 1])
   : path.resolve(hjem(process.env.STUDIE_EKSPORT_UD || path.join(os.homedir(), ".kompas", "studie")));
 const LIV_SITE = path.resolve(hjem(process.env.LIV_SITE || path.join(os.homedir(), ".garmin-coach", "site")));
-
-// Fagene: id bruges i data og adresser, mappe er fagets mappe i semestermappen, readme er fagets navn i README.md's
-// tabel over eksamensformer, og overskrift genkender fagets afsnit i ugeplanerne. Gamma har drills og afleveringer.
-const FAG = [
-  { id: "alfa", mappe: "Alfa", kort: "Alfa", navn: "Alfa – lorem ipsum", readme: "Alfa", overskrift: /^Alfa\b/ },
-  { id: "beta", mappe: "Beta", kort: "Beta", navn: "Beta – dolor sit amet", readme: "Beta", overskrift: /^Beta\b/ },
-  { id: "gamma", mappe: "Gamma", kort: "Gamma", navn: "Gamma – consectetur", readme: "Gamma", overskrift: /^Gamma\b/ },
-];
 
 // ── små hjælpere ─────────────────────────────────────────────────────
 
@@ -49,19 +41,6 @@ const læs = f => { try { return fs.readFileSync(f, "utf8"); } catch { return nu
 const findes = f => { try { fs.accessSync(f); return true; } catch { return false; } };
 const ls = d => { try { return fs.readdirSync(d).filter(n => !n.startsWith(".") && !n.startsWith("~$")); } catch { return []; } };
 const mtime = f => { try { return fs.statSync(f).mtime; } catch { return null; } };
-const isoDato = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-
-function isoUge(d) {
-  const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  t.setUTCDate(t.getUTCDate() + 4 - (t.getUTCDay() || 7));
-  return Math.ceil(((t - Date.UTC(t.getUTCFullYear(), 0, 1)) / 864e5 + 1) / 7);
-}
-function mandagIUge(aar, uge) {
-  const jan4 = new Date(aar, 0, 4);
-  const m = new Date(jan4); m.setDate(jan4.getDate() - ((jan4.getDay() + 6) % 7) + (uge - 1) * 7);
-  return m;
-}
-const plusDage = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
 
 // ── markdown → html (det, planerne bruger: overskrifter, lister, tabeller, fed, kode) ──
 
@@ -129,14 +108,6 @@ function md(src) {
   return ud.join("\n");
 }
 
-function tabel(src) {
-  const rækker = src.split("\n").filter(l => /^\s*\|/.test(l));
-  if (rækker.length < 2) return [];
-  const celler = r => r.trim().replace(/^\||\|$/g, "").split("|").map(c => c.trim());
-  const hoved = celler(rækker[0]);
-  return rækker.slice(2).map(r => Object.fromEntries(celler(r).map((c, i) => [hoved[i] || `k${i}`, c])));
-}
-
 // ── ugeplaner fra køreplan-rutinen ───────────────────────────────────
 
 const DELAFSNIT = ["Hurtigt overblik", "Kilder", "Noter til pensum", "Til rapporten", "Video"];
@@ -167,7 +138,7 @@ function læsPlan(fil) {
   const plan = { uge, aar, fil: `Uge_Overblik/${fil}`, titel, fra: isoDato(mandag), til: isoDato(plusDage(mandag, 6)),
     ændret: mtime(path.join(ROD, "Uge_Overblik", fil))?.toISOString() ?? null, fag: {}, vigtigst: null, genkaldelse: null, deadlines: [], øvrigt: [] };
   for (const a of afsnit) {
-    const fag = FAG.find(f => f.overskrift.test(a.titel));
+    const fag = S.fag().find(f => a.titel.startsWith(f.fagnoter_overskrift));
     if (fag) {
       // Del kun på de faste underoverskrifter; noterne kan selv have fede linjer som mellemrubrikker
       const dele = {}; let nu = "intro"; const buf = { intro: [] };
@@ -200,48 +171,35 @@ function læsPlan(fil) {
   return plan;
 }
 
-// ── deadlines og eksamener ───────────────────────────────────────────
+// ── LeetCode pr. uge (leetcode i fag.json) ──────────────────────────────
 
-// aar er planens år og planUge dens uge: en frist i uge 1-25 i en efterårsplan (fx en januar-eksamen)
-// ligger i det følgende år
-function deadline(r, aar, planUge = 40) {
-  const uger = (r.Uge || "").match(/\d+/g)?.map(Number) || [];
-  if (uger.length && uger[0] < 26 && planUge >= 26) aar += 1;
-  const hvad = r.Aktivitet || r.Hvad || "";
-  const ren = hvad.replace(/\*\*|`/g, "");
-  let type = "andet";
-  // Rækkefølgen betyder noget: "Præsentationen afleveres" er en aflevering, og
-  // "præsentation … forudsætning for eksamen" er en præsentation, ikke en eksamen
-  if (/prøveeksamen/i.test(ren)) type = "proeve";
-  else if (/\bopgave \d+\b|aflever/i.test(ren)) type = "aflevering";
-  else if (/præsentation/i.test(ren)) type = "praesentation";
-  else if (/stedprøve|eksamen|prøve\b/i.test(ren)) type = "eksamen";
-  else if (/ferie/i.test(ren)) type = "ferie";
-  let fra = uger.length ? mandagIUge(aar, uger[0]) : null;
-  let til = uger.length ? plusDage(mandagIUge(aar, uger[uger.length - 1]), 6) : null;
-  // En præcis dato (dd.mm) i Dato-kolonnen vinder over ugen, når den ligger i ugen.
-  // Et interval ("28.09-04.10", "12.-18.10") er ingen frist, bare ugen igen.
-  // Uden Dato-kolonne (CLAUDE.md's "Vigtige datoer") står datoen i teksten, fx "torsdag 10.12.2026 kl. 09:00-11:00"
-  const kilde = r.Dato != null ? r.Dato : ren;
-  const interval = r.Dato != null && /\d\.?\s*[-–]\s*\d/.test(r.Dato);
-  const præcis = interval ? null : kilde.match(/(\d{1,2})\.(\d{1,2})(?:\.(\d{4}))?(?!\d)/);
-  let dato = null;
-  if (præcis && fra) {
-    const d = new Date(præcis[3] ? +præcis[3] : aar, +præcis[2] - 1, +præcis[1]);
-    if (d >= plusDage(fra, -1) && d <= plusDage(til, 1)) dato = isoDato(d);
+// "## Uge N — emne", en valgfri note og én linje pr. opgave:
+// "- [2634. Filter Elements from Array](https://leetcode.com/problems/filter-elements-from-array/) · Easy · hvorfor"
+function leetcode() {
+  const f = S.fagMed("leetcode")[0];
+  const fil = f && path.join(ROD, f.mappe, f.leetcode), tekst = f && læs(fil);
+  if (!tekst) return null;
+  const uger = {};
+  for (const a of tekst.split(/^## /m).slice(1)) {
+    const m = a.match(/^Uge (\d+)\s*[—–-]?\s*(.*)\n([\s\S]*)$/);
+    if (!m) continue;
+    const opgaver = [], note = [];
+    for (const l of m[3].split("\n")) {
+      const o = l.match(/^- \[(\d+)\. (.+?)\]\((https:\/\/leetcode\.com\/problems\/[\w-]+\/)\) · (Easy|Medium|Hard)(?: · (.*))?$/);
+      if (o) opgaver.push({ nr: +o[1], titel: o[2], url: o[3], niveau: o[4], hvorfor: o[5] ? inline(o[5]) : null });
+      else note.push(l);
+    }
+    uger[m[1]] = { emne: m[2].trim(), note: note.join("").trim() ? md(note.join("\n")) : null, opgaver };
   }
-  const t = ren.match(/kl\.\s*(\d{1,2})[:.](\d{2})(?:\s*[-–]\s*(\d{1,2})[:.](\d{2}))?/);
-  const tid = t ? `${t[1].padStart(2, "0")}.${t[2]}${t[3] ? `–${t[3].padStart(2, "0")}.${t[4]}` : ""}` : null;
-  return {
-    uger: r.Uge || "", dato_tekst: r.Dato || null, fag: /^(—|–|-|alle)?$/i.test((r.Fag || "").trim()) ? "Alle" : r.Fag.trim(), hvad: inline(hvad), note: r.Bemærkning ? inline(r.Bemærkning) : null,
-    type, fra: fra && isoDato(fra), til: til && isoDato(til), dato, tid,
-  };
+  return { fag: f.id, fil: `${f.mappe}/${f.leetcode}`, uger };
 }
 
-function eksamensformer() {
-  const readme = læs(path.join(ROD, "README.md")) || "";
-  const afsnit = readme.split(/^## /m).find(a => /trænes forskelligt/i.test(a)) || "";
-  return tabel(afsnit);
+// ── deadlines og eksamener ───────────────────────────────────────────
+
+// En frist som html (selve tolkningen ligger i semester.js, så serveren bruger samme)
+function deadline(r, aar, planUge) {
+  const d = S.deadline(r, aar, planUge);
+  return { ...d, hvad: inline(d.hvad), note: d.note ? inline(d.note) : null };
 }
 
 // ── status pr. fag (samme optælling som køreplanen) ─────────────────
@@ -292,8 +250,7 @@ function drills(mappe) {
   });
 }
 
-// Afleveringernes statustabel (Gamma/vscode/Opgaver/README.md): Opgave | Uge | Afleveret | Godkendt | Hvad drillede
-function afleveringer(fil) {
+function afleveringsTabel(fil) {
   const t = læs(fil);
   if (!t) return null;
   const status = t.split(/^## /m).find(a => /^Status/.test(a)) || "";
@@ -335,13 +292,13 @@ function fagStatus(f) {
     s.genkald = genkald(path.join(d, "Genkald"));
   }
   if (findes(path.join(d, "Modeller"))) s.modeller = ls(path.join(d, "Modeller")).filter(n => !/^README/i.test(n)).length;
-  if (f.id === "gamma") {
-    const vs = path.join(d, "vscode");
+  if (f.kode) {
+    const vs = path.join(d, f.kode);
     s.drills = drills(path.join(vs, "Drills"));
     s.oevelser_i_gang = ls(vs).filter(n => /\.js$/.test(n));
     s.oevelser_faerdige = [...ls(path.join(vs, "Bog")), ...ls(path.join(vs, "Øvelser"))].length;
-    s.afleveringer = afleveringer(path.join(vs, "Opgaver", "README.md"));
   }
+  if (f.afleveringer) s.afleveringer = afleveringsTabel(path.join(d, f.afleveringer.mappe, "README.md"));
   return s;
 }
 
@@ -482,7 +439,7 @@ function fagnoterUger(fil, fagId) {
 // Billederne pakkes kun ud, når dokumentet er ændret siden sidst (stempel = ændringstid + størrelse)
 function fagnoter(forrige) {
   const ud = {};
-  for (const f of FAG) {
+  for (const f of S.fag()) {
     const navn = ls(path.join(ROD, f.mappe)).find(n => /^Fagnoter.*\.docx$/i.test(n));
     if (!navn) continue;
     const fil = path.join(ROD, f.mappe, navn);
@@ -521,9 +478,7 @@ function main() {
   // med en præcis dato (fx eksamen fra Eksamener.pdf) erstatter planens række for samme fag, uge og type;
   // rækker planen ikke har, kommer med; resten af planens rækker står uændret.
   let deadlines = nyeste?.deadlines?.length ? nyeste.deadlines.map(r => deadline(r, nyeste.aar, nyeste.uge)) : [];
-  const claude = læs(path.join(ROD, "CLAUDE.md")) || "";
-  const vigtige = tabel(claude.split(/^## /m).find(a => /^Vigtige datoer/.test(a)) || "")
-    .map(r => deadline(r, nyeste?.aar ?? nu.getFullYear(), nyeste?.uge ?? ugeNu));
+  const vigtige = S.vigtigeDatoer().map(r => deadline(r, nyeste?.aar ?? nu.getFullYear(), nyeste?.uge ?? ugeNu));
   const samme = (a, b) => a.fag === b.fag && a.type === b.type && a.fra === b.fra;
   for (const v of vigtige) {
     const i = deadlines.findIndex(d => samme(d, v));
@@ -532,32 +487,34 @@ function main() {
   }
   // Prøveeksamener er en egen plan, ikke frister fra uddannelsen: de står i CLAUDE.md's "Egen plan" og vises på
   // Eksamen-fanen. En prøveeksamen i ugeplanens tabel eller under Vigtige datoer flyttes også derover.
-  const egenPlan = tabel(claude.split(/^## /m).find(a => /^Egen plan/.test(a)) || "")
-    .map(r => deadline(r, nyeste?.aar ?? nu.getFullYear(), nyeste?.uge ?? ugeNu));
+  const egenPlan = S.egenPlan().map(r => deadline(r, nyeste?.aar ?? nu.getFullYear(), nyeste?.uge ?? ugeNu));
   const proeveplan = [...egenPlan, ...deadlines.filter(d => d.type === "proeve" && !egenPlan.some(e => e.fag === d.fag && e.fra === d.fra))]
     .map(({ uger, fag, hvad, fra, til }) => ({ uger, fag, hvad, fra, til }))
     .sort((a, b) => String(a.fra).localeCompare(String(b.fra)));
   deadlines = deadlines.filter(d => d.type !== "proeve");
   deadlines.sort((a, b) => String(a.dato || a.fra).localeCompare(String(b.dato || b.fra)));
-  // Færdig-markering fra Kompas: nummererede afleveringer ("Opgave 3") i "Afleveret" i Opgaver/README.md, resten i
-  // deadlines-status.json. Nøglen er "<fag>|Opgave 3" for dem og ellers "<fag>|<type>|<uge>", så den overlever, at
-  // planens tekst ændrer sig.
+  // Færdig-markering fra Kompas: afleveringer (fx Opgave 3) i "Afleveret" i fagets afleveringstabel, resten i
+  // deadlines-status.json. Nøglen er "<fag>|Opgave 3" for afleveringer og ellers "<fag>|<type>|<uge>", så den overlever,
+  // at planens tekst ændrer sig.
   let status = {};
-  try { status = JSON.parse(læs(path.join(DATA, "deadlines-status.json")) || "{}"); } catch { status = {}; }
-  const aflRækker = afleveringer(path.join(ROD, "Gamma", "vscode", "Opgaver", "README.md"))?.raekker || [];
+  try { status = JSON.parse(læs(path.join(S.DATA, "deadlines-status.json")) || "{}"); } catch { status = {}; }
+  const afleveringer = Object.fromEntries(S.fagMed("afleveringer").map(f =>
+    [f.kort, afleveringsTabel(path.join(ROD, f.mappe, f.afleveringer.mappe, "README.md"))?.raekker || []]));
   for (const d of deadlines) {
-    const nr = (d.hvad.replace(/<[^>]+>/g, "").match(/\bopgave (\d+)\b/i) || [])[1];
-    const g = nr ? `Opgave ${nr}` : null;
+    const g = S.afleveringsNr(d.hvad.replace(/<[^>]+>/g, ""));
     d.noegle = g ? `${d.fag}|${g}` : `${d.fag}|${d.type}|${(d.uger.match(/\d+/) || [""])[0]}`;
-    const gr = g && aflRækker.find(r => r.opgave === g);
+    const gr = g && (afleveringer[d.fag] || Object.values(afleveringer).flat()).find(r => r.opgave === g);
     const afl = gr?.afleveret && !/^(nej|-|—|–)$/i.test(gr.afleveret) ? gr.afleveret : null;
     d.faerdig = status[d.noegle]?.faerdig || afl || null;
   }
   const deadlineKilde = [nyeste?.deadlines?.length ? nyeste.fil : null, vigtige.length ? "CLAUDE.md" : null].filter(Boolean).join(" og ") || null;
 
-  const former = eksamensformer();
-  const fag = FAG.map(f => ({
-    id: f.id, kort: f.kort, navn: f.navn,
+  // Fagene med det, siderne skal vide om dem: farve og hvilke funktioner faget har (fra fag.json)
+  const former = S.eksamensformer();
+  const fag = S.fag().map(f => ({
+    id: f.id, kort: f.kort, navn: f.navn, mappe: f.mappe, farve: f.farve, genkald: f.genkald,
+    begreber: f.begreber, kode: f.kode, afleveringer: f.afleveringer, leetcode: !!f.leetcode,
+    eksamenstraening: f.eksamenstraening, forudsaetning: f.forudsaetning,
     eksamen: former.find(r => (r.Fag || "").startsWith(f.readme)) || null,
     status: fagStatus(f),
   }));
@@ -565,11 +522,11 @@ function main() {
   const data = {
     genereret: nu.toISOString(), uge_nu: ugeNu, aktuel_uge: aktuel?.uge ?? null,
     planer: planer.map(p => ({ ...p, deadlines: undefined })),
-    deadlines, deadline_kilde: deadlineKilde, proeveplan, fag,
+    deadlines, deadline_kilde: deadlineKilde, proeveplan, fag, leetcode: leetcode(),
   };
   const manifest = {
     omraade: "Studie", ikon: "graduation-cap", raekkefoelge: 20,
-    kilde: `${path.basename(ROD)} (Scripts/kompas-eksport.js) · ugeplaner fra køreplan-rutinen`,
+    kilde: `${S.semester()} (Scripts/kompas-eksport.js) · ugeplaner fra køreplan-rutinen`,
     opdateret: nu.toISOString(),
     sider: [
       { titel: "Ugeoverblik", ikon: "calendar", sti: "/studie/" },

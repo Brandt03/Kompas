@@ -2,7 +2,7 @@
 """Henter studiejob og praktikopslag fra Jobindex, forfiltrerer dem og lægger nye i køen.
 
 Kun standardbiblioteket bruges. Kør:  python3 hent_jobs.py
-Resultat: én JSON-fil pr. nyt relevant opslag i data/koe/, som Claude-kørslen (AGENT.md) behandler.
+Resultat: én JSON-fil pr. nyt relevant opslag i data/koe/, som rutinen (RUTINE.md) behandler.
 """
 import html
 import json

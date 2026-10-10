@@ -1,7 +1,7 @@
 # Køreplan-rutinen: instruktioner
 
 Instruktionerne til rutinen Studie (`studie-koereplan`) i Claude-appen. Rutinen selv peger kun hertil, så
-rutinen ændres her og versioneres med projektet. Fagene hedder her Alfa, Beta og Gamma; Gamma er faget med kode.
+rutinen ændres her og versioneres med projektet.
 
 Lav min køreplan for den kommende uge.
 
@@ -11,19 +11,24 @@ Brug absolutte stier. Alle stier nedenfor er relative til den mappe.
 ## 0. FØR ALT ANDET
 
 a) Læs `CLAUDE.md` i roden. Dens regler gælder også for denne kørsel, og den har
-   bøgernes konventioner, "Materiale der mangler" og "Vigtige datoer". Vigtigst her:
+   bøgernes konventioner, "Materiale der mangler" og "Vigtige datoer". Læs også
+   `Scripts/fag.json` (semestrets fag) og tabellen "… trænes forskelligt" i `README.md`
+   (eksamensform pr. fag). Rutinen går fagene igennem i fag.json's rækkefølge, og `<mappe>`
+   nedenfor er fagets `mappe`. Felterne siger, hvad faget har: `genkald`, `begreber`,
+   `kode` (mappen med drills og øvelser), `afleveringer` (mappe og præfiks som G i G1)
+   og `eksamenstraening.form` (skriftlig, kode eller mundtlig). Vigtigst i CLAUDE.md:
    - **Mine arbejdsfiler** (`*/Genkald/begreber.md`, eksisterende `genkald-*.md`,
-     alt i `Gamma/vscode/`) læser du kun. Du redigerer ALDRIG i dem.
-   - **Mine opgaver** (drills, øvelsessæt, afleveringer og fagenes obligatoriske projekter):
-     til dem skriver du stof og spørgsmål, ALDRIG facit, heller ikke som kodeeksempel.
+     alt i `<mappe>/<kode>/` for et kodefag) læser du kun. Du redigerer ALDRIG i dem.
+   - **Mine opgaver** (drills, øvelsessæt, afleveringer, obligatoriske opgaver): til dem
+     skriver du stof og spørgsmål, ALDRIG facit, heller ikke som kodeeksempel.
    - Du opretter kun NYE filer, der er nævnt i denne fil. To undtagelser må
      udvides: Fagnoter-dokumenterne (KUN efter afsnit 6) og
-     `Gamma/vscode/Drills/forklaringer/*.md` (KUN efter afsnit 6b).
+     `<mappe>/<kode>/Drills/forklaringer/*.md` (KUN efter afsnit 6b).
 
 a2) SORTÉR CANVAS-DOWNLOADS. Kør altid, også når køreplanen springes over i c):
    `node Scripts/canvas-sortering.js --kør` (fra semestermappen).
-   Scriptet flytter Canvas-filer fra ~/Downloads ind i `<fag>/Pensum/...` og
-   `<fag>/Afleveringer/`, konverterer PPTX til PDF og lægger dubletter i
+   Scriptet flytter Canvas-filer fra ~/Downloads ind i `<mappe>/Pensum/...` og
+   `<mappe>/Afleveringer/`, konverterer PPTX til PDF og lægger dubletter i
    papirkurven. Ret ikke i scriptet, og flyt ikke filer i hånden. Filer i
    `_Indbakke/` kunne scriptet ikke placere. Lad dem ligge, men nævn dem i
    slutsvaret. Fejler kørslen, så skriv én linje om det og fortsæt.
@@ -49,35 +54,32 @@ c) Findes der allerede en `Uge_Overblik/Ugeplan_ugeNN_*.md` for den uge, så spr
 | Hvad | Sti |
 |---|---|
 | Ugeplaner (dine tidligere output) | `Uge_Overblik/Ugeplan_uge*.md` |
-| Lektionsplan og kursusbeskrivelse pr. fag | `<fag>/Lektionsplan*.pdf`, `<fag>/Kursusbeskrivelse*.pdf` |
-| Gammas kursusplan (uge → emne, afleveringer) | søg `Gamma/` efter `Kursusplan*` (png/pdf) |
-| Fagenes eksamensformer | tabellen "De tre fag trænes forskelligt" i `README.md` |
+| Lektionsplan, kursusbeskrivelse, kursusplan | `<mappe>/` (filerne pr. fag står i CLAUDE.md under "Hvad mappen er") |
+| Obligatoriske opgaver | `<mappe>/Afleveringer/` |
 | Gamle eksamenssæt | søg hele mappen efter `*Eksamen*` |
-| Slides | `<fag>/Pensum/Forelæsninger/ÅÅÅÅMMDD_*.pdf` |
-| Øvelsessæt | `<fag>/Pensum/Øvelser/ÅÅÅÅMMDD_*.pdf` |
-| Opgavetekster (afleveringer, obligatoriske projekter) | `<fag>/Afleveringer/` — deres frister har FORRANG for kursusplanens uge |
+| Slides | `<mappe>/Pensum/Forelæsninger/ÅÅÅÅMMDD_*.pdf` |
+| Øvelsessæt | `<mappe>/Pensum/Øvelser/ÅÅÅÅMMDD_*.pdf` |
+| Opgavetekster (afleveringer m.m.) | `<mappe>/Afleveringer/` — deres frister har FORRANG for kursusplanens uge |
 | Lærebøger | `Bøger/` |
-
-`<fag>` er `Alfa`, `Beta` eller `Gamma`.
 
 HVILKEN UGE EN FIL HØRER TIL (bruges overalt, hvor filen siger "dato i ugen"):
 Står der et ugenummer i filnavnet efter datopræfikset (`Uge 12`, `uge 12`, `uge12`,
 `Uge 12(2)`, `uge11A`), hører filen til den uge, også når datopræfikset ligger i en
 anden uge. Ellers afgør datopræfikset `ÅÅÅÅMMDD`. Eksempel: `20270314_Lorem_Uge 12(2)_Ipsum.pdf`
-er dateret søndag i uge 11, men hører til uge 12. Omdøb ikke filen. Nævn uoverensstemmelsen i
-slutsvaret, så brugeren kan rette datoen.
+er dateret søndag i uge 11, men hører til uge 12. Omdøb ikke filen. Nævn uoverensstemmelsen i slutsvaret, så brugeren kan rette
+datoen.
 
-Mangler Gammas kursusplan eller eksamenssættene, så brug de
-tidligere ugeplaner i `Uge_Overblik/` som kilde til afleveringsuger og emner, og skriv
-under "Huller" at filen mangler i mappen. Opfind aldrig datoer.
+Mangler et fags kursusplan eller eksamenssættene, så brug de tidligere ugeplaner i
+`Uge_Overblik/` som kilde til afleveringsuger og emner, og skriv under "Huller" at
+filen mangler i mappen. Opfind aldrig datoer.
 
 ## 2. FREMGANGSMÅDE
 
-1. Slå ugen op i lektionsplanerne og kursusplanen. Et fag kan have flere
+1. Slå ugen op i lektionsplanerne og kursusplanerne. Et fag kan have flere
    selvstudier eller øvelsesgange i samme uge. Tag dem alle.
 
-2. SLIDES OG ØVELSESSÆT. Se efter filer i `<fag>/Pensum/Forelæsninger/` og
-   `<fag>/Pensum/Øvelser/`, der hører til den planlagte uge (se "Hvilken uge en
+2. SLIDES OG ØVELSESSÆT. Se efter filer i `<mappe>/Pensum/Forelæsninger/` og
+   `<mappe>/Pensum/Øvelser/`, der hører til den planlagte uge (se "Hvilken uge en
    fil hører til" i afsnit 1). Findes de, så
    læs dem, og byg noteafsnittet på slides + bog (slides viser, hvad underviseren
    vægter). Findes de ikke, så skriv "slides til uge NN ikke uploadet endnu" i
@@ -87,21 +89,21 @@ under "Huller" at filen mangler i mappen. Opfind aldrig datoer.
 3. MIN STATUS — læs den direkte fra mappen.
    Datér alt med filernes ændringsdato (`stat -f '%Sm' -t '%d.%m' fil`).
    Fremstil det aldrig som mere end det, filerne viser.
-   - Drills: for hver `Gamma/vscode/Drills/kap*.js`: antal `TOM` tilbage
-     (`grep -cw TOM`) og antal `DIN KODE HER` tilbage (mine arbejdsfiler).
+   - Drills (fag med `kode`): for hver `<mappe>/<kode>/Drills/kap*.js`: antal `TOM`
+     tilbage (`grep -cw TOM`) og antal `DIN KODE HER` tilbage (mine arbejdsfiler).
      Du må køre `node` på dem for at tælle bestået/fejlet.
-   - Øvelser i gang: `.js`-filer direkte i `Gamma/vscode/`. Færdige: filer i
-     `Gamma/vscode/Bog/` og `Gamma/vscode/Øvelser/`.
-   - Afleveringer: statustabellen i `Gamma/vscode/Opgaver/README.md` og eventuelle
-     `Opgave N/`-mapper.
-   - Begreber: i `Alfa/Genkald/begreber.md` og `Beta/Genkald/begreber.md`, antal
+   - Øvelser i gang: `.js`-filer direkte i `<mappe>/<kode>/`. Færdige: filer i
+     `<mappe>/<kode>/Bog/` og `<mappe>/<kode>/Øvelser/`.
+   - Afleveringer (fag med `afleveringer`): statustabellen i
+     `<mappe>/<afleveringer.mappe>/README.md` og eventuelle mapper med præfikset.
+   - Begreber (fag med `begreber`): i `<mappe>/Genkald/begreber.md`, antal
      tabelrækker hvor definitionskolonnen er udfyldt, ud af det samlede antal.
-   - Genkald: i `*/Genkald/genkald-*.md` (ikke `-svar.md`), antal `[✓]`, `[~]`,
-     `[✗]` og antal spørgsmål uden markering.
-   - Aktivitet: filer ændret de sidste 7 dage i fagmapperne
+   - Genkald (fag med `genkald`): i `<mappe>/Genkald/genkald-*.md` (ikke `-svar.md`),
+     antal `[✓]`, `[~]`, `[✗]` og antal spørgsmål uden markering.
+   - Aktivitet: filer ændret de sidste 7 dage i fagenes mapper
      (`find ... -mtime -7`), inkl. Fagnoter-dokumenterne.
-   Brug status til at målrette rådene: fx er kap04 ikke begyndt, og Opgave 1 er
-   denne uge, så sig det. Er noget umuligt at aflæse, så skriv det.
+   Brug status til at målrette rådene: fx er en drill ikke begyndt, og en
+   aflevering er denne uge, så sig det. Er noget umuligt at aflæse, så skriv det.
 
 4. Læs ugens pensum i lærebøgerne, før du skriver noteafsnittet. Skriv ud fra
    bogen, ikke ud fra hvad du husker om emnet.
@@ -111,18 +113,18 @@ under "Huller" at filen mangler i mappen. Opfind aldrig datoer.
 
 ## 3. OM BØGERNE
 
-- Hvilken bog og udgave hvert fag bruger, står i CLAUDE.md. Angiv altid sidetal i
-  den udgave, der ligger i `Bøger/`. Bruger lektionsplanen en anden udgave, så omregn
-  efter fagets tabel, som CLAUDE.md nævner, aldrig med en fast forskydning.
-- Angiver kursusplanen emner frem for kapitler, så map selv emnet til kapitlet og
-  skriv, hvilket du landede på.
-- Scannede bøger har OCR-støj, så parafrasér, citer ikke ordret.
+- Bøgerne, deres udgaver, filnavne og hvordan de læses (sidetal, OCR, omregning
+  mellem udgaver) står i CLAUDE.md under "Konventioner". Følg dem, og angiv altid
+  sidetal i min udgave.
 - Står noget fra "Materiale der mangler" i CLAUDE.md på pensum, og finder du det
   ikke i mappen: skriv afsnittet som forberedelsesnote, marker det tydeligt, og
   opfind aldrig sidetal eller struktur.
 - Er ugen ferie eller uden undervisning i et fag, så skriv det kort og gå videre.
 
 ## 4. FORMAT — én sektion per fag
+
+Én `## <navn>`-sektion per fag i fag.json's rækkefølge, med fagets `navn` fra fag.json
+som overskrift (Kompas finder sektionen ud fra den). Hver sektion har:
 
 **Hurtigt overblik** — punktform, maks otte linjer
 - Ugens emne og formål
@@ -137,31 +139,33 @@ under "Huller" at filen mangler i mappen. Opfind aldrig datoer.
 række), bog (kapitel, afsnitsoverskrift, sider i min udgave), slides
 (filnavn, slidenummer), status-filer (sti og dato).
 
-**Noter til pensum** — 400-600 ord. FORMEN AFHÆNGER AF FAGETS EKSAMEN (se tabellen
-"De tre fag trænes forskelligt" i `README.md`):
+**Noter til pensum** — 400-600 ord. FORMEN AFHÆNGER AF FAGETS EKSAMEN: formen står i
+`eksamenstraening.form` i fag.json, og eksamenens detaljer (varighed, hjælpemidler,
+opgavetyper) i fagets række i README's "… trænes forskelligt".
 
-  · SKRIFTLIG PRØVE MED NOTER (typisk faget med kode) — skriv et opslagsværk, ikke
-    forståelsesprosa. Syntaks, kaldsignatur og et minimaleksempel, der viser
+  · **kode** — skriftlig prøve i kode. Er noter tilladt, så skriv et opslagsværk,
+    ikke forståelsesprosa. Syntaks, kaldsignatur og et minimaleksempel, der viser
     hvad det returnerer, for hvert nyt konstrukt. De to-tre typiske fejl,
     formuleret så jeg kan genkende dem i en fejlmeddelelse. Brug egne
     eksempler, aldrig facit til mine opgaver.
 
-  · SKRIFTLIG PRØVE UDEN HJÆLPEMIDLER — prosa, der forklarer sammenhængen. Slut
-    ALTID med 5-8 øvelsesspørgsmål i eksamensformat: multiple choice med plausible
-    distraktorer, en tabel eller en model at udfylde, mindst ét essayspørgsmål.
-    Svarene til sidst, adskilt. Findes der eksamenssæt i mappen, så kalibrér
-    formatet efter dem.
+  · **skriftlig** — prosa, der forklarer sammenhængen. Slut ALTID med 5-8
+    øvelsesspørgsmål i eksamensformatet fra README: fx multiple choice med plausible
+    distraktorer, en model eller tabel fra faget at udfylde, mindst ét essayspørgsmål.
+    Svarene til sidst, adskilt. Findes der eksamenssæt i mappen, så kalibrér formatet
+    efter dem.
 
-  · MUNDTLIG PRØVE — prosa med bogens fagtermer. Slut med ét realistisk
-    pensumspørgsmål og et disponeret svar på fem minutter: tre-fire hovedpunkter i
-    rækkefølge med de begreber, der skal nævnes i hvert.
+  · **mundtlig** — prosa med bogens fagtermer. Slut med ét realistisk
+    pensumspørgsmål og et disponeret svar på fem minutter: tre-fire hovedpunkter
+    i rækkefølge med de begreber, der skal nævnes i hvert.
 
-  Fælles: bogens egne termer, på fagets sprog. Knyt stoffet til læringsmålet i
+  Fælles: bogens egne termer på bogens sprog. Knyt stoffet til læringsmålet i
   kursusbeskrivelsen.
 
-**Til rapporten** — én til tre linjer. Hvilke begreber kan operationaliseres
-i fagenes obligatoriske projekter eller rapporter? Ingen kobling er et
-gyldigt svar.
+**Til rapporten** — én til tre linjer. Hvilke begreber kan operationaliseres i
+fagets rapport, projekt eller obligatoriske opgave (se `<mappe>/Afleveringer/` og
+kursusbeskrivelsen)? Ingen kobling er et gyldigt svar. Har faget ingen rapport eller
+opgave, så udelad afsnittet.
 
 **Video** — højst én YouTube-video pr. fag, kun når en virkelig god findes.
 Udelad afsnittet helt for et fag, hvis ingen video passer. Det er bedre end en
@@ -188,8 +192,9 @@ middelmådig video. Det gælder også uger uden undervisning.
   titel og længde, så brug ikke videoen. Opfind aldrig et link eller et
   video-id.
 - CS50 som ekstra: ud over videoen må hvert fag få ÉN CS50-forelæsning, når
-  en del af den passer godt til ugens emne. Det gælder typisk fag med databaser,
-  SQL, netværk eller programmering. 50-minutters-grænsen gælder
+  en del af den passer godt til ugens emne. Det gælder typisk de tekniske fag
+  (databaser, SQL, netværk, programmering) og næsten aldrig organisations- og
+  samfundsfag. 50-minutters-grænsen gælder
   ikke her, men link til den relevante del med `&t=<sekunder>s`, og angiv
   start-slut og omtrentlig længde. Tidsstemplerne skal komme fra kapitlerne
   i videoens beskrivelse (`"shortDescription"`), aldrig fra et gæt.
@@ -197,7 +202,7 @@ middelmådig video. Det gælder også uger uden undervisning.
   CS50 SQL (`https://cs50.harvard.edu/sql/weeks/N/`), CS50 Web og CS50's
   Understanding Technology. Brug den engelske udgave, ikke en
   spansk/portugisisk dublet. CS50x underviser i C og Python, så sig, hvad der
-  overføres til fagets sprog, og hvad der kan springes over. Gentag ikke en
+  overføres til kodefagets sprog, og hvad der kan springes over. Gentag ikke en
   del, der er brugt før (`grep -h "CS50:" Uge_Overblik/*.md`). Form:
   `- CS50: [Titel](https://www.youtube.com/watch?v=ID&t=Ns) (Kursus år, m:ss-m:ss, ca. N min.). <1-3 sætninger>`
   som ekstra punkt under samme **Video**-overskrift.
@@ -209,16 +214,18 @@ middelmådig video. Det gælder også uger uden undervisning.
   efter læsningen, efter en aflevering). Er en videos ramme en anden end
   fagets, så gør koblingen til bogens begreber til en lille opgave.
 
-EFTER DE TRE FAGSEKTIONER
+EFTER FAGSEKTIONERNE
 
 **Genkaldelse** — tre spørgsmål fra stof to til fire uger tilbage.
-Spørgsmål, ikke resumé. Prioritér faget med den nærmeste eksamen. Svarene til sidst, adskilt.
+Spørgsmål, ikke resumé. Prioritér faget med den nærmeste eksamen ("Vigtige datoer" i
+CLAUDE.md). Svarene til sidst, adskilt.
 Prioritér stof, hvor min status viser `[~]`/`[✗]` eller tomme begreber.
 
 **Deadlines** — tabel over obligatoriske aktiviteter og eksamener inden for
 fire uger, inkl. de frister under "Vigtige datoer" i CLAUDE.md, der falder i perioden.
-Tabellen skal have kolonnerne `| Uge | Dato | Fag | Aktivitet | Bemærkning |` (Kompas læser den).
-Kendes en præcis frist (opgavetekst i `<fag>/Afleveringer/`, Canvas, eksamensplanen eller "Vigtige datoer" i CLAUDE.md), så skriv den
+Tabellen skal have kolonnerne `| Uge | Dato | Fag | Aktivitet | Bemærkning |` (Kompas læser den),
+med fagets `kort` fra fag.json i Fag-kolonnen.
+Kendes en præcis frist (opgavetekst i `<mappe>/Afleveringer/`, Canvas, eksamensplanen eller "Vigtige datoer" i CLAUDE.md), så skriv den
 som `dd.mm kl. tt:mm` i Dato-kolonnen og sæt Uge til fristens uge, ikke kursusplanens.
 
 **Vigtigst i ugen** — maks tre linjer.
@@ -228,8 +235,9 @@ som `dd.mm kl. tt:mm` i Dato-kolonnen og sæt Uge til fristens uge, ikke kursusp
 Kompas (https://kompas.localhost) er overblikket over frister; de føres kun i ugeplanen og dér.
 
 1. Frister, jeg har markeret som færdige på Kompas, står i `Scripts/deadlines-status.json`
-   (`{"<fag>|<type>|<uge>": {"faerdig": "ÅÅÅÅ-MM-DD"}}`). Afleveringer markeres i stedet i
-   kolonnen "Afleveret" i `Gamma/vscode/Opgaver/README.md`. Læs begge.
+   (`{"<fag>|<type>|<uge>": {"faerdig": "ÅÅÅÅ-MM-DD"}}`). Afleveringer (fag med
+   `afleveringer`) markeres i stedet i kolonnen "Afleveret" i
+   `<mappe>/<afleveringer.mappe>/README.md`. Læs begge.
 2. En færdig frist står stadig i Deadlines-tabellen, men med "✓ færdig" først i
    Bemærkning, og den nævnes ikke i Vigtigst i ugen eller som noget, der skal nås.
 3. Ret aldrig i `deadlines-status.json` eller i README-tabellen. Det gør jeg selv på Kompas.
@@ -238,21 +246,21 @@ Kompas (https://kompas.localhost) er overblikket over frister; de føres kun i u
 
 Ud over køreplanen for den kommende uge skal du udfylde fagnoterne for den uge,
 der netop er slut (den uge, hvis søndag er i dag, eller ved en forsinket kørsel
-den seneste afsluttede uge). Det gælder alle tre fag. Er et fag uden undervisning
-den uge (fx efterårsferie), så spring det over.
+den seneste afsluttede uge). Det gælder alle fag i fag.json. Er et fag uden
+undervisning den uge (fx efterårsferie), så spring det over.
 
-Dokumenter: `<fag>/Fagnoter - <fag>.docx`.
+Dokumenter: fagets Word-dokument `<mappe>/Fagnoter - *.docx`.
 
 Værktøjet, der skriver noterne ind i Word-dokumentet (python-docx), er ikke med i repoet. Det skal kunne:
 indsætte en uges noter i samme form som de godkendte eksempler (felter, længde, sprog, sidetalsform,
-billedtekster), og for faget med kode køre alle `// →`-resultater i kodeblokkene gennem node. Kør den
-kontrol altid, og ret alle fejl.
+billedtekster; ét eksempel pr. fag, eller et fra et fag med samme eksamensform), og for fag med `kode` køre
+alle `// →`-resultater i kodeblokkene gennem node. Kør den kontrol altid, og ret alle fejl.
 
 Fremgangsmåde per fag:
 1. Hvilke uger: den netop afsluttede uge PLUS tidligere uger, der endnu ikke er
    udfyldt (indhentning). En uge er udfyldt, hvis dens blok har en "Modeller"-label.
    Slides-reglen: mangler forelæsningsslides for en uge (ingen fil i
-   `<fag>/Pensum/Forelæsninger/`, der hører til ugen efter reglen i afsnit 1), så vent. Spring ugen over nu, så
+   `<mappe>/Pensum/Forelæsninger/`, der hører til ugen efter reglen i afsnit 1), så vent. Spring ugen over nu, så
    den tages ved en senere kørsel, og skriv det i rapporten. Er ugen mere end 14
    dage gammel og mangler slides stadig, så udfyld den ud fra bog og lektionsplan
    og skriv under Uafklaret: "[?] Slides til uge NN var ikke uploadet — noterne
@@ -274,21 +282,22 @@ Fremgangsmåde per fag:
 Regler: "I egne ord" og alt, brugeren selv har skrevet, røres aldrig. Ingen facit til
 mine opgaver. Mangler en kilde, så skriv at den mangler, og opfind aldrig indhold eller sidetal.
 
-GENKALD — HVER UGE, KUN ALFA OG BETA
+GENKALD — HVER UGE, KUN FAG MED `genkald` I FAG.JSON
 Når et fags fagnoter er gjort færdige (eller faget blev sprunget over pga. låsefil),
 laver du genkaldsfiler for samme fag ud fra det samme materiale, du lige har læst.
 Kompas viser dem under Genkald og Dagens kort, så snart brugeren har markeret ugen
 som læst under Fag → Indhentning.
-1. Hvilke uger: hver uge, hvor faget havde undervisning, og som ingen genkaldsfil
-   dækker endnu (en fil `<fag>/Genkald/genkald-ugeAA-BB.md` dækker uge AA til BB),
-   regnet fra den første uge med en genkaldsfil og til og med den netop afsluttede uge.
-   Slides-reglen ovenfor gælder også her: venter en uge på slides, så venter dens
-   genkald også (de andre uger laves alligevel). Låsefil-reglen gælder ikke, for
-   genkald rører ikke Word-dokumentet.
-2. Én fil pr. uge: `<fag>/Genkald/genkald-ugeNN-NN.md` (kun spørgsmål) og
-   `<fag>/Genkald/genkald-ugeNN-NN-svar.md` (facit med kapitel og sidetal i min
+1. Hvilke uger: hver uge til og med den netop afsluttede uge, hvor faget havde
+   undervisning, og som ingen genkaldsfil dækker endnu (en fil
+   `<mappe>/Genkald/genkald-ugeAA-BB.md` dækker uge AA til BB). Slides-reglen ovenfor
+   gælder også her: venter en uge på slides, så venter dens genkald også (de andre
+   uger laves alligevel). Låsefil-reglen gælder ikke, for genkald rører ikke
+   Word-dokumentet.
+2. Én fil pr. uge: `<mappe>/Genkald/genkald-ugeNN-NN.md` (kun spørgsmål) og
+   `<mappe>/Genkald/genkald-ugeNN-NN-svar.md` (facit med kapitel og sidetal i min
    udgave, og slidenummer). Overskriv aldrig en eksisterende fil.
-3. Kopiér formatet fra den nyeste genkaldsfil og dens `-svar.md`: samme indledning om at
+3. Kopiér formatet fra fagets nyeste `genkald-ugeNN-NN.md` og `-svar.md` (har faget
+   ingen endnu, så fra et andet genkaldsfag): samme indledning om at
    svare fra hukommelsen og markere `[✓]`/`[~]`/`[✗]`, én `## Uge NN — <forelæsning>`-
    overskrift (Kompas læser ugen derfra), nummererede `**N.**`-spørgsmål med samme numre
    i facit. 5-7 spørgsmål, der kræver produktion, ikke genkendelse. Dæk både
@@ -299,23 +308,24 @@ som læst under Fag → Indhentning.
 ## 6b. DRILL-FORKLARINGER — KUN DE MANGLENDE
 
 Kompas og `tjek.js` viser en kort forklaring, når brugeren har gættet på et
-`tjek(...)` i `Gamma/vscode/Drills/kap*.js`. Forklaringerne ligger i
-`Gamma/vscode/Drills/forklaringer/<drill>.md` (fx `kap01-lorem.md`).
+`tjek(...)` i kodefagets `<mappe>/<kode>/Drills/kap*.js`. Forklaringerne ligger i
+`<mappe>/<kode>/Drills/forklaringer/<drill>.md` (samme navn som drill-filen).
 
 1. Kør `node Scripts/drill-forklaringer.js` (fra semestermappen). Det viser hvert
    tjek, der mangler en forklaring: overskriften, udtrykket og `=> det JavaScript
-   giver`. Siger det "0 tjek mangler", så er du færdig med dette afsnit.
+   giver`. Siger det "0 tjek mangler", eller har intet fag `kode`, så er du færdig
+   med dette afsnit.
 2. Skriv en forklaring til hvert manglende tjek, der forklarer, HVORFOR
    JavaScript giver præcis det resultat, scriptet viser. Byg på resultatet fra
    scriptet, aldrig på hvad du tror udtrykket giver. Ser resultatet forkert ud,
    så skriv ingen forklaring til det tjek, men nævn det i slutsvaret.
 3. Form: kopiér stilen fra de eksisterende filer. `## <overskrift præcis som
    scriptet skriver den>`, derunder 1-2 korte sætninger på dansk med fagtermer på
-   engelsk (`undefined`, closure, scope). Kode i backticks. Brug lærebogens
-   begreber.
+   engelsk (`undefined`, closure, scope). Kode i backticks. Brug kodefagets
+   lærebogs begreber.
 4. Føj de nye afsnit til enden af den rigtige fil. Findes filen ikke, så opret
-   den med samme indledning som den første forklaringsfil (kapitlets titel fra første
-   linje i drill-filen). Ret, flyt eller slet ALDRIG eksisterende afsnit.
+   den med samme indledning som den første fil i `forklaringer/` (kapitlets titel
+   fra første linje i drill-filen). Ret, flyt eller slet ALDRIG eksisterende afsnit.
 5. Kør scriptet igen og tjek, at det nu siger "0 tjek mangler".
 
 Regler: Rør aldrig drill-filerne selv eller `tjek.js`. Skriv aldrig forklaringer

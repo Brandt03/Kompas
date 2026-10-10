@@ -79,12 +79,13 @@
 <script src="studie.js"></script>
 <script>
 const API = "/studie/api";
-const FAGNAVN = { alfa: "Alfa", gamma: "Gamma", beta: "Beta" };
+// Eksamensformen fra fag.json styrer siden: kode (tjekliste, kode-felt), mundtlig (disposition, intet ur) eller skriftlig
+const form = () => fagInfo(fag)?.eksamenstraening?.form || "skriftlig";
 const SIK = [["sikker", "Sikker"], ["usikker", "Usikker"], ["gaet", "Gætter / kan ikke"]];
 // Karakter efter en øvelsesopgave, som i FSRS: 4 let, 3 sad, 2 halvt, 1 blankt. Rettelsen efter en prøveeksamen bruger kun ✓/~/✗.
 const KAR = [[4, "sad", "✓ Let", "Sad med det samme, uden at tænke dig om"], [3, "sad", "✓ Sad", "Sad, men du skulle tænke dig om"],
   [2, "halvt", "~ Halvt", "Noget af det, eller kun med besvær"], [1, "blankt", "✗ Blankt", "Kunne det ikke"]];
-let L = null, S = null, fag = (location.hash.slice(1) || "alfa"), tilstand = "liste";
+let L = null, S = null, fag = location.hash.slice(1), tilstand = "liste";
 let E = null, set = null, svar = {}, marks = {}, start = null, facit = null, tick = null;
 let oCur = 0, oVist = false, oSik = null, oFacit = null;
 
@@ -108,15 +109,18 @@ function mc(tekst) {
 // Facit starter med "**c)**" (eller fx "**b) — usikkert.**")
 const facitBogstav = f => ((f || "").match(/^\*\*([a-e])\)/) || [])[1] || null;
 const alleQ = () => E.sektioner.flatMap(s => s.spoergsmaal.map(q => ({ ...q, sek: s })));
-const erKode = q => fag === "gamma" || /^Opgave/i.test(q.sek?.titel || "");
+const erKode = q => form() === "kode" || /^Opgave/i.test(q.sek?.titel || "");
 
 // ── oversigt ───────────────────────────────────────────────────────
 function renderListe() {
   tilstand = "liste"; clearInterval(tick);
   document.getElementById("hoved").hidden = false;
-  document.getElementById("fagvalg").innerHTML = ["alfa", "gamma", "beta"].map(f => `<button type="button" data-fag="${f}" aria-pressed="${f === fag}">${FAGNAVN[f]}</button>`).join("");
+  const fagene = FAG.length ? fagMed("eksamenstraening").map(f => f.id) : [...new Set((L || []).map(x => x.fag))];
+  if (!fagene.includes(fag)) fag = fagene[0];
+  const mundtlig = form() === "mundtlig", mappe = fagInfo(fag)?.mappe || fagKort(fag);
+  document.getElementById("fagvalg").innerHTML = fagene.map(f => `<button type="button" data-fag="${esc(f)}" aria-pressed="${f === fag}">${esc(fagKort(f))}</button>`).join("");
   const saet = (L || []).filter(x => x.fag === fag);
-  const eks = (S?.deadlines || []).find(d => d.type === "eksamen" && d.fag.toLowerCase() === fag);
+  const eks = (S?.deadlines || []).find(d => d.type === "eksamen" && fagFraKort(d.fag)?.id === fag);
   const n = eks ? daysUntil(eks.dato || eks.fra) : null;
   root().innerHTML = `
     ${eks ? `<section class="card count"><div class="big">${n} dage</div><div class="t"><b>${esc(eks.hvad.replace(/<[^>]+>/g, "").split(" — ")[0])}</b>
@@ -126,17 +130,14 @@ function renderListe() {
       const r = x.resultat, t = r.sad + r.halvt + r.blankt;
       return `<div class="card sc">
         <h3>${esc(kortTitel(x.titel))}</h3>
-        <div class="m">${x.varighed ? `${x.varighed >= 60 ? `${x.varighed / 60} timer` : `${x.varighed} min`} · ` : ""}${x.antal} ${fag === "beta" ? "spørgsmål" : "opgaver"}${x.har_facit ? "" : " · facit mangler"}</div>
+        <div class="m">${x.varighed ? `${x.varighed >= 60 ? `${x.varighed / 60} timer` : `${x.varighed} min`} · ` : ""}${x.antal} ${mundtlig ? "spørgsmål" : "opgaver"}${x.har_facit ? "" : " · facit mangler"}</div>
         ${x.sektioner.length > 1 ? `<div class="m">${(v => x.sektioner.map((s, i) => `${esc(s.titel.replace(/^Del (\w) — /, "$1: "))}${v[i] != null ? ` ${v[i]} %` : ""}`).join(" · "))(vaegte(x.sektioner))}</div>` : ""}
         ${t ? `<div class="bar3" title="${r.sad} sad, ${r.halvt} halvt, ${r.blankt} blankt af ${x.antal}"><i style="width:${100 * r.sad / x.antal}%;background:var(--success)"></i><i style="width:${100 * r.halvt / x.antal}%;background:var(--warning)"></i><i style="width:${100 * r.blankt / x.antal}%;background:var(--destructive)"></i></div>
           <div class="m">${r.sad} sad · ${r.halvt} halvt · ${r.blankt} blankt${x.proever.length ? ` · prøveeksamen ${x.proever.map(p => dayMonth(parseDate(p))).join(", ")}` : ""}</div>` : `<div class="m">Ikke prøvet endnu</div>`}
-        <div class="row">${x.varighed && fag !== "beta" ? `<button type="button" class="btn" data-start="${x.id}">${icon("clock", 14)}Prøveeksamen</button>` : ""}
-          <button type="button" class="btn ${x.varighed && fag !== "beta" ? "ghost" : ""}" data-oev="${x.id}">${fag === "beta" ? "Øv et spørgsmål" : "Øv opgaver"}</button></div>
-      </div>`; }).join("")}</section>` : `<div class="card empty">Der er ingen sæt til ${FAGNAVN[fag]} endnu. De lægges i <code>${FAGNAVN[fag]}/Eksamenstræning/</code>.</div>`}
-    <p class="meta" style="line-height:1.55">${fag === "gamma"
-      ? "Sættene er i samme format som prøven. Facit er en tjekliste over kravene, ikke en løsning: du retter din egen kode mod den. Bøger og noter er tilladt til prøven, så øv med dem ved hånden."
-      : fag === "beta" ? "Der findes ingen gamle sæt. Pensumspørgsmålene er lavet ud fra lektionsplanen og bøgerne, med en disponeret 5-minutters besvarelse som facit. Øv dem højt: forbered 20 min, svar 5–7 min."
-      : "Facit er vejledende og skrevet ud fra lærebogen, ikke et officielt facit. MC rettes automatisk; resten retter du selv mod facit."}
+        <div class="row">${x.varighed && !mundtlig ? `<button type="button" class="btn" data-start="${x.id}">${icon("clock", 14)}Prøveeksamen</button>` : ""}
+          <button type="button" class="btn ${x.varighed && !mundtlig ? "ghost" : ""}" data-oev="${x.id}">${mundtlig ? "Øv et spørgsmål" : "Øv opgaver"}</button></div>
+      </div>`; }).join("")}</section>` : `<div class="card empty">Der er ingen sæt til ${esc(fagKort(fag))} endnu. De lægges i <code>${esc(mappe)}/Eksamenstræning/</code>.</div>`}
+    <p class="meta" style="line-height:1.55">${esc(fagInfo(fag)?.eksamenstraening?.note || "")}
       Alt, du ikke havde helt rigtigt, kommer med i Dagens kort under Genkald.</p>`;
 }
 
@@ -228,7 +229,7 @@ function renderRetning() {
       return `<section class="card q"><div class="nr">${q.nr}.${q.emne ? `<span class="chip">${esc(q.emne)}</span>` : ""}</div>
         ${m ? `<div class="spm md">${md(m.spm)}</div><div class="mc">${m.opts.map(o => `<label class="${o.k === b ? "rigtig" : o.k === svar[q.nr] ? "forkert" : ""}"><input type="radio" disabled${svar[q.nr] === o.k ? " checked" : ""}><span><b>${o.k})</b> ${md(o.t).replace(/^<p>|<\/p>$/g, "")}</span></label>`).join("")}</div>`
           : `<div class="spm md">${md(q.tekst)}</div><div class="mitsvar${erKode(q) ? " kode" : ""}">${esc(svar[q.nr] || "(ikke besvaret)")}</div>`}
-        <div class="facit"><div class="lbl">${fag === "gamma" ? "Tjekliste" : "Facit"}</div><div class="md">${facit[q.nr] ? md(facit[q.nr]) : "Der er ingen facit til denne opgave endnu."}</div></div>
+        <div class="facit"><div class="lbl">${form() === "kode" ? "Tjekliste" : "Facit"}</div><div class="md">${facit[q.nr] ? md(facit[q.nr]) : "Der er ingen facit til denne opgave endnu."}</div></div>
         <div class="row"><span class="meta">${m && b ? "Rettet automatisk; du kan ændre det." : "Hvordan gik det?"}</span>
           ${[["sad", "✓ Sad"], ["halvt", "~ Halvt"], ["blankt", "✗ Blankt"]].map(([k, t]) => `<button type="button" class="btn m-${k}" data-mk="${q.nr}" data-v="${k}" aria-pressed="${mk === k}">${t}</button>`).join("")}</div>
       </section>`; }).join("")}</div></div>`).join("")}`;
@@ -252,22 +253,22 @@ async function startOevelse(id) {
 }
 function renderOevelse() {
   document.getElementById("hoved").hidden = true;
-  const alle = alleQ(), q = alle[oCur], m = mc(q.tekst), mundtlig = fag === "beta";
+  const alle = alleQ(), q = alle[oCur], m = mc(q.tekst), mundtlig = form() === "mundtlig";
   root().innerHTML = `
     <div class="topbar"><b style="font-weight:600">${esc(E.titel)}</b><span class="spacer"></span>
       <select id="ohop" aria-label="Opgave" style="font:inherit;font-size:13px;border:0;box-shadow:var(--shadow-border-xs);border-radius:8px;padding:6px 8px;background:var(--container);color:var(--text-primary)">${alle.map((x, i) => `<option value="${i}"${i === oCur ? " selected" : ""}>${x.nr}. ${esc(x.sek.titel.replace(/^Del (\w) — /, "$1 · ").slice(0, 28))}</option>`).join("")}</select>
       <button type="button" class="btn quiet" id="tilbage">Tilbage til sættene</button></div>
-    ${q.sek.intro && (fag === "gamma" || mundtlig) ? `<section class="card panel"><div class="md">${md(q.sek.intro)}</div></section>` : ""}
+    ${q.sek.intro && (form() === "kode" || mundtlig) ? `<section class="card panel"><div class="md">${md(q.sek.intro)}</div></section>` : ""}
     <section class="card q"><div class="nr">${esc(q.sek.titel)} · ${q.nr}.${q.emne ? `<span class="chip">${esc(q.emne)}</span>` : ""}</div>
       ${m ? `<div class="spm md">${md(m.spm)}</div><div class="mc">${m.opts.map(o => { const b = oVist && facitBogstav(oFacit);
           return `<label class="${oVist && o.k === b ? "rigtig" : oVist && o.k === svar[q.nr] && o.k !== b ? "forkert" : ""}"><input type="radio" name="o${q.nr}" value="${o.k}" data-q="${q.nr}"${svar[q.nr] === o.k ? " checked" : ""}${oVist ? " disabled" : ""}><span><b>${o.k})</b> ${md(o.t).replace(/^<p>|<\/p>$/g, "")}</span></label>`; }).join("")}</div>`
         : `<div class="spm md">${md(q.tekst)}</div>
         ${mundtlig ? `<div class="row"><button type="button" class="btn ghost" data-ur="20">${icon("clock", 14)}Forbered 20 min</button><button type="button" class="btn ghost" data-ur="7">${icon("clock", 14)}Svar højt 7 min</button><span class="timer" id="ur" style="font-size:18px"></span></div>` : ""}
         <textarea class="${erKode(q) ? "kode" : ""}" data-q="${q.nr}" spellcheck="${erKode(q) ? "false" : "true"}" placeholder="${mundtlig ? "Din disposition: 3–4 hovedpunkter med begreber …" : erKode(q) ? "Din kode …" : "Dit svar …"}">${esc(svar[q.nr] || "")}</textarea>`}
-      ${oVist ? `<div class="facit"><div class="lbl">${mundtlig ? "Disposition" : fag === "gamma" ? "Tjekliste" : "Facit"}</div><div class="md">${oFacit ? md(oFacit) : "Der er ingen facit til denne opgave endnu."}</div></div>
+      ${oVist ? `<div class="facit"><div class="lbl">${mundtlig ? "Disposition" : form() === "kode" ? "Tjekliste" : "Facit"}</div><div class="md">${oFacit ? md(oFacit) : "Der er ingen facit til denne opgave endnu."}</div></div>
         <div class="row"><span class="meta">Hvordan gik det?</span>${KAR.map(([g, k, t, h]) => `<button type="button" class="btn m-${k}" data-okar="${g}" title="${h}">${t}</button>`).join("")}
           <span class="spacer"></span><span class="meta">du sagde: ${esc(SIK.find(([s]) => s === oSik)?.[1] || "")}</span></div>`
-      : `<div class="row"><span class="meta">Hvor sikker er du?</span>${SIK.map(([k, t], i) => `<button type="button" class="btn${i ? " ghost" : ""}" data-osik="${k}">${t}</button>`).join("")}<span class="spacer"></span><span class="meta">så vises ${mundtlig ? "dispositionen" : fag === "gamma" ? "tjeklisten" : "facit"}</span></div>`}
+      : `<div class="row"><span class="meta">Hvor sikker er du?</span>${SIK.map(([k, t], i) => `<button type="button" class="btn${i ? " ghost" : ""}" data-osik="${k}">${t}</button>`).join("")}<span class="spacer"></span><span class="meta">så vises ${mundtlig ? "dispositionen" : form() === "kode" ? "tjeklisten" : "facit"}</span></div>`}
     </section>
     <div class="row"><button type="button" class="btn quiet" id="oforrige"${oCur ? "" : " disabled"}>${icon("arrow-left", 14)}Forrige</button><span class="spacer"></span><button type="button" class="btn quiet" id="onaeste"${oCur < alle.length - 1 ? "" : " disabled"}>Næste ${icon("arrow-right", 14)}</button></div>`;
 }

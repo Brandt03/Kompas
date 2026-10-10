@@ -10,9 +10,12 @@ const { spawn } = require("child_process");
 const SERVER = path.join(__dirname, "..", "studie", "Scripts", "kompas-server.js");
 const src = fs.readFileSync(SERVER, "utf8");
 const t0 = Date.parse("2026-09-01T10:00:00Z");
-// Planen hentes fra serveren; `eksamen` giver "alfa" en eksamensdag (serveren selv har ingen datoer)
+// Planen hentes fra serveren. Eksamensdagene læser serveren fra CLAUDE.md; her erstattes opslaget, så `eksamen`
+// giver "alfa" en eksamensdag
+const EKS_KODE = /let eksamenCache = [\s\S]*?\nfunction eksamensdage\(\) \{[\s\S]*?\n\}\n/;
+if (!EKS_KODE.test(src)) throw new Error("fandt ikke eksamensdage() i serveren");
 const lav = (eksamen = null) => new Function(`${src.slice(src.indexOf("const NYE_PR_DAG ="), src.indexOf("async function repetitionsKort"))
-  .replace("const EKSAMEN = {};", eksamen ? `const EKSAMEN = { alfa: ${eksamen} };` : "const EKSAMEN = {};")};
+  .replace(EKS_KODE, `function eksamensdage() { return ${eksamen ? `{ alfa: ${eksamen} }` : "{}"}; }\n`)};
   return { planlæg, hændelser, husker, dageTil, W, DAG, MÅL, MÅL_EKSAMEN };`)();
 const { planlæg, hændelser, husker, dageTil, W, DAG, MÅL, MÅL_EKSAMEN } = lav();
 let fejl = 0;

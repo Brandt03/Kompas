@@ -113,7 +113,7 @@ function render() {
   const kalendere = [...new Set([...Object.values(liv.kalender || {}).flat(), ...kal].map(kalenderNavn))].sort((a, b) => a.localeCompare(b, "da"));
   const events = kal.map(parseEvent).filter(e => !skjulte.has(kalenderNavn(e)));
   const allFag = [...new Set(alle.filter(e => e.fag).map(e => e.fag))].sort();
-  const color = f => FAG_FARVE[fagId(f)] || COLORS[allFag.indexOf(f) % COLORS.length];
+  const color = f => fagInfo(fagId(f))?.farve || COLORS[allFag.indexOf(f) % COLORS.length];
 
   const teach = events.filter(e => e.type === "undervisning");
   const self = events.filter(e => e.type === "selvstudie");

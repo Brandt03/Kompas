@@ -4,7 +4,7 @@
 //   - skrive dit svar og din markering [✓]/[~]/[✗] ind under et spørgsmål i */Genkald/genkald-*.md
 //     (karakteren 1-4, som repetitionen planlægges efter, står kun i genkald-log.jsonl)
 //   - skrive din definition (og for Beta: "Hvad det får dig til at se") i */Genkald/begreber.md
-//   - erstatte TOM med DIT gæt i en tjek(...)-linje i Gamma/vscode/Drills/kap*.js og køre filen
+//   - erstatte TOM med DIT gæt i en tjek(...)-linje i kodefagets Drills/kap*.js og køre filen
 // På farten (mobil.html) henter en pakke med dagens kort, så du kan svare uden net, og sender svarene
 // tilbage med /sync, når Mac'en er vågen. Det er de samme skrivninger som ovenfor, bare senere.
 // Alt, der skrives, er tekst du selv har tastet. Serveren finder aldrig på et svar, og facit
@@ -24,13 +24,10 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
-const os = require("os");
 const { execFile } = require("child_process");
 
-const hjem = s => s.replace(/^~(?=$|\/)/, os.homedir());
-const ROD = path.resolve(hjem(process.env.KOMPAS_SEMESTER || path.join(__dirname, "..")));
-// Serverens egne datafiler (forsøgslog, læst-markeringer, færdige frister) ligger i semestermappens Scripts/
-const DATA = path.join(ROD, "Scripts");
+const S = require("./semester");
+const ROD = S.ROD;
 const PORT = +(process.env.STUDIE_PORT || 8767);
 const ORIGIN = "https://kompas.localhost";
 // Telefonen kommer ind gennem Tailscale med sin egen adresse (https://<mac>.<tailnet>.ts.net), sat i LaunchAgent'en
@@ -40,11 +37,16 @@ const ORIGINS = [ORIGIN, ...String(process.env.STUDIE_ORIGINS || "").split(",").
 // dens egen side. 8768 er Caddys blok til telefonen. Afviste navne logges.
 const VAERTER = new Set(["kompas.localhost", `127.0.0.1:${PORT}`, `localhost:${PORT}`, "127.0.0.1:8768", "localhost:8768",
   ...ORIGINS.map(o => { try { return new URL(o).host; } catch { return null; } }).filter(Boolean)]);
-const LOG = path.join(DATA, "genkald-log.jsonl");
-// Fagene (id → mappe). Alfa og Beta har genkald og begreber; Gamma har drills og afleveringer.
-const FAG = { alfa: "Alfa", beta: "Beta", gamma: "Gamma" };
+const LOG = path.join(S.DATA, "genkald-log.jsonl");
+// Fagene står i fag.json (se semester.js). Genkald og begreber findes for fagene med de funktioner, drills i kodefaget.
+const kort = id => S.find(id)?.kort || id;
+const fagMappe = id => S.find(id)?.mappe;
+const genkaldsFag = () => S.fagMed("genkald").map(f => f.id);
+const KODEFAG = S.fagMed("kode")[0] || null;
 const MARK = { sad: "✓", halvt: "~", blankt: "✗" };
-const DRILLS = path.join(ROD, FAG.gamma, "vscode", "Drills");
+const DRILLS = KODEFAG ? path.join(ROD, KODEFAG.mappe, KODEFAG.kode, "Drills") : path.join(ROD, "_ingen-drills");
+// "alfa/genkald-uge40-40.md#3" for et genkaldsfag
+const genkaldNoegle = () => new RegExp(`^(${genkaldsFag().join("|") || "_"})\\/(genkald-[\\w-]+\\.md)#(\\d+)$`);
 
 const læs = f => fs.readFileSync(f, "utf8");
 // Atomisk som Karriere (mkstemp): et unikt midlertidigt navn ved siden af filen, så to skrivninger aldrig deler det
@@ -69,14 +71,14 @@ function sidst() {
 
 // Stier: kun præcis de filer, fanen må skrive i
 function genkaldFil(fag, fil) {
-  if (!FAG[fag] || fag === "gamma" || !/^genkald-[\w-]+\.md$/.test(fil) || /-svar\.md$/.test(fil)) throw new Error("ukendt genkaldsfil");
-  const f = path.join(ROD, FAG[fag], "Genkald", fil);
+  if (!S.find(fag)?.genkald || !/^genkald-[\w-]+\.md$/.test(fil) || /-svar\.md$/.test(fil)) throw new Error("ukendt genkaldsfil");
+  const f = path.join(ROD, fagMappe(fag), "Genkald", fil);
   if (!fs.existsSync(f)) throw new Error("filen findes ikke");
   return f;
 }
 function begrebFil(fag) {
-  if (fag !== "alfa" && fag !== "beta") throw new Error("ukendt fag");
-  return path.join(ROD, FAG[fag], "Genkald", "begreber.md");
+  if (!S.find(fag)?.begreber) throw new Error("ukendt fag");
+  return path.join(ROD, fagMappe(fag), "Genkald", "begreber.md");
 }
 function drillFil(fil) {
   if (!/^kap\d+[\w-]*\.js$/.test(fil)) throw new Error("ukendt drill");
@@ -121,8 +123,8 @@ function parseBlok(linjer, b) {
 
 function genkaldListe() {
   const log = sidst(), ud = [];
-  for (const fag of ["alfa", "beta"]) {
-    const dir = path.join(ROD, FAG[fag], "Genkald");
+  for (const fag of genkaldsFag()) {
+    const dir = path.join(ROD, fagMappe(fag), "Genkald");
     let filer = [];
     try { filer = fs.readdirSync(dir).filter(n => /^genkald-.*\.md$/.test(n) && !/-svar\.md$/.test(n)).sort(); } catch { continue; }
     for (const fil of filer) {
@@ -181,7 +183,7 @@ const celler = l => l.trim().replace(/^\||\|$/g, "").split("|").map(c => c.trim(
 const række = c => `|${c.map(x => x ? ` ${x} ` : " ").join("|")}|`;
 function begreberListe() {
   const log = sidst(), ud = {};
-  for (const fag of ["alfa", "beta"]) {
+  for (const { id: fag } of S.fagMed("begreber")) {
     let tekst; try { tekst = læs(begrebFil(fag)); } catch { continue; }
     const linjer = tekst.split("\n"), rows = [];
     let afsnit = "", under = "", hoved = null;
@@ -196,7 +198,8 @@ function begreberListe() {
       rows.push({ begreb: c[0], definition: c[1] || "", se: hoved[2] && /se/i.test(hoved[2]) ? (c[2] || "") : null,
         kilde: c[c.length - 1] || "", afsnit: under ? `${afsnit} · ${under}` : afsnit, sidst: log[`${fag}/begreb/${c[0]}`]?.tid || null });
     });
-    ud[fag] = { hoved_se: fag === "beta" ? "Hvad det får dig til at se" : null, begreber: rows };
+    const b = S.find(fag).begreber;
+    ud[fag] = { hoved_se: b.ekstra_kolonne || null, spoergsmaal_se: b.ekstra_spoergsmaal || null, begreber: rows };
   }
   return ud;
 }
@@ -518,10 +521,10 @@ async function skrivDrill(f, fil, linje, beskrivelse, gaet, meta) {
 // <Fag>/Eksamenstræning/<id>.md + <id>-svar.md. Opbygning: "# titel", en kursiv metalinje, "---",
 // sektioner "## Del A …"/"## Opgave 1 …"/"## Uge 36 …" med evt. fælles tekst, og opgaver "**N.**".
 // Hver opgave slutter med "*Emne: … · uge NN*" eller "· kap. N".
-const EKS_FAG = { alfa: "Alfa", gamma: "Gamma", beta: "Beta" };
-const eksDir = fag => path.join(ROD, EKS_FAG[fag], "Eksamenstræning");
+const eksDir = fag => path.join(ROD, fagMappe(fag), "Eksamenstræning");
+const kodeEksamen = fag => S.find(fag)?.eksamenstraening?.form === "kode";
 function eksFil(fag, id, svar = false) {
-  if (!EKS_FAG[fag] || !/^[\w-]{1,40}$/.test(id) || /-svar$/.test(id)) throw new Error("ukendt sæt");
+  if (!S.find(fag)?.eksamenstraening || !/^[\w-]{1,40}$/.test(id) || /-svar$/.test(id)) throw new Error("ukendt sæt");
   const f = path.join(eksDir(fag), `${id}${svar ? "-svar" : ""}.md`);
   if (!fs.existsSync(f)) throw new Error("sættet findes ikke");
   return f;
@@ -557,7 +560,7 @@ function eksamensLog() {
 }
 function eksamenListe() {
   const log = eksamensLog(), ud = [];
-  for (const fag of Object.keys(EKS_FAG)) {
+  for (const { id: fag } of S.fagMed("eksamenstraening")) {
     let filer = []; try { filer = fs.readdirSync(eksDir(fag)).filter(n => /\.md$/.test(n) && !/-svar\.md$/.test(n) && !/^README/i.test(n)).sort().reverse(); } catch { continue; }
     for (const n of filer) {
       const id = n.replace(/\.md$/, ""), e = parseEksamen(læs(path.join(eksDir(fag), n)));
@@ -591,7 +594,7 @@ function afslutEksamen({ fag, id, svar, marks, start, slut, tilstand }) {
     for (const q of sek.spoergsmaal) {
       const m = marks?.[q.nr], tx = String(svar?.[q.nr] ?? "").replace(/\r/g, "").trim();
       ud.push(`**${q.nr}.** ${m?.mark ? `[${MARK[RES[m.mark]] || ""}] ` : ""}${tx ? "" : "*(ikke besvaret)*"}`);
-      if (tx) ud.push("", ...(sek.titel.startsWith("Opgave") || fag === "gamma" ? ["```js", tx, "```"] : tx.split("\n").map(l => `> ${l}`)));
+      if (tx) ud.push("", ...(sek.titel.startsWith("Opgave") || kodeEksamen(fag) ? ["```js", tx, "```"] : tx.split("\n").map(l => `> ${l}`)));
       ud.push("");
     }
   }
@@ -615,10 +618,10 @@ function gemEksamenResultat({ fag, id, nr, mark, karakter, sikkerhed }, meta = {
 // ── indhentet / læst pr. uge ─────────────────────────────────────────
 // Scripts/laest.json: { "alfa": { "36": "2026-10-01" }, "beta": { ... } }. Nye genkaldsspørgsmål kommer kun
 // i Dagens kort fra uger, der er markeret her; ellers ville man "genkalde" stof, man ikke har læst.
-const LAEST = path.join(DATA, "laest.json");
+const LAEST = path.join(S.DATA, "laest.json");
 function læst() { try { return JSON.parse(læs(LAEST)); } catch { return {}; } }
 function gemLæst({ fag, uge, laest }) {
-  if (fag !== "alfa" && fag !== "beta") throw new Error("ukendt fag");
+  if (!S.find(fag)?.genkald) throw new Error("ukendt fag");
   uge = String(+uge);
   if (!(+uge >= 1 && +uge <= 53)) throw new Error("ukendt uge");
   const l = læst();
@@ -661,9 +664,14 @@ const W = [0.212, 1.2931, 2.3065, 8.2956, 6.4133, 0.8334, 3.0194, 0.001, 1.8722,
 const MÅL = 0.9, MÅL_EKSAMEN = 0.95;
 // Et kort "sidder", når du med 90 % sandsynlighed stadig kan det om tre uger
 const LÆRT = 21;
-// Eksamensdatoerne pr. fag-id, fra din eksamensplan. Et fag uden eksamen planlægges kun efter MÅL.
-// Udfyld med dine egne, fx { alfa: new Date(2027, 0, 14).getTime(), gamma: new Date(2027, 0, 21).getTime() }.
-const EKSAMEN = {};
+// Eksamensdagen pr. fag fra CLAUDE.md's "Vigtige datoer" (semester.js), læst igen, når filen ændres. Et fag uden
+// eksamen med dato planlægges kun efter MÅL.
+let eksamenCache = { mtime: null, datoer: {} };
+function eksamensdage() {
+  let m = null; try { m = fs.statSync(path.join(ROD, "CLAUDE.md")).mtimeMs; } catch { /* ingen CLAUDE.md */ }
+  if (m !== eksamenCache.mtime) eksamenCache = { mtime: m, datoer: S.eksamensdatoer() };
+  return eksamenCache.datoer;
+}
 const FALD = -W[20], FAKTOR = 0.9 ** (1 / FALD) - 1;
 const klem = (x, a, b) => Math.min(b, Math.max(a, x));
 // Sandsynligheden for at kunne kortet t dage efter sidste gennemgang, og antal dage til den er r
@@ -692,7 +700,7 @@ function fsrs(st, g, dage) {
 // kommer det i stedet, når det falder til MÅL_EKSAMEN (altid senest dagen før eksamen).
 function næsteInterval(t, s, fag) {
   let dage = Math.max(1, Math.round(dageTil(s, MÅL)));
-  const eks = EKSAMEN[fag];
+  const eks = eksamensdage()[fag];
   if (eks && t < eks && t + dage * DAG > eks) {
     const før = Math.max(1, Math.round(dageTil(s, MÅL_EKSAMEN)));
     if (t + før * DAG <= eks) dage = før;
@@ -747,7 +755,7 @@ async function repetitionsKort() {
     // Markeret i filen, men ikke i loggen (fx i VS Code): forfalden nu
     const p = hs.length ? planlæg(hs, f.fag) : q.mark ? { s: null, d: null, forfald: 0, sidst: null } : null;
     const uge = ugeFor(q.afsnit, f.fil);
-    alle.push({ type: "genkald", noegle, fag: f.fag, uge, laest: !!L[f.fag]?.[uge], kicker: `${FAG[f.fag]} · ${f.uger} · ${q.afsnit}`, titel: `Spørgsmål ${q.nr}`,
+    alle.push({ type: "genkald", noegle, fag: f.fag, uge, laest: !!L[f.fag]?.[uge], kicker: `${kort(f.fag)} · ${f.uger} · ${q.afsnit}`, titel: `Spørgsmål ${q.nr}`,
       spoergsmaal: q.tekst, ny: !p, ...(p || {}) });
   }
   const B = begreberListe();
@@ -755,15 +763,16 @@ async function repetitionsKort() {
     if (!b.definition) continue;
     const noegle = `${fag}/begreb/${b.begreb}`, hs = H[`begreb:${noegle}`] || [];
     const p = hs.length ? planlæg(hs, fag) : { s: null, d: null, forfald: 0, sidst: null };
-    alle.push({ type: "begreb", noegle, fag, kicker: `${FAG[fag]} · begreb · ${b.afsnit}`, titel: b.begreb,
-      spoergsmaal: `Forklar **${b.begreb}** med dine egne ord${B[fag].hoved_se ? ", og sig hvad det får dig til at se i en organisation" : ""}.`, ...p });
+    alle.push({ type: "begreb", noegle, fag, kicker: `${kort(fag)} · begreb · ${b.afsnit}`, titel: b.begreb,
+      spoergsmaal: `Forklar **${b.begreb}** med dine egne ord${B[fag].spoergsmaal_se ? `, ${B[fag].spoergsmaal_se}` : ""}.`, ...p });
   }
   for (const k of await drillsCachet()) for (const t of k.tjek) {
     if (!t.udtryk) continue;
     const noegle = `drill/${k.fil}#${t.beskrivelse}`, hs = H[`drill:${noegle}`] || [];
     if (!hs.some(h => h.res === "blankt")) continue;   // kun dem, du har taget fejl af
-    alle.push({ type: "drill", noegle, fag: "gamma", kicker: `${FAG.gamma} · drill · ${k.titel}`, titel: t.beskrivelse.replace(/\s+←.*$/, ""),
-      spoergsmaal: "Hvad giver udtrykket?", udtryk: t.udtryk, kontekst: t.kontekst, ...planlæg(hs, "gamma") });
+    // Titlen starter med bogens navn ("… kap. 4 — …"); kickeren viser fra "kap." og frem
+    alle.push({ type: "drill", noegle, fag: KODEFAG.id, kicker: `${KODEFAG.kort} · drill · ${k.titel.replace(/^.*?(?=kap\.?\s*\d)/i, "")}`, titel: t.beskrivelse.replace(/\s+←.*$/, ""),
+      spoergsmaal: "Hvad giver udtrykket?", udtryk: t.udtryk, kontekst: t.kontekst, ...planlæg(hs, KODEFAG.id) });
   }
 
   // Eksamensopgaver, du ikke havde helt rigtigt, repeteres som kort
@@ -773,8 +782,8 @@ async function repetitionsKort() {
     let q = null, titel = id;
     try { const e = parseEksamen(læs(eksFil(fag, id))); titel = e.titel; for (const sek of e.sektioner) q ||= sek.spoergsmaal.find(x => x.nr === +nr) && { ...sek.spoergsmaal.find(x => x.nr === +nr), sek: sek.titel, intro: sek.intro }; } catch { continue; }
     if (!q) continue;
-    alle.push({ type: "eksamen", noegle: k.slice(8), fag, kicker: `${EKS_FAG[fag]} · eksamen · ${titel.replace(/^\w+ — /, "")} · ${q.sek}`, titel: `Opgave ${nr}`,
-      spoergsmaal: (fag === "gamma" && q.intro ? q.intro + "\n\n" : "") + q.tekst, ...planlæg(hs, fag) });
+    alle.push({ type: "eksamen", noegle: k.slice(8), fag, kicker: `${kort(fag)} · eksamen · ${titel.replace(/^\w+ — /, "")} · ${q.sek}`, titel: `Opgave ${nr}`,
+      spoergsmaal: (kodeEksamen(fag) && q.intro ? q.intro + "\n\n" : "") + q.tekst, ...planlæg(hs, fag) });
   }
   const forfaldne = alle.filter(k => !k.ny && k.forfald <= dagSlut.getTime()).sort((a, b) => a.forfald - b.forfald);
   const nyeIdag = new Set(poster.filter(p => p.type === "genkald" && p.mark && Date.parse(p.tid) >= idagStart.getTime()).map(p => p.noegle));
@@ -796,7 +805,7 @@ async function repetitionsKort() {
   const næste = alle.filter(k => !k.ny && k.forfald > dagSlut.getTime()).sort((a, b) => a.forfald - b.forfald)[0];
   // Til eksamen: hvor sandsynligt du kan de kort, du har gennemgået, på eksamensdagen, hvis du ikke repeterer mere
   const eksamen = {};
-  for (const [fag, eks] of Object.entries(EKSAMEN)) {
+  for (const [fag, eks] of Object.entries(eksamensdage())) {
     if (eks < idagStart.getTime()) continue;
     const rs = alle.filter(k => k.fag === fag && k.s != null).map(k => husker((eks - k.sidst) / DAG, k.s));
     eksamen[fag] = { dato: new Date(eks).toLocaleDateString("sv-SE"), kort: rs.length,
@@ -814,14 +823,14 @@ async function repetitionsKort() {
 async function repetitionSvar(noegle) {
   const [type, rest] = [noegle.split(":")[0], noegle.slice(noegle.indexOf(":") + 1)];
   if (type === "genkald") {
-    const m = rest.match(/^(alfa|beta)\/(genkald-[\w-]+\.md)#(\d+)$/);
+    const m = rest.match(genkaldNoegle());
     if (!m) throw new Error("ukendt kort");
     return { svar: facit(m[1], m[2], +m[3]), form: "md" };
   }
   if (type === "begreb") {
-    const [fag, , ...navn] = rest.split("/"), b = (begreberListe()[fag]?.begreber || []).find(x => x.begreb === navn.join("/"));
+    const [fag, , ...navn] = rest.split("/"), liste = begreberListe()[fag], b = (liste?.begreber || []).find(x => x.begreb === navn.join("/"));
     if (!b) throw new Error("ukendt begreb");
-    return { svar: b.definition, se: b.se || null, form: "tekst" };
+    return { svar: b.definition, se: b.se || null, se_navn: liste.hoved_se, form: "tekst" };
   }
   if (type === "eksamen") {
     const m = rest.match(/^(\w+)\/([\w-]+)#(\d+)$/);
@@ -843,7 +852,7 @@ function gemRepetition({ noegle, mark, karakter, sikkerhed, svar }, meta = {}) {
   if (sikkerhed != null && !SIKKERHED.includes(sikkerhed)) throw new Error("ukendt sikkerhed");
   const type = noegle.split(":")[0], rest = noegle.slice(noegle.indexOf(":") + 1);
   if (type === "genkald") {
-    const m = rest.match(/^(alfa|beta)\/(genkald-[\w-]+\.md)#(\d+)$/);
+    const m = rest.match(genkaldNoegle());
     if (!m) throw new Error("ukendt kort");
     return gemGenkald({ fag: m[1], fil: m[2], nr: +m[3], svar, karakter: bed.karakter, sikkerhed }, meta);
   }
@@ -865,10 +874,10 @@ function gemRepetition({ noegle, mark, karakter, sikkerhed, svar }, meta = {}) {
 const EKSTRA_GENKALD = 20;
 async function pakke() {
   const r = await repetitionsKort(), L = læst(), log = sidst();
-  const kort = [];
-  for (const k of r.kort) { let svar = null; try { svar = await repetitionSvar(k.id); } catch { /* kortet er væk siden */ } kort.push({ ...k, facit: svar }); }
+  const dagens = [];
+  for (const k of r.kort) { let svar = null; try { svar = await repetitionSvar(k.id); } catch { /* kortet er væk siden */ } dagens.push({ ...k, facit: svar }); }
   // Ekstra genkald: ikke i dagens kort; først nye fra læste uger i filens orden, så ✗, ~ og ✓ med ældste forsøg først
-  const iDag = new Set(kort.map(k => k.id)), vægt = { "✗": 1, "~": 2, "✓": 3 }, kand = [];
+  const iDag = new Set(dagens.map(k => k.id)), vægt = { "✗": 1, "~": 2, "✓": 3 }, kand = [];
   for (const f of genkaldListe()) for (const q of f.spoergsmaal) {
     const noegle = `${f.fag}/${f.fil}#${q.nr}`;
     if (iDag.has(`genkald:${noegle}`) || (!q.mark && !L[f.fag]?.[q.uge])) continue;
@@ -876,7 +885,7 @@ async function pakke() {
   }
   kand.sort((a, b) => a.v - b.v || (a.v ? a.t.localeCompare(b.t) : 0));
   const ekstra = kand.slice(0, EKSTRA_GENKALD).map(({ f, q, noegle }) => ({ id: `genkald:${noegle}`, type: "genkald", noegle, fag: f.fag,
-    kicker: `${FAG[f.fag]} · ${f.uger} · ${q.afsnit}`, titel: `Spørgsmål ${q.nr}`, spoergsmaal: q.tekst, ny: !q.mark, mark: q.mark,
+    kicker: `${kort(f.fag)} · ${f.uger} · ${q.afsnit}`, titel: `Spørgsmål ${q.nr}`, spoergsmaal: q.tekst, ny: !q.mark, mark: q.mark,
     facit: { svar: facit(f.fag, f.fil, q.nr), form: "md" } }));
   const B = begreberListe(), begreber = [];
   for (const fag of Object.keys(B)) for (const b of B[fag].begreber) if (!b.definition)
@@ -885,7 +894,9 @@ async function pakke() {
   for (const k of await drillsCachet()) for (const t of k.tjek) if (t.status === "tom" && t.udtryk)
     drills.push({ fil: k.fil, titel: k.titel, linje: t.linje, afsnit: t.afsnit, beskrivelse: t.beskrivelse, udtryk: t.udtryk, kontekst: t.kontekst });
   const { klaret_i_dag, laert, i_alt, naeste, kalibrering } = r.statistik;
-  return { genereret: new Date().toISOString(), kort, ekstra, begreber, drills, statistik: { klaret_i_dag, laert, i_alt, naeste, kalibrering } };
+  // Fagene med, så telefonens sider kan vise navne og farver uden net
+  const fag = S.fag().map(({ id, kort, navn, farve, genkald, begreber, kode, eksamenstraening }) => ({ id, kort, navn, farve, genkald, begreber, kode, eksamenstraening }));
+  return { genereret: new Date().toISOString(), fag, kort: dagens, ekstra, begreber, drills, statistik: { klaret_i_dag, laert, i_alt, naeste, kalibrering } };
 }
 
 // Hver post fra telefonen har et id; er det allerede gemt (svaret nåede ikke tilbage sidst), gemmes den ikke igen
@@ -912,20 +923,21 @@ async function sync({ poster }) {
 }
 
 // ── deadlines ────────────────────────────────────────────────────────
-// Færdig-markering fra Deadlines-siden. Nummererede afleveringer ("Opgave 3") skrives i kolonnen "Afleveret" i
-// Gamma/vscode/Opgaver/README.md
-// (der hvor køreplanen også læser dem); andre frister i Scripts/deadlines-status.json.
-const STATUS = path.join(DATA, "deadlines-status.json");
+// Færdig-markering fra Deadlines-siden. Afleveringer (fx Opgave 3) skrives i kolonnen "Afleveret" i fagets
+// afleveringstabel (der hvor køreplanen også læser dem); andre frister i Scripts/deadlines-status.json.
+const STATUS = path.join(S.DATA, "deadlines-status.json");
 function gemDeadline({ noegle, faerdig }) {
   noegle = String(noegle || "");
-  if (!/^[\wÆØÅæøå]{1,12}\|(Opgave \d{1,2}|[a-z]+\|\d{0,2})$/.test(noegle)) throw new Error("ukendt frist");
+  const [fagKort, rest = ""] = noegle.split(/\|(.*)/s);
+  const g = S.afleveringsNr(rest) === rest ? rest : null;
+  if (!/^[\wÆØÅæøå]{1,12}$/.test(fagKort) || !(g || /^[a-z]+\|\d{0,2}$/.test(rest))) throw new Error("ukendt frist");
   const dato = new Date(), iso = dato.toISOString().slice(0, 10);
-  const g = (noegle.match(/\|(Opgave \d{1,2})$/) || [])[1];
   if (g) {
-    const f = path.join(ROD, FAG.gamma, "vscode", "Opgaver", "README.md");
+    const af = S.fraKort(fagKort)?.afleveringer ? S.fraKort(fagKort) : S.fagMed("afleveringer")[0];
+    const f = path.join(ROD, af.mappe, af.afleveringer.mappe, "README.md");
     const linjer = læs(f).split("\n");
     const hovedIdx = linjer.findIndex((l, i) => /^\s*\|\s*Opgave\s*\|/i.test(l) && /^\s*\|\s*-/.test(linjer[i + 1] || ""));
-    if (hovedIdx < 0) throw new Error("fandt ikke statustabellen i Opgaver/README.md");
+    if (hovedIdx < 0) throw new Error(`fandt ikke statustabellen i ${af.afleveringer.mappe}/README.md`);
     const kol = celler(linjer[hovedIdx]).findIndex(c => /^Afleveret$/i.test(c));
     const i = linjer.findIndex((l, j) => j > hovedIdx && celler(l)[0] === g);
     if (kol < 0 || i < 0) throw new Error(`${g} står ikke i statustabellen`);

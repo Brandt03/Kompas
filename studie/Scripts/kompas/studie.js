@@ -2,11 +2,23 @@
 async function loadStudie() {
   const r = await fetch("/studie/studie.json", { cache: "no-store" });
   if (!r.ok) throw new Error(`studie.json svarede ${r.status}`);
-  return r.json();
+  const d = await r.json();
+  saetFag(d.fag);
+  return d;
 }
+// The semester's courses from Scripts/fag.json (via studie.json or the phone's package): id, kort, navn, farve and
+// which features each has (genkald, begreber, kode, eksamenstraening …). Pages ask here instead of keeping lists.
+let FAG = [];
+const saetFag = fag => { if (Array.isArray(fag) && fag.length) FAG = fag; };
+const fagInfo = id => FAG.find(f => f.id === id) || null;
+const fagKort = id => fagInfo(id)?.kort || id;
+const fagFarve = id => fagInfo(id)?.farve || "var(--gray-400)";
+const fagMed = egenskab => FAG.filter(f => f[egenskab]);
+// Deadlines and CLAUDE.md name the course by its short name ("Alfa")
+const fagFraKort = k => FAG.find(f => f.kort.toLowerCase() === String(k).trim().toLowerCase()) || null;
 // Calendar titles and the plans name the courses slightly differently; the first word is stable.
-const fagId = navn => ({ alfa: "alfa", beta: "beta", gamma: "gamma" })[String(navn).split(" ")[0].toLowerCase()] || "";
-const FAG_FARVE = { alfa: "var(--c1)", beta: "var(--c2)", gamma: "var(--c3)" };
+const forsteOrd = s => String(s).split(" ")[0].toLowerCase();
+const fagId = navn => FAG.find(f => forsteOrd(f.navn) === forsteOrd(navn))?.id || "";
 
 // På telefonen (gennem Tailscale, se mobil.html) er siderne en del af appen På farten: en linje tilbage øverst,
 // og en service worker, så de også kan åbnes uden net. På Mac'en (kompas.localhost) sker ingenting af det.

@@ -92,7 +92,9 @@
 <script src="/kompas/assets/md.js"></script>
 <script>
 const API = "/studie/api";
-const FAGNAVN = { alfa: "Alfa", beta: "Beta", gamma: "Gamma" };
+// Fagene kommer med pakken (fra fag.json). En gammel pakke uden dem viser fagets id.
+const fagI = id => P?.fag?.find(f => f.id === id) || null;
+const fagKort = id => fagI(id)?.kort || id;
 const TYPENAVN = { genkald: "Genkald", begreb: "Begreb", drill: "Drill", eksamen: "Eksamen" };
 const FANENAVN = { idag: "Dagens kort", genkald: "Genkald", begreber: "Begreber", drills: "Drills", overblik: "Overblik" };
 const SIK = [["sikker", "Sikker"], ["usikker", "Usikker"], ["gaet", "Gætter"]];
@@ -118,7 +120,7 @@ const kladde = {
 };
 const nyId = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`);
 let fane = (location.hash.slice(1) in FANENAVN) ? location.hash.slice(1) : "idag";
-let bFag = lager.hent("bfag", "alfa"), dFil = lager.hent("dfil", null);
+let bFag = lager.hent("bfag", null), dFil = lager.hent("dfil", null);
 
 let tt; function toast(t) { const el = document.getElementById("toast"); el.textContent = t; el.classList.add("vis"); clearTimeout(tt); tt = setTimeout(() => el.classList.remove("vis"), 3800); }
 const root = () => document.getElementById("root");
@@ -249,7 +251,7 @@ function renderKort(f) {
     <textarea id="k-svar" placeholder="${k.type === "drill" ? "Dit gæt …" : "Svar fra hukommelsen, eller sig det i hovedet …"}"${k.type === "drill" ? ' autocapitalize="off" autocorrect="off" spellcheck="false" style="min-height:52px"' : ""}>${esc(kladde.hent(kk))}</textarea>
     ${s.vist ? `<div class="facit"><div class="lbl">${k.type === "genkald" || k.type === "eksamen" ? "Facit" : k.type === "begreb" ? "Din definition" : "JavaScript giver"}</div>
         ${!svar ? `<div>Facit kom ikke med i pakken.</div>` : svar.form === "md" ? `<div class="md">${md(svar.svar || "Der er ingen facit.")}</div>` : svar.form === "kode" ? `<pre class="kode" style="background:none;padding:0">${esc(svar.svar ?? "")}</pre>` : `<div>${esc(svar.svar || "")}</div>`}
-        ${svar?.se ? `<div class="lbl" style="margin-top:10px">Hvad det får dig til at se</div><div>${esc(svar.se)}</div>` : ""}
+        ${svar?.se ? `<div class="lbl" style="margin-top:10px">${esc(svar.se_navn || "Hvad det får dig til at se")}</div><div>${esc(svar.se)}</div>` : ""}
         ${svar?.forklaring ? `<div class="lbl" style="margin-top:10px">Hvorfor</div><div class="md">${md(svar.forklaring)}</div>` : ""}</div>
       <div class="lbl-sm">Hvordan gik det? <span style="color:var(--text-subdued)">· du sagde ${esc(SIK.find(([x]) => x === s.sik)?.[1].toLowerCase() || "")}</span></div>
       ${k.type === "drill" ? `<div class="grid">${karKnapper(KAR_DRILL)}</div>` : `<div class="grid" style="grid-auto-flow:row;grid-template-columns:1fr 1fr">${karKnapper(KAR)}</div>`}`
@@ -276,20 +278,23 @@ let bCur = null;
 const bNoegle = b => `begreb:${b.fag}/${b.begreb}`;
 const begreberTilbage = (fag) => P ? P.begreber.filter(b => !gjort[bNoegle(b)] && (!fag || b.fag === fag)) : [];
 function renderBegreber() {
+  const fagene = P?.fag ? P.fag.filter(f => f.begreber).map(f => f.id) : [...new Set((P?.begreber || []).map(b => b.fag))];
+  if (!fagene.includes(bFag)) bFag = fagene[0] || null;
+  const ekstra = fagI(bFag)?.begreber;
   const tomme = begreberTilbage(bFag), skrevet = koe.filter(p => p.type === "begreb" && p.data.fag === bFag).length;
   if (!tomme.find(b => b.begreb === bCur)) bCur = tomme[0]?.begreb || null;
   const b = tomme.find(x => x.begreb === bCur), kk = b ? bNoegle(b) : "";
   root().innerHTML = `
-    <div class="row"><div class="seg" role="group" aria-label="Fag">${["alfa", "beta"].map(f => `<button type="button" data-bfag="${f}" aria-pressed="${f === bFag}">${FAGNAVN[f]}</button>`).join("")}</div>
+    <div class="row"><div class="seg" role="group" aria-label="Fag">${fagene.map(f => `<button type="button" data-bfag="${esc(f)}" aria-pressed="${f === bFag}">${esc(fagKort(f))}</button>`).join("")}</div>
       <span class="spacer"></span><span class="meta">${tomme.length} tomme${skrevet ? ` · ${skrevet} venter på at blive sendt` : ""}</span></div>
     ${b ? `<section class="card q">
       <div class="kicker"><span>${esc(b.afsnit)}</span>${b.kilde ? `<span>${/^\d/.test(b.kilde) ? "s. " : ""}${esc(b.kilde)}</span>` : ""}</div>
       <div class="begreb">${esc(b.begreb)}</div>
-      <p class="hint">Én til tre sætninger med dine egne ord${b.se != null ? ", og hvad begrebet får dig til at se i en konkret organisation" : " og hvor det gør en forskel"}.</p>
+      <p class="hint">Én til tre sætninger med dine egne ord${b.se != null ? (ekstra?.ekstra_spoergsmaal ? `, ${esc(ekstra.ekstra_spoergsmaal)}` : "") : " og hvor det gør en forskel"}.</p>
       <textarea id="def" placeholder="Din definition …">${esc(kladde.hent(kk + ":def"))}</textarea>
-      ${b.se != null ? `<textarea id="se" placeholder="Hvad det får dig til at se …" style="min-height:76px">${esc(kladde.hent(kk + ":se"))}</textarea>` : ""}
+      ${b.se != null ? `<textarea id="se" placeholder="${esc(ekstra?.ekstra_kolonne || "Hvad det får dig til at se")} …" style="min-height:76px">${esc(kladde.hent(kk + ":se"))}</textarea>` : ""}
       <div class="grid"><button type="button" class="btn" id="gem-b">${icon("check", 15)}Gem</button><button type="button" class="btn ghost" id="spring-b">Spring over</button></div>
-    </section>` : `<div class="card empty">Alle begreber i ${FAGNAVN[bFag]} er skrevet${skrevet ? " (nogle venter på at blive sendt)" : ""}. Du overhøres i dem under Dagens kort.</div>`}`;
+    </section>` : `<div class="card empty">Alle begreber i ${esc(fagKort(bFag))} er skrevet${skrevet ? " (nogle venter på at blive sendt)" : ""}. Du overhøres i dem under Dagens kort.</div>`}`;
   const def = document.getElementById("def"), se = document.getElementById("se");
   if (def) def.oninput = () => kladde.gem(kk + ":def", def.value);
   if (se) se.oninput = () => kladde.gem(kk + ":se", se.value);
@@ -307,7 +312,7 @@ function bSpring() {
 }
 
 // ── drills ──────────────────────────────────────────────────────────
-// Ugættede tjek fra Gamma/vscode/Drills. Gættet sendes til Mac'en, som skriver det i stedet for TOM og kører filen.
+// Ugættede tjek fra kodefagets Drills. Gættet sendes til Mac'en, som skriver det i stedet for TOM og kører filen.
 const dNoegle = d => `drill:${d.fil}#${d.beskrivelse}`;
 const drillsTilbage = (fil) => P ? P.drills.filter(d => !gjort[dNoegle(d)] && (!fil || d.fil === fil)) : [];
 // Tjekker kun, at gættet kan læses som JavaScript (Mac'en afviser det ellers). Det køres ikke.

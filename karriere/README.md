@@ -2,7 +2,7 @@
 
 Overvåger studiejob og praktikopslag i Region Hovedstaden på Jobindex, vurderer dem mod dit CV og dine fag med en fast rubrik og viser de bedste match i Kompas. Den søger aldrig selv: du beslutter, hvad du vil søge, og holder selv styr på dine ansøgninger.
 
-**Kører automatisk** mandag og torsdag kl. 12:00 som en planlagt opgave i Claude-appen ("Karriere" under *Planlagte opgaver*). Opgavens prompt står i `rutine.md` og peger blot på `AGENT.md`. Er appen lukket på det tidspunkt, kører opgaven, næste gang appen åbnes.
+**Kører automatisk** som rutinen Karriere (`jobagent-studiejob`) i Claude-appen. Rutinen peger kun på `RUTINE.md`; tidsplanen styres i appen, og Kompas' side Forbindelser viser den. Er appen lukket på det tidspunkt, kører rutinen, næste gang appen åbnes.
 
 ## Hvor ligger hvad
 | Fil/mappe | Hvad |
@@ -11,8 +11,7 @@ Overvåger studiejob og praktikopslag i Region Hovedstaden på Jobindex, vurdere
 | `oversigt.csv` | Tracker over alt vurderet. `status` sættes på Kompas (vil søge, fravalgt, søgt, samtale, …) |
 | `profil.md` | Dine fag, erfaring og ønsker. **Det er her, du tuner matchet** |
 | `config.json` | Område, jobtyper, søgeord og tærskel for gode match (`match_taerskel`, standard 70) |
-| `AGENT.md` | Instruktionerne, Claude følger ved hver kørsel |
-| `rutine.md` | Prompten til den planlagte opgave i Claude-appen |
+| `RUTINE.md` | Instruktionerne, rutinen følger ved hver kørsel: trin, rubrik og output |
 | `hent_jobs.py` | Henter opslag fra Jobindex (kun standardbibliotek) |
 | `data/` | Intern tilstand: kø, behandlede opslag, vurderinger, `set.json`, `beslutninger.jsonl`, `frasorteret.log` |
 
@@ -53,6 +52,6 @@ Skrivninger tages kun imod fra `https://kompas.localhost` med `Content-Type: app
 ```bash
 python3 hent_jobs.py
 ```
-Den henter kun nye opslag. Vil du også have dem vurderet med det samme, så tryk *Run now* på opgaven i Claude-appen.
+Den henter kun nye opslag. Vil du også have dem vurderet med det samme, så kør rutinen nu i Claude-appen.
 
 Opdaterer du `../CV.pdf`, genereres `cv.txt` automatisk igen ved næste kørsel.

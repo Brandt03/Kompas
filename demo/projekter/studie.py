@@ -176,6 +176,20 @@ FAG = [
 ]
 FAGNAVN = {f["id"]: f["kort"] for f in FAG}
 
+
+def _fag_felter(i: int, f: dict) -> dict:
+    """Et fag fra fag.example.json, som eksporten skriver det i studie.json (farven efter rækkefølgen)."""
+    return {"id": f["id"], "kort": f["kort"], "navn": f["navn"], "mappe": f["mappe"],
+            "farve": f.get("farve") or f"var(--c{i + 1})", "genkald": f.get("genkald", False),
+            "begreber": f.get("begreber"), "kode": f.get("kode"), "afleveringer": f.get("afleveringer"),
+            "leetcode": bool(f.get("leetcode")), "eksamenstraening": f.get("eksamenstraening"),
+            "forudsaetning": f.get("forudsaetning")}
+
+
+# Fagenes felter (genkald, begreber, kode, afleveringer, eksamensform …) fra eksemplet, som koden selv bruger
+FAG_JSON = {f["id"]: _fag_felter(i, f) for i, f in enumerate(json.loads(
+    (Path(__file__).resolve().parents[2] / "studie" / "Scripts" / "fag.example.json").read_text(encoding="utf-8"))["fag"])}
+
 ORD = ("lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore et dolore "
        "magna aliqua enim ad minim veniam quis nostrud exercitation ullamco laboris nisi aliquip ex ea commodo "
        "consequat duis aute irure in reprehenderit voluptate velit esse cillum fugiat nulla pariatur excepteur sint "
@@ -810,7 +824,8 @@ class Studie:
                 rows.append({"begreb": navn, "definition": d, "se": se if fag == "beta" else None, "kilde": kilde,
                              "afsnit": f"Uge {self.U[k]} — {EMNER[fag][k - 1]}",
                              "sidst": self.iso(h[1]) if d else None})
-            ud[fag] = {"hoved_se": "Hvad det får dig til at se" if fag == "beta" else None, "begreber": rows}
+            b = FAG_JSON[fag]["begreber"]
+            ud[fag] = {"hoved_se": b.get("ekstra_kolonne"), "spoergsmaal_se": b.get("ekstra_spoergsmaal"), "begreber": rows}
         return ud
 
     def begreb_historik(self, fag: str, navn: str, i: int):
@@ -921,9 +936,10 @@ class Studie:
                 noegle = f"{fag}/begreb/{b['begreb']}"
                 alle.append({"type": "begreb", "noegle": noegle, "fag": fag, "kicker": f"{FAGNAVN[fag]} · begreb · {b['afsnit']}",
                              "titel": b["begreb"], "spoergsmaal": f"Forklar **{b['begreb']}** med dine egne ord"
-                             + (", og sig hvad det får dig til at se i en organisation" if fag == "beta" else "") + ".",
+                             + (f", {B[fag]['spoergsmaal_se']}" if B[fag]["spoergsmaal_se"] else "") + ".",
                              "niveau": niveau, "_sidst": sidst, "_forfald": sidst + timedelta(days=interval)})
-                svar[f"begreb:{noegle}"] = {"svar": b["definition"], "se": b["se"] or None, "form": "tekst"}
+                svar[f"begreb:{noegle}"] = {"svar": b["definition"], "se": b["se"] or None, "se_navn": B[fag]["hoved_se"],
+                                            "form": "tekst"}
         for k in D:
             for t in k["tjek"]:
                 n = re.sub(r"\s*←.*$", "", t["beskrivelse"]).strip()
@@ -1042,7 +1058,7 @@ class Studie:
                 s["aktivitet"].sort(key=lambda a: a["ændret"], reverse=True)
             if fid != "gamma":
                 s["aktivitet"].sort(key=lambda a: a["ændret"], reverse=True)
-            ud.append({"id": fid, "kort": f["kort"], "navn": f["navn"], "eksamen": EKSAMENSFORM[fid], "status": s})
+            ud.append({**FAG_JSON[fid], "eksamen": EKSAMENSFORM[fid], "status": s})
         return ud
 
 
@@ -1154,6 +1170,8 @@ def lav(ud: Path, idag: date) -> None:
     kand.sort(key=lambda fq: (vaegt.get(fq[1]["mark"], 0), fq[1]["sidst"] or "" if fq[1]["mark"] else ""))
     svar("pakke", {
         "genereret": genereret,
+        "fag": [{k: f[k] for k in ("id", "kort", "navn", "farve", "genkald", "begreber", "kode", "eksamenstraening")}
+                for f in FAG_JSON.values()],
         "kort": [{**k, "facit": rep_svar.get(k["id"])} for k in rep["kort"]],
         "ekstra": [{"id": f"genkald:{f['fag']}/{f['fil']}#{q['nr']}", "type": "genkald",
                     "noegle": f"{f['fag']}/{f['fil']}#{q['nr']}", "fag": f["fag"],

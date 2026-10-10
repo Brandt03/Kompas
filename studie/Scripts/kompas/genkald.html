@@ -85,7 +85,6 @@
 <script>
 const API = "/studie/api";
 const MK = { "✓": "sad", "~": "halvt", "✗": "blankt" };
-const FAGNAVN = { alfa: "Alfa", beta: "Beta", gamma: "Gamma" };
 let fane = (location.hash.slice(1) || "idag"), G = null, B = null, D = null, S = null, R = null;
 let rCur = null, rVist = false, rSik = null, rSvar = null, gSik = null;
 // Kalibrering: vælg hvor sikker du er, før svaret vises
@@ -98,8 +97,8 @@ const karKnapper = (data, kar = KAR) => kar.map(([g, m, t, h]) => `<button type=
 const karMark = g => KAR.find(x => x[0] === +g)[1];
 const sikKnapper = (kræverTekst) => `<div class="row"><span class="meta">Hvor sikker er du?</span>${SIK.map(([k, t], i) =>
   `<button type="button" class="btn${i ? " ghost" : ""}" data-sik="${k}"${kræverTekst && k !== "gaet" ? " data-krav" : ""}>${t}</button>`).join("")}<span class="spacer"></span><span class="meta">så vises svaret</span></div>`;
-let gFag = "alfa", gFil = "alle", gCur = null, gVist = false, gFacit = null;
-let bFag = "alfa", bTilstand = "udfyld", bCur = null, bVist = false, bRet = null;  // bRet: et udfyldt begreb, du retter
+let gFag = null, gFil = "alle", gCur = null, gVist = false, gFacit = null;
+let bFag = null, bTilstand = "udfyld", bCur = null, bVist = false, bRet = null;  // bRet: et udfyldt begreb, du retter
 let dKap = 0, dKunTomme = false, oUge = null;
 try { const x = JSON.parse(localStorage.getItem("genkald-valg") || "{}"); ({ gFag = gFag, bFag = bFag, dKap = dKap } = x); } catch (e) {}
 const huskValg = () => { try { localStorage.setItem("genkald-valg", JSON.stringify({ gFag, bFag, dKap })); } catch (e) {} };
@@ -132,10 +131,10 @@ function tilEksamen(st) {
   const rk = Object.entries(st.eksamen || {}).filter(([, e]) => e.kort);
   if (!rk.length) return "";
   return `<section class="card panel"><div class="panel-head"><h2>Til eksamen</h2><span class="meta">hvis du ikke repeterer mere</span></div>
-    <div style="display:grid;gap:8px">${rk.map(([f, e]) => `<div class="row" style="gap:10px"><span style="width:120px">${FAGNAVN[f]} · ${dayMonth(new Date(e.dato)).replace(/\.$/, "")}</span>
+    <div style="display:grid;gap:8px">${rk.map(([f, e]) => `<div class="row" style="gap:10px"><span style="width:120px">${esc(fagKort(f))} · ${dayMonth(new Date(e.dato)).replace(/\.$/, "")}</span>
       <span class="meter" style="flex:1;height:8px;border-radius:4px;background:var(--surface-inset);overflow:hidden"><i style="display:block;height:100%;width:${e.forventet}%;background:var(--mark)"></i></span>
       <span class="meta" style="width:130px;text-align:right">${e.forventet} % af ${e.kort} kort</span></div>`).join("")}</div>
-    ${rk.some(([, e]) => e.under_maal) ? `<p class="meta" style="margin:10px 0 0">${rk.filter(([, e]) => e.under_maal).map(([f, e]) => `${e.under_maal} ${FAGNAVN[f]}-kort`).join(" og ")} er under ${Math.round(100 * st.maal_eksamen)} % på eksamensdagen. De kommer i Dagens kort inden da.</p>` : ""}</section>`;
+    ${rk.some(([, e]) => e.under_maal) ? `<p class="meta" style="margin:10px 0 0">${rk.filter(([, e]) => e.under_maal).map(([f, e]) => `${e.under_maal} ${esc(fagKort(f))}-kort`).join(" og ")} er under ${Math.round(100 * st.maal_eksamen)} % på eksamensdagen. De kommer i Dagens kort inden da.</p>` : ""}</section>`;
 }
 function renderIdag() {
   const st = R.statistik, k = R.kort[0];
@@ -155,7 +154,7 @@ function renderIdag() {
       <textarea id="r-svar" placeholder="${k.type === "drill" ? "Dit gæt …" : "Svar fra hukommelsen (eller sig det højt) …"}" style="min-height:${k.type === "drill" ? 60 : 110}px">${esc(kladde.hent("r:" + k.id))}</textarea>
       ${rVist ? `<div class="facit"><div class="lbl">${k.type === "genkald" ? "Facit" : k.type === "begreb" ? "Din definition" : "JavaScript giver"}</div>
           ${rSvar?.form === "md" ? `<div class="md">${md(rSvar.svar || "Der er ingen facit.")}</div>` : rSvar?.form === "kode" ? `<pre style="margin:0;font:13px ui-monospace,Menlo,monospace">${esc(rSvar.svar ?? "")}</pre>` : `<div>${esc(rSvar?.svar || "")}</div>`}
-          ${rSvar?.se ? `<div class="lbl" style="margin-top:10px">Hvad det får dig til at se</div><div>${esc(rSvar.se)}</div>` : ""}
+          ${rSvar?.se ? `<div class="lbl" style="margin-top:10px">${esc(rSvar.se_navn || "Hvad det får dig til at se")}</div><div>${esc(rSvar.se)}</div>` : ""}
           ${rSvar?.forklaring ? `<div class="lbl" style="margin-top:10px">Hvorfor</div><div class="md">${md(rSvar.forklaring)}</div>` : ""}</div>
         <div class="row"><span class="meta">Hvordan gik det?</span>${karKnapper("rkar", k.type === "drill" ? KAR_DRILL : KAR)}
           <span class="spacer"></span><span class="meta">du sagde: ${esc(SIK.find(([s]) => s === rSik)?.[1] || "")}</span></div>`
@@ -202,13 +201,15 @@ function gNaeste(efter) {
 }
 function renderGenkald() {
   if (!G.length) { root().innerHTML = `<div class="card empty">Der er ingen genkaldsfiler endnu.</div>`; return; }
+  const fagene = [...new Set(G.map(f => f.fag))];   // serveren tager genkaldsfagene fra fag.json
+  if (!fagene.includes(gFag)) gFag = fagene[0];
   const filer = G.filter(f => f.fag === gFag), qs = gAlle();
   if (!gCur || !qs.find(q => q.fil === gCur.fil && q.nr === gCur.nr)) { gCur = gNaeste(); gVist = false; gFacit = null; }
   const q = gCur && qs.find(x => x.fil === gCur.fil && x.nr === gCur.nr);
   const n = { sad: 0, halvt: 0, blankt: 0 }; qs.forEach(x => x.mark && n[MK[x.mark]]++);
   const forsøgt = n.sad + n.halvt + n.blankt, k = q ? `${q.fag}/${q.fil}#${q.nr}` : "";
   root().innerHTML = `
-    <div class="bar"><div class="seg" role="group" aria-label="Fag">${["alfa", "beta"].map(f => `<button type="button" data-gfag="${f}" aria-pressed="${f === gFag}">${FAGNAVN[f]}</button>`).join("")}</div>
+    <div class="bar"><div class="seg" role="group" aria-label="Fag">${fagene.map(f => `<button type="button" data-gfag="${esc(f)}" aria-pressed="${f === gFag}">${esc(fagKort(f))}</button>`).join("")}</div>
       <select id="gfil" aria-label="Fil"><option value="alle">Alle uger</option>${filer.map(f => `<option value="${esc(f.fil)}"${f.fil === gFil ? " selected" : ""}>${esc(f.uger)}</option>`).join("")}</select>
       <span class="spacer"></span><span class="meta">${forsøgt} af ${qs.length} forsøgt · ${n.sad} sad · ${n.halvt} halvt · ${n.blankt} blankt</span></div>
     ${q ? `<section class="card q">
@@ -247,29 +248,32 @@ async function gMarker(karakter) {
 
 // ── Begreber ───────────────────────────────────────────────────────
 function renderBegreber() {
+  const fagene = Object.keys(B);   // fagene med begreber i fag.json
+  if (!fagene.length) { root().innerHTML = `<div class="card empty">Intet fag har begreber.</div>`; return; }
+  if (!fagene.includes(bFag)) bFag = fagene[0];
   const alle = (B[bFag]?.begreber || []), tomme = alle.filter(b => !b.definition), fyldte = alle.filter(b => b.definition);
   const kandidater = bTilstand === "udfyld" ? [...alle.filter(b => b.begreb === bRet), ...tomme] : [...fyldte].sort((a, b) => String(a.sidst || "").localeCompare(String(b.sidst || "")));
   if (!bCur || !kandidater.find(b => b.begreb === bCur)) { bCur = kandidater[0]?.begreb || null; bVist = false; }
   const b = alle.find(x => x.begreb === bCur), se = B[bFag]?.hoved_se, k = `begreb:${bFag}:${bCur}`;
   root().innerHTML = `
-    <div class="bar"><div class="seg" role="group" aria-label="Fag">${["alfa", "beta"].map(f => `<button type="button" data-bfag="${f}" aria-pressed="${f === bFag}">${FAGNAVN[f]}</button>`).join("")}</div>
+    <div class="bar"><div class="seg" role="group" aria-label="Fag">${fagene.map(f => `<button type="button" data-bfag="${esc(f)}" aria-pressed="${f === bFag}">${esc(fagKort(f))}</button>`).join("")}</div>
       <div class="seg" role="group" aria-label="Tilstand"><button type="button" data-btil="udfyld" aria-pressed="${bTilstand === "udfyld"}">Udfyld (${tomme.length})</button><button type="button" data-btil="overhoer" aria-pressed="${bTilstand === "overhoer"}">Overhør (${fyldte.length})</button></div>
       <span class="spacer"></span><span class="meta">${fyldte.length} af ${alle.length} skrevet i dine egne ord</span></div>
     ${b ? `<section class="card q">
       <div class="kicker"><span>${esc(b.afsnit)}</span>${b.kilde ? `<span>${/^\d/.test(b.kilde) ? "s. " : ""}${esc(b.kilde)}</span>` : ""}</div>
       <div class="begreb">${esc(b.begreb)}</div>
       ${bTilstand === "udfyld" ? `
-        <p class="hint" style="margin:0">Slå det gerne op først, men luk bogen, før du skriver. Én til tre sætninger med dine egne ord${se ? ", og hvad begrebet får dig til at se i en konkret organisation" : " og hvor det gør en forskel"}.</p>
+        <p class="hint" style="margin:0">Slå det gerne op først, men luk bogen, før du skriver. Én til tre sætninger med dine egne ord${se ? (B[bFag].spoergsmaal_se ? `, ${esc(B[bFag].spoergsmaal_se)}` : "") : " og hvor det gør en forskel"}.</p>
         <textarea id="def" placeholder="Din definition …" style="min-height:100px">${esc(kladde.hent(k + ":def"))}</textarea>
-        ${se ? `<textarea id="se" placeholder="Hvad det får dig til at se …" style="min-height:80px">${esc(kladde.hent(k + ":se"))}</textarea>` : ""}
+        ${se ? `<textarea id="se" placeholder="${esc(se)} …" style="min-height:80px">${esc(kladde.hent(k + ":se"))}</textarea>` : ""}
         <div class="row"><button type="button" class="btn" id="gem-b">${icon("check", 14)}Gem i begreber.md</button><span class="spacer"></span><button type="button" class="btn quiet" id="spring-b">Spring over</button></div>`
       : `
         <p class="hint" style="margin:0">Forklar begrebet for dig selv, højt eller på papir. Så se, hvad du skrev.</p>
-        ${bVist ? `<div class="facit"><div class="lbl">Din definition</div><div>${esc(b.definition)}</div>${b.se ? `<div class="lbl" style="margin-top:10px">Hvad det får dig til at se</div><div>${esc(b.se)}</div>` : ""}</div>
+        ${bVist ? `<div class="facit"><div class="lbl">Din definition</div><div>${esc(b.definition)}</div>${b.se ? `<div class="lbl" style="margin-top:10px">${esc(se || "")}</div><div>${esc(b.se)}</div>` : ""}</div>
           <div class="row"><button type="button" class="btn" id="naeste-b">Næste begreb</button><button type="button" class="btn quiet" id="ret-b">${icon("pencil", 14)}Ret definitionen</button></div>`
         : `<div class="row"><button type="button" class="btn" id="vis-b">Vis min definition</button><span class="spacer"></span><button type="button" class="btn quiet" id="spring-b">Spring over</button></div>`}`}
     </section>` : `<div class="card empty">${bTilstand === "udfyld" ? "Alle begreber er skrevet. Skift til Overhør." : "Du har ikke skrevet nogen definitioner endnu. Start i Udfyld."}</div>`}
-    <section class="card panel"><details><summary>Alle begreber i ${FAGNAVN[bFag]}</summary>
+    <section class="card panel"><details><summary>Alle begreber i ${esc(fagKort(bFag))}</summary>
       <div class="liste">${alle.map(x => `<button type="button" class="li" data-begreb="${esc(x.begreb)}" aria-current="${x.begreb === bCur}"><span class="mk ${x.definition ? "sad" : ""}">${x.definition ? "✓" : "·"}</span><span class="t">${esc(x.begreb)}${x.definition ? ` — ${esc(x.definition)}` : ""}</span><span class="n">${esc(x.kilde)}</span></button>`).join("")}</div></details></section>`;
   const def = document.getElementById("def"), seEl = document.getElementById("se");
   if (def) { def.oninput = () => kladde.gem(k + ":def", def.value); def.focus(); }
@@ -341,7 +345,7 @@ function renderOevelser() {
   root().innerHTML = `
     <div class="bar"><select id="ouge" aria-label="Uge">${planer.map(x => `<option value="${x.uge}"${x.uge === p.uge ? " selected" : ""}>Uge ${x.uge}</option>`).join("")}</select>
       <span class="meta">Fra køreplanen. Svarene står også i ugeplanen; her er de skjult, til du beder om dem.</span></div>
-    ${Object.entries(p.fag).filter(([, f]) => f.oevelse).map(([id, f]) => blok(`${FAGNAVN[id]} · uge ${p.uge}`, f.oevelse.spoergsmaal, f.oevelse.svar, id)).join("")}
+    ${Object.entries(p.fag).filter(([, f]) => f.oevelse).map(([id, f]) => blok(`${esc(fagKort(id))} · uge ${p.uge}`, f.oevelse.spoergsmaal, f.oevelse.svar, id)).join("")}
     ${p.genkaldelse?.svar ? blok(esc(p.genkaldelse.titel), p.genkaldelse.spoergsmaal, p.genkaldelse.svar, "genkald") : ""}`;
 }
 
@@ -349,6 +353,7 @@ function renderOevelser() {
 async function vis() {
   document.querySelectorAll("#faner button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.fane === fane)));
   try {
+    if (!S) S = await loadStudie().catch(() => null);   // fagenes kortnavne; uden dem står id'et
     if (fane === "idag") { root().innerHTML = R ? root().innerHTML : `<div class="card empty">Finder dagens kort …</div>`; R = R || await hent("/repetition"); renderIdag(); }
     else if (fane === "genkald") { G = G || await hent("/genkald"); renderGenkald(); }
     else if (fane === "begreber") { B = B || await hent("/begreber"); renderBegreber(); }

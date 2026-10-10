@@ -73,7 +73,7 @@
 <script src="/kompas/assets/liv.js"></script>
 <script src="studie.js"></script>
 <script>
-let S = null, valgt = (location.hash.slice(1) || "alfa"), planUge = null;
+let S = null, valgt = location.hash.slice(1), planUge = null;   // tomt: det første fag i fag.json
 // Styr på: hvilke uger du har læst (live fra Scripts/kompas-server.js). Styrer nye kort i Dagens kort.
 let LAEST = null, GK = null;
 // Fagnoterne (Word), udfyldt af køreplan-rutinen efter ugen, når slides er lagt op (fagnoter.json fra kompas-eksport.js)
@@ -89,12 +89,12 @@ function tiles(f) {
     const g = s.genkald.reduce((a, x) => ({ q: a.q + x.spoergsmaal, m: a.m + x.sad + x.halvt + x.blankt, sad: a.sad + x.sad }), { q: 0, m: 0, sad: 0 });
     t.push(`<div class="card tile"><div class="label">Genkald forsøgt</div><div class="value">${g.m}<small>/ ${g.q}</small></div>${meter(g.m, g.q)}<div class="foot">${g.sad} sad helt</div></div>`);
   }
-  if (s.modeller != null) t.push(`<div class="card tile"><div class="label">Tegnede modeller</div><div class="value">${s.modeller}</div><div class="foot">i ${esc(f.kort)}/Modeller</div></div>`);
+  if (s.modeller != null) t.push(`<div class="card tile"><div class="label">Tegnede modeller</div><div class="value">${s.modeller}</div><div class="foot">i ${esc(f.mappe)}/Modeller</div></div>`);
   if (s.drills) {
     const d = s.drills.reduce((a, x) => ({ p: a.p + x.pladser, g: a.g + x.gættet, st: a.st + x.stubbe }), { p: 0, g: 0, st: 0 });
     t.push(`<div class="card tile"><div class="label">Drills gættet</div><div class="value">${d.g}<small>/ ${d.p}</small></div>${meter(d.g, d.p)}<div class="foot">${d.st} kodestubbe tilbage</div></div>`);
   }
-  if (s.afleveringer) t.push(`<div class="card tile"><div class="label">Afleveringer godkendt</div><div class="value">${s.afleveringer.godkendt}<small>/ ${s.afleveringer.krav ?? "–"} krævet</small></div>${meter(s.afleveringer.godkendt, s.afleveringer.krav || 1)}<div class="foot">${s.afleveringer.afleveret} afleveret af ${s.afleveringer.ud_af ?? s.afleveringer.raekker.length}</div></div>`);
+  if (s.afleveringer) t.push(`<div class="card tile"><div class="label">${esc(f.afleveringer?.navn || "Afleveringer")} godkendt</div><div class="value">${s.afleveringer.godkendt}<small>/ ${s.afleveringer.krav ?? "–"} krævet</small></div>${meter(s.afleveringer.godkendt, s.afleveringer.krav || 1)}<div class="foot">${s.afleveringer.afleveret} afleveret af ${s.afleveringer.ud_af ?? 8}</div></div>`);
   if (s.oevelser_i_gang) t.push(`<div class="card tile"><div class="label">Øvelser</div><div class="value">${s.oevelser_faerdige}<small>færdige</small></div><div class="foot">${s.oevelser_i_gang.length} i gang: ${esc(s.oevelser_i_gang.join(", ")) || "ingen"}</div></div>`);
   t.push(`<div class="card tile"><div class="label">Aktivitet, 7 dage</div><div class="value">${s.aktivitet.length}${s.aktivitet.length >= 12 ? "+" : ""}<small>filer</small></div><div class="foot">i dine arbejdsmapper</div></div>`);
   return `<section class="tiles">${t.join("")}</section>`;
@@ -107,10 +107,10 @@ function detaljer(f) {
   if (s.genkald?.length) parts.push(`<section class="card panel"><div class="panel-head"><h2>Genkaldelse</h2><span class="meta">markér [✓] [~] [✗] i filen</span></div>
     <div class="rows">${s.genkald.map(g => `<div class="row"><span class="n">${esc(g.uger)}<small>${esc(g.fil)}</small></span>
       <span class="v">${g.sad} sad · ${g.halvt} halvt · ${g.blankt} blankt · ${g.umarkeret} ikke forsøgt</span>${meter(g.sad + g.halvt + g.blankt, g.spoergsmaal)}</div>`).join("")}</div></section>`);
-  if (s.drills?.length) parts.push(`<section class="card panel"><div class="panel-head"><h2>Drills</h2><span class="meta">${esc(f.kort)}/vscode/Drills</span></div>
+  if (s.drills?.length) parts.push(`<section class="card panel"><div class="panel-head"><h2>Drills</h2><span class="meta">${esc(`${f.mappe}/${f.kode}/Drills`)}</span></div>
     <div class="rows">${s.drills.map(d => `<div class="row"><span class="n">${esc(d.titel)}<small>${esc(d.fil)}${d.stubbe ? ` · ${d.stubbe} kodestubbe` : ""}</small></span>
       <span class="v">${d.gættet} / ${d.pladser} gættet</span>${meter(d.gættet, d.pladser)}</div>`).join("")}</div></section>`);
-  if (s.afleveringer) parts.push(`<section class="card panel"><div class="panel-head"><h2>Afleveringer</h2><span class="meta">${s.afleveringer.krav} af ${s.afleveringer.ud_af} skal godkendes</span></div>
+  if (s.afleveringer) parts.push(`<section class="card panel"><div class="panel-head"><h2>Godkendelsesopgaver</h2><span class="meta">${s.afleveringer.krav} af ${s.afleveringer.ud_af} skal godkendes</span></div>
     <div style="overflow-x:auto"><table class="g"><thead><tr><th>Opgave</th><th>Uge</th><th>Afleveret</th><th>Godkendt</th><th>Hvad drillede</th></tr></thead>
     <tbody>${s.afleveringer.raekker.map(r => `<tr><td>${esc(r.opgave)}${r.mappe ? "" : ` <span class="meta">(ingen mappe)</span>`}</td><td>${esc(r.uge || "–")}</td><td>${esc(r.afleveret || "–")}</td><td>${esc(r.godkendt || "–")}</td><td>${esc(r.drillede || "")}</td></tr>`).join("")}</tbody></table></div></section>`);
   return parts.length > 1 ? `<div class="cols">${parts.join("")}</div>` : parts.join("");
@@ -130,6 +130,12 @@ function plan(f) {
       ? `<details class="sec"><summary>Fagnoter <span class="meta">· udfyldt efter ugen${fn.kun_bog ? ", kun ud fra bogen (slides var ikke lagt op)" : " ud fra slides og bog"}</span></summary>
           <div class="md fn">${fn.html}</div><p class="meta" style="margin:12px 0 0">Fra ${esc(fd.fil)}, ændret ${kort(fd.ændret)}.</p></details>`
       : `<p class="meta" style="border-top:1px solid var(--divider);padding-top:12px;margin:12px 0 0">Fagnoter: kommer, når ugen er slut og slides er lagt op (køreplan-rutinen søndag).</p>`);
+  // Valgfrie LeetCode-opgaver til ugen (leetcode i fag.json, fx Gamma/leetcode.md). Kun links og hvad de træner, aldrig løsninger.
+  const lc = S.leetcode?.fag === f.id ? S.leetcode.uger?.[p.uge] : null;
+  const leet = lc ? `<details class="sec"><summary>LeetCode <span class="meta">· ${lc.opgaver.length ? `${lc.opgaver.length} opgaver, valgfrit` : "ingen denne uge"}</span></summary>
+      <div class="md">${lc.note || ""}${lc.opgaver.length ? `<ul>${lc.opgaver.map(o => `<li><a href="${esc(o.url)}" target="_blank" rel="noopener">${o.nr}. ${esc(o.titel)}</a>
+        <span class="meta">${esc(o.niveau)}</span>${o.hvorfor ? ` · ${o.hvorfor}` : ""}</li>`).join("")}</ul>` : ""}</div>
+      <p class="meta" style="margin:12px 0 0">Fra ${esc(S.leetcode.fil)}.</p></details>` : "";
   return `<section class="card panel">
     <div class="plan-head"><h2>Køreplan, uge ${p.uge} <span class="meta">(${range(p.fra)})${p.uge === S.aktuel_uge ? " · denne uge" : ""} · skrevet før ugen</span></h2>
       <div class="weeknav">
@@ -141,6 +147,7 @@ function plan(f) {
     ${a["Til rapporten"] ? `<div class="banner" style="padding:12px 0 0"><span class="bi">${icon("sparkles", 16)}</span><div><div class="bl">Til rapporten</div><div class="md">${a["Til rapporten"]}</div></div></div>` : ""}
     ${a.Video ? `<div class="banner" style="padding:12px 0 0"><span class="bi">${icon("external-link", 16)}</span><div><div class="bl">Video</div><div class="md">${a.Video}</div></div></div>` : ""}
     ${noter}
+    ${leet}
     ${sek("Kilder", "Kilder")}
     ${a["Hurtigt overblik"] ? "" : sek("intro", "Hele afsnittet", true)}
     <p class="meta" style="margin:12px 0 0">Fra ${esc(p.fil)}, skrevet af køreplan-rutinen.</p>
@@ -148,7 +155,7 @@ function plan(f) {
 }
 
 function styrPaa(f) {
-  if (f.id === "gamma" || !LAEST) return "";
+  if (!f.genkald || !LAEST) return "";
   // Uger med undervisning i faget: dem planerne har et afsnit for, til og med denne uge
   const uger = S.planer.filter(p => p.fag[f.id] && p.uge <= S.uge_nu).map(p => p.uge);
   if (!uger.length) return "";
@@ -175,7 +182,7 @@ function render() {
   const e = f.eksamen || {};
   const kommende = S.deadlines.filter(d => (d.fag === f.kort || d.fag === "Alle") && (d.til || d.fra) >= iso(new Date()) && d.type !== "ferie").slice(0, 3);
   document.getElementById("root").innerHTML = `
-    <section class="card fag-head"><span class="sw" style="background:${FAG_FARVE[f.id]}"></span><div>
+    <section class="card fag-head"><span class="sw" style="background:${f.farve}"></span><div>
       <h2>${esc(f.navn)}</h2>
       ${e.Eksamen ? `<p><b>Eksamen:</b> ${esc(e.Eksamen)}. <b>Det der virker:</b> ${esc((e["Det der virker"] || "").replace(/\*\*/g, ""))}.</p>` : ""}
       ${kommende.length ? `<p><b>Næste:</b> ${kommende.map(d => `${d.hvad.replace(/<[^>]+>/g, "")} (${nedtaelling(d.dato || d.fra, !d.dato)})`).join(" · ")}</p>` : ""}

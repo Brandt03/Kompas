@@ -144,6 +144,9 @@ Sure itself is not part of the demo (its menu items show a short explanation ins
   scheduled with FSRS-6: a card comes back when I'm predicted to recall it with 90 % probability, and before an exam
   when it would otherwise be below 95 % on the day. New questions only come from weeks I have marked as read, and the page shows
   how often an answer was actually right when I said I was sure.
+- **A new semester is a new `fag.json`.** The code knows no courses: one file lists the semester's courses and
+  what each has (recall questions, a glossary, code drills, numbered hand-ins, exam form), and exam dates are read
+  from my notes. A test runs the server on a made-up semester and fails if a course id is hardcoded.
 - **Offline first on the phone.** *På farten* downloads a package of today's cards over Tailscale, queues
   answers without a connection, and sends them later. Each answer has an id, so sending twice is harmless. A
   service worker serves the pages from cache.
@@ -159,7 +162,7 @@ Sure itself is not part of the demo (its menu items show a short explanation ins
 
 - A deterministic fetcher (standard library only) reads new student-job listings, pre-filters them with weighted
   word lists and queues the relevant ones.
-- A scheduled Claude routine follows [AGENT.md](karriere/AGENT.md): it scores each listing 0–100 on a fixed
+- A scheduled Claude routine follows [RUTINE.md](karriere/RUTINE.md): it scores each listing 0–100 on a fixed
   five-part rubric with caps, and writes down why it fits and what is missing. Listings are treated as data, not
   instructions (prompt-injection defence), and the routine only writes its assessments; it never applies for
   anything or contacts anyone.

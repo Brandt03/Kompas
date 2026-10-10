@@ -13,7 +13,8 @@
 // Env-variabler (valgfrie):
 //   KOMPAS_SEMESTER   semestermappen; standard er mappen over Scripts/
 //   CANVAS_VAERT      Canvas-adressen, downloads kommer fra; standard canvas.instructure.com
-// Undervisningsdagene står i Scripts/undervisningsdage.json (se undervisningsdage.example.json).
+// Kurserne står under "canvas" i fag.json, undervisningsdagene i Scripts/undervisningsdage.json
+// (se undervisningsdage.example.json).
 
 const fs = require("fs");
 const path = require("path");
@@ -21,29 +22,25 @@ const crypto = require("crypto");
 const os = require("os");
 const { execFileSync } = require("child_process");
 
-const ROD = path.resolve((process.env.KOMPAS_SEMESTER || path.join(__dirname, "..")).replace(/^~(?=$|\/)/, os.homedir()));
-const DATA = path.join(ROD, "Scripts");
+const S = require("./semester");
+const ROD = S.ROD;
 const DOWNLOADS = path.join(os.homedir(), "Downloads");
-const TILSTAND = path.join(DATA, "canvas-tilstand.json");
-const LOG = path.join(DATA, "canvas-log.txt");
+const TILSTAND = path.join(S.DATA, "canvas-tilstand.json");
+const LOG = path.join(S.DATA, "canvas-log.txt");
 const CANVAS = (process.env.CANVAS_VAERT || "canvas.instructure.com").replace(/\./g, "\\.");
 const INDBAKKE = path.join(ROD, "_Indbakke");
 const KØR = process.argv.includes("--kør");
 
-// Kursus-id -> fag og standardmappe, når filnavnet ikke afgør det.
+// Kursus-id -> fagets mappe og standardmappe, når filnavnet ikke afgør det (fra "canvas" i fag.json).
 // standard: null betyder, at usikre filer går i _Indbakke.
-// Id'et står i kursets adresse på Canvas (…/courses/<id>). Tallene her er eksempler; skriv dine egne kurser.
-const KURSER = {
-  10001: { fag: "Gamma", standard: null },
-  10002: { fag: "Beta", standard: "Forelæsninger" },
-  10003: { fag: "Alfa", standard: "Forelæsninger" },
-  10004: { fag: "Alfa", standard: "Øvelser" },
-};
+const KURSER = Object.fromEntries(S.fag().flatMap(f => f.canvas.map(c => [c.kursus, { fag: f.mappe, standard: c.standard }])));
+// Afleveringer genkendes på fagenes præfiks (fx G1) ud over ordene
+const AFL = S.afleveringsMoenster();
 
 // Filnavn -> undermappe. Første regel, der passer, vinder.
 const REGLER = [
   { mappe: "Studieteknik", mønster: /studieteknik|notatteknik/i },
-  { mappe: "Afleveringer", mønster: /aflevering|assignment|godkendelsesopgave|\bopgave\s?\d+\b/i },
+  { mappe: "Afleveringer", mønster: new RegExp(`aflevering|assignment|godkendelsesopgave${AFL ? `|${AFL}` : ""}`, "i") },
   { mappe: "Øvelser", mønster: /øvelse|exercise/i },
   { mappe: "Forelæsninger", mønster: /\bFL\s?\d|forelæsning|lecture/i },
 ];
@@ -86,7 +83,7 @@ function datoPræfiks(fil) {
 //      undervisningen), højst 10 dage frem; ellers den seneste før.
 // Returnerer { dato: "ÅÅÅÅMMDD", sikker } eller null, hvis faget/mappen ikke står i tabellen.
 const UNDERVISNING = (() => {
-  try { return JSON.parse(fs.readFileSync(path.join(DATA, "undervisningsdage.json"), "utf8")); }
+  try { return JSON.parse(fs.readFileSync(path.join(S.DATA, "undervisningsdage.json"), "utf8")); }
   catch { return {}; }
 })();
 
@@ -118,15 +115,16 @@ function undervisningsdato(navn, fag, mappe, fil) {
   return i >= 0 ? svar(i, false) : null;
 }
 
-// Ensartet navn, når nummer og emne er kendt: 20261005_FL5_Lorem ipsum.pdf,
-// 20261005_Øvelsessæt 5_Lorem ipsum.pdf, 20260911_Exercise 1_Dolor sit.pdf (Gamma har øvelsessæt, de andre exercises).
+// Ensartet navn, når nummer og emne er kendt: 20261005_FL5_Højere ordens funktioner.pdf,
+// 20261005_Øvelsessæt 5_Højere ordens funktioner.pdf, 20260911_Exercise 1_Course introduction.pdf.
 // Ellers: dato + Canvas-navnet.
 function ensartetNavn(uv, fag, mappe, navn) {
   const ext = path.extname(rensNavn(navn));
   if (!uv) return null;
   if (!uv.emne) return `${uv.dato}_${rensNavn(navn).replace(/^\d{8}_/, "")}`;
   const emne = uv.emne.replace(/[\/:]/g, "-");
-  const type = mappe === "Forelæsninger" ? `FL${uv.nr}` : fag === "Gamma" ? `Øvelsessæt ${uv.nr}` : `Exercise ${uv.nr}`;
+  const oevelse = S.fag().find(f => f.mappe === fag)?.oevelse_navn || "Exercise";
+  const type = mappe === "Forelæsninger" ? `FL${uv.nr}` : `${oevelse} ${uv.nr}`;
   const løsning = /solution|løsning|facit/i.test(navn) ? " (løsning)" : "";
   return `${uv.dato}_${type}_${emne}${løsning}${ext}`;
 }

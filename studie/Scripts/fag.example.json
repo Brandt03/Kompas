@@ -1,0 +1,86 @@
+{
+  "_forklaring": "Eksempel med demoens tre opdigtede fag. Kopiér til semestermappens Scripts/fag.json og skriv dine egne fag. Koden i Scripts/ og siderne læser fagene herfra; et nyt semester er en ny fag.json. Datoer står i CLAUDE.md under \"Vigtige datoer\", eksamens- og arbejdsform i README.md under \"... trænes forskelligt\" (readme er rækkens navn i Fag-kolonnen). Felter: id (bruges i logs og nøgler; ændres ikke midt i et semester), kort, navn, mappe, readme, fagnoter_overskrift (overskriften i ugeplanen og fagnoterne starter med den), genkald, begreber (ekstra_kolonne og det tilhørende ekstra_spoergsmaal i overhøringen), kode (mappen med drills og øvelser), afleveringer (mappe, præfiks som Opgave i Opgave 3, og navn), leetcode, eksamenstraening (form: skriftlig, kode eller mundtlig; note under sættene), forudsaetning (en frist af typen, der er forudsætning for eksamen), canvas (kurser og standardmappe), oevelse_navn (navnet på øvelsessæt fra Canvas), farve (valgfri; ellers efter rækkefølgen).",
+  "semester": "Demosemester",
+  "fag": [
+    {
+      "id": "alfa",
+      "kort": "Alfa",
+      "navn": "Alfa – lorem ipsum",
+      "mappe": "Alfa",
+      "readme": "Alfa",
+      "fagnoter_overskrift": "Alfa",
+      "genkald": true,
+      "begreber": {
+        "ekstra_kolonne": null
+      },
+      "eksamenstraening": {
+        "form": "skriftlig",
+        "note": "Facit er vejledende og skrevet ud fra lærebogen, ikke et officielt facit. MC rettes automatisk; resten retter du selv mod facit."
+      },
+      "forudsaetning": {
+        "type": "praesentation",
+        "tekst": "Præsentationen"
+      },
+      "canvas": [
+        {
+          "kursus": 10003,
+          "standard": "Forelæsninger"
+        },
+        {
+          "kursus": 10004,
+          "standard": "Øvelser"
+        }
+      ],
+      "oevelse_navn": "Exercise"
+    },
+    {
+      "id": "beta",
+      "kort": "Beta",
+      "navn": "Beta – dolor sit amet",
+      "mappe": "Beta",
+      "readme": "Beta",
+      "fagnoter_overskrift": "Beta",
+      "genkald": true,
+      "begreber": {
+        "ekstra_kolonne": "Hvad det får dig til at se",
+        "ekstra_spoergsmaal": "og sig hvad det får dig til at se i en organisation"
+      },
+      "eksamenstraening": {
+        "form": "mundtlig",
+        "note": "Der findes ingen gamle sæt. Pensumspørgsmålene er lavet ud fra lektionsplanen og bøgerne, med en disponeret 5-minutters besvarelse som facit. Øv dem højt: forbered 20 min, svar 5–7 min."
+      },
+      "canvas": [
+        {
+          "kursus": 10002,
+          "standard": "Forelæsninger"
+        }
+      ],
+      "oevelse_navn": "Exercise"
+    },
+    {
+      "id": "gamma",
+      "kort": "Gamma",
+      "navn": "Gamma – consectetur",
+      "mappe": "Gamma",
+      "readme": "Gamma",
+      "fagnoter_overskrift": "Gamma",
+      "kode": "vscode",
+      "afleveringer": {
+        "mappe": "vscode/Opgaver",
+        "praefiks": "Opgave",
+        "navn": "Afleveringer"
+      },
+      "eksamenstraening": {
+        "form": "kode",
+        "note": "Sættene er i samme format som prøven. Facit er en tjekliste over kravene, ikke en løsning: du retter din egen kode mod den. Bøger og noter er tilladt til prøven, så øv med dem ved hånden."
+      },
+      "canvas": [
+        {
+          "kursus": 10001,
+          "standard": null
+        }
+      ],
+      "oevelse_navn": "Øvelsessæt"
+    }
+  ]
+}

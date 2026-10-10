@@ -71,13 +71,13 @@ function row(d, today) {
   const past = !d.faerdig && (d.til || d.fra || "") < today && !(d.dato && d.dato >= today);
   const [cls, lbl] = TYPE[d.type] || TYPE.andet;
   const n = target(d) ? daysUntil(target(d)) : null;
-  const id = FAG_FARVE[d.fag.toLowerCase()] ? d.fag.toLowerCase() : null;
+  const id = fagFraKort(d.fag)?.id || null;
   const done = !!d.faerdig;
   return `<div class="ti${past ? " past" : ""}${done ? " done" : ""}">
     <button type="button" class="ok" data-k="${esc(d.noegle || "")}" aria-pressed="${done}" title="${done ? `Færdig ${esc(d.faerdig)} – klik for at fortryde` : "Markér som færdig"}" aria-label="${done ? "Fortryd færdig" : "Markér som færdig"}"${d.noegle ? "" : " disabled"}>${icon("check", 14)}</button>
     <div class="when"><b>${esc(whenText(d))}</b>${esc(whenSub(d))}</div>
     <div class="what">${d.hvad}${d.note ? `<span class="note">${d.note}</span>` : ""}</div>
-    <div class="tags"><span class="chip">${id ? `<span class="dot" style="background:${FAG_FARVE[id]}"></span>` : ""}${esc(d.fag)}</span>
+    <div class="tags"><span class="chip">${id ? `<span class="dot" style="background:${fagFarve(id)}"></span>` : ""}${esc(d.fag)}</span>
       <span class="badge ${cls}">${lbl}</span>${done ? `<span class="badge good">${icon("check", 12)}færdig ${esc(/^\d{4}-/.test(d.faerdig) ? dayMonth(parseDate(d.faerdig)) : d.faerdig)}</span>` : n != null && !past ? `<span class="badge">${nedtaelling(target(d), !d.dato)}</span>` : ""}</div>
   </div>`;
 }
@@ -101,11 +101,12 @@ function render(S) {
       <div class="what"><span class="meta">${label}</span><br>${esc(d.hvad.replace(/<[^>]+>/g, "").split(" — ")[0].replace(/^Eksamen: /, ""))}<small>${esc(d.fag)} · ${esc(whenText(d))}${d.tid ? ` kl. ${esc(d.tid)}` : ""}${d.dato ? "" : " (ingen præcis dato endnu)"}</small></div></section>`;
   };
 
-  // Forudsætninger: godkendte afleveringer (status fra afleveringernes tabel) og en kommende præsentation i faget
+  // Forudsætningen for eksamen: afleveringer, der skal godkendes, eller en frist af fagets forudsætningstype (fag.json)
   const krav = f => {
-    const a = f.status.afleveringer, p = kommende.find(d => d.fag === f.kort && d.type === "praesentation");
-    return (a ? `<p><b>Forudsætning:</b> ${a.krav} af ${a.ud_af} afleveringer godkendt. Status: ${a.godkendt} godkendt, ${a.afleveret} afleveret.</p>` : "")
-      + (p ? `<p><b>Forudsætning:</b> præsentationen (${esc(whenText(p))}).</p>` : "");
+    const a = f.afleveringer && f.status.afleveringer;
+    if (a) return `<p><b>Forudsætning:</b> ${a.krav} af ${a.ud_af} ${esc(f.afleveringer.navn || "afleveringer")} godkendt. Status: ${a.godkendt} godkendt, ${a.afleveret} afleveret.</p>`;
+    const fr = f.forudsaetning && kommende.find(d => fagFraKort(d.fag)?.id === f.id && d.type === f.forudsaetning.type);
+    return fr ? `<p><b>Forudsætning:</b> ${esc(f.forudsaetning.tekst)} (${esc(whenText(fr))}).</p>` : "";
   };
 
   document.getElementById("root").innerHTML = `
@@ -116,7 +117,7 @@ function render(S) {
       ${overstaaet.length ? `<details style="margin-top:12px"><summary>Overståede, ikke markeret (${overstaaet.length})</summary><div class="tl">${overstaaet.map(d => row(d, today)).join("")}</div></details>` : ""}
     </section>
     <section class="ecards">${S.fag.map(f => `<div class="card panel">
-      <h3><span class="dot" style="background:${FAG_FARVE[f.id]}"></span>${esc(f.kort)}</h3>
+      <h3><span class="dot" style="background:${f.farve}"></span>${esc(f.kort)}</h3>
       ${f.eksamen ? `<p><b>Eksamen:</b> ${esc(f.eksamen.Eksamen)}</p><p><b>Det der virker:</b> ${esc((f.eksamen["Det der virker"] || "").replace(/\*\*/g, ""))}</p>` : `<p>Eksamensformen står ikke i README.md.</p>`}
       ${krav(f)}
       <p><b>Gamle sæt:</b> ${f.status.eksamenssaet.length ? esc(f.status.eksamenssaet.join(", ")) : "ingen i mappen"}</p>

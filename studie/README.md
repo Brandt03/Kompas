@@ -11,6 +11,8 @@ repoet. Demoen (`demo/projekter/studie.py`) laver opdigtede data i samme form.
 
 | Fil | Hvad den gør |
 |---|---|
+| `Scripts/semester.js` | Semestret ét sted: fagene fra `fag.json`, frister og eksamensdage fra CLAUDE.md og eksamensformerne fra README.md. De andre scripts spørger herfra i stedet for at have egne lister. |
+| `Scripts/fag.example.json` | Eksempel på `fag.json` med demoens tre fag og en forklaring af hvert felt. Kopiér til semestermappens `Scripts/fag.json`. |
 | `Scripts/kompas-eksport.js` | Læser semestermappen og skriver `studie.json`, `fagnoter.json`, `kalender.json` og `kompas.json` til `~/.kompas/studie/`, plus en kopi af siderne. Læser kun; ændrer aldrig arbejdsfiler. |
 | `Scripts/kompas-server.js` | Lille server på `127.0.0.1:8767` (Caddy sender `/studie/api/*` hertil). Læser genkald, begreber, drills og eksamenssæt og skriver kun det, brugeren selv taster: svar, markeringer, definitioner og gæt. Facit udleveres først efter et forsøg. |
 | `Scripts/kompas/` | Siderne: Ugeoverblik (`index.html`), Fag, Genkald, Eksamen, Deadlines og På farten (`mobil.html` med service worker, manifest og ikoner). De bruger Kompas' designkit fra `/kompas/assets/`. |
@@ -47,7 +49,7 @@ KOMPAS_SEMESTER=/tmp/kopi STUDIE_PORT=18767 STUDIE_EKSPORT_UD=/tmp/studie-ud nod
   README.md                     tabellen "## De tre fag trænes forskelligt" (| Fag | Eksamen | Det der virker |)
   Uge_Overblik/
     Ugeplan_uge12_16-22mar_2027.md
-  Alfa/  Beta/  Gamma/          ét fag pr. mappe (fagene står i FAG øverst i kompas-eksport.js)
+  Alfa/  Beta/  Gamma/          ét fag pr. mappe (fagene står i Scripts/fag.json)
     Fagnoter - Alfa.docx        Word; hver uge er en "Uge NN — …"-overskrift (Overskrift 2)
     Genkald/
       begreber.md
@@ -60,7 +62,8 @@ KOMPAS_SEMESTER=/tmp/kopi STUDIE_PORT=18767 STUDIE_EKSPORT_UD=/tmp/studie-ud nod
     Opgaver/README.md           "## Status"-tabel (| Opgave | Uge | Afleveret | Godkendt | Hvad drillede |)
                                 og fx "**4 af 6 skal godkendes**"; Opgave 1/, Opgave 2/ … er mapperne
     Bog/  Øvelser/  *.js        færdige og igangværende øvelser (tælles)
-  Scripts/                      koden + datafiler, der skrives undervejs:
+  Scripts/                      koden + semestrets egne filer:
+    fag.json                    fagene, og hvad hvert fag har (genkald, begreber, kode, afleveringer, eksamensform)
     genkald-log.jsonl           alle forsøg; Dagens kort regnes ud herfra
     laest.json                  uger markeret som læst
     deadlines-status.json       frister markeret som færdige
@@ -68,16 +71,17 @@ KOMPAS_SEMESTER=/tmp/kopi STUDIE_PORT=18767 STUDIE_EKSPORT_UD=/tmp/studie-ud nod
 
 Formaterne, koden forventer:
 
-- **Ugeplan**: `# Titel`, et `## <fagnavn>`-afsnit pr. fag med `**Hurtigt overblik**`, `**Kilder**`,
+- **Ugeplan**: `# Titel`, et `## <fagnavn>`-afsnit pr. fag (overskriften starter med fagets `fagnoter_overskrift`) med `**Hurtigt overblik**`, `**Kilder**`,
   `**Noter til pensum**`, `**Til rapporten**` og `**Video**`, og evt. øvelsesspørgsmål fra `*Øvelsesspørgsmål …*`
   til `*Svar …*`. Desuden `## Vigtigst i ugen`, `## Genkaldelse …` (med `*Svar*`) og `## Deadlines`
   (`| Uge | Fag | Aktivitet | Dato | Bemærkning |`). Planerne skrives af en planlagt Claude-opgave
-  (køreplan-rutinen, instruktionerne står i `RUTINE.md`) eller i hånden; koden læser dem kun. En frist med "Opgave N" i teksten kobles til
-  afleveringernes tabel, så den er færdig, når kolonnen Afleveret er udfyldt.
+  (køreplan-rutinen, instruktionerne står i `RUTINE.md`) eller i hånden; koden læser dem kun. En frist med en aflevering i teksten (fagets
+  præfiks i `fag.json` og et nummer, fx "Opgave 3") kobles til afleveringernes tabel, så den er færdig, når kolonnen Afleveret er udfyldt.
 - **Genkald**: `## Uge 10 — emne` og spørgsmål som `**1.** …`. Markeringen står efter nummeret
   (`**1.** [✓] …`, `[~]`, `[✗]`), dit svar nederst som `> **Mit svar** (14.03): …`. `-svar.md` har samme numre.
 - **Begreber**: `## Uge 10 — emne` og en tabel, hvis første kolonne hedder `Begreb`:
-  `| Begreb | Min definition | Kilde |` (Beta har også `| Hvad det får dig til at se |`).
+  `| Begreb | Min definition | Kilde |` (et fag med `ekstra_kolonne` i `fag.json` har også
+  den kolonne, fx Beta: `| Hvad det får dig til at se |`).
 - **Drills**: `tjek("beskrivelse", () => udtryk, TOM);` under `// ── afsnit ──`-linjer. Gættet skrives i stedet
   for `TOM`. `tjek.js` (i drillmappen, ikke med her) eksporterer `tjek`, `TOM` og `opsummer` og skriver
   `FEJL  <beskrivelse>`, `du gættede …` og `JavaScript: …` ved fejl og til sidst `N rigtige · N forkerte · …`.
@@ -112,7 +116,19 @@ Alle under `/studie/api/`. Skrivninger kræver `Content-Type: application/json` 
 
 Kortene regnes ud af `genkald-log.jsonl`; der er ingen anden tilstand. Hvert svar har en karakter (1 blankt,
 2 halvt, 3 sad, 4 let), og FSRS-6 med standardparametrene planlægger kortet: det kommer igen, når du regnes for at
-kunne det med 90 % sandsynlighed, så lette kort venter længere end svære. Står eksamensdatoerne i `EKSAMEN` i
-`kompas-server.js`, kommer et kort før eksamen, hvis det ellers ville være under 95 % på eksamensdagen. Op til 5
+kunne det med 90 % sandsynlighed, så lette kort venter længere end svære. Står et fags eksamen med dato under
+"Vigtige datoer" i semestermappens CLAUDE.md, kommer et kort før eksamen, hvis det ellers ville være under 95 % på eksamensdagen. Op til 5
 nye genkaldsspørgsmål om dagen, og kun fra uger, der er markeret som læst. Typerne (genkald, eksamen, begreb, drill) blandes på skift, og
 siden viser, hvor tit svaret sad, når man sagde "sikker", "usikker" eller "gætter".
+
+## Nyt semester
+
+Koden kender ingen fag; alt fagspecifikt står i semestermappens filer. Ved semesterskift:
+
+1. Lav en ny semestermappe med samme opbygning, og kopiér `Scripts/` med. Log- og statusfilerne
+   (`genkald-log.jsonl`, `laest.json`, `deadlines-status.json`, `canvas-*`) hører til det gamle semester.
+2. Skriv `Scripts/fag.json` (se `fag.example.json`) og `Scripts/undervisningsdage.json`.
+3. Skriv "Vigtige datoer" og "Egen plan" i `CLAUDE.md` (eksamensdagene læses herfra) og tabellen
+   "De tre fag trænes forskelligt" i `README.md`, så Fag-kolonnen matcher `readme` i `fag.json`.
+4. Peg `KOMPAS_SEMESTER` (eller symlinket `~/kompas/studie`) på den nye mappe, og genstart serveren.
+5. Kør eksporten og testene: `node tests/test_studie_semester.js && node tests/test_studie_fag.js`.

@@ -72,3 +72,7 @@ jobs:
         run: node tests/test_drill_gaet.js
       - name: Gentagelsesplan og sync uden dubletter
         run: node tests/test_studie_repetition.js
+      - name: Fagene fra fag.json (semester.js)
+        run: node tests/test_studie_semester.js
+      - name: Server og eksport på et andet semester, ingen faste fag i koden
+        run: node tests/test_studie_fag.js

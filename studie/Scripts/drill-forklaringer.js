@@ -1,19 +1,19 @@
-// Finder tjek(...) i Gamma/vscode/Drills/kap*.js, der mangler en forklaring i forklaringer/<drill>.md,
+// Finder tjek(...) i kodefagets Drills/kap*.js (fx Gamma/vscode/Drills), der mangler en forklaring i forklaringer/<drill>.md,
 // og viser for hvert: beskrivelsen (som den skal stå i "## "-overskriften), udtrykket og hvad
 // JavaScript faktisk giver. Læser kun; skriver intet og viser aldrig dine gæt.
 //
 //   node Scripts/drill-forklaringer.js           → kun de manglende
 //   node Scripts/drill-forklaringer.js --alle    → alle tjek
-//
-// KOMPAS_SEMESTER peger på semestermappen; standard er mappen over Scripts/.
 
 const fs = require("fs");
-const os = require("os");
 const path = require("path");
 const Module = require("module");
 
-const ROD = path.resolve((process.env.KOMPAS_SEMESTER || path.join(__dirname, "..")).replace(/^~(?=$|\/)/, os.homedir()));
-const DRILLS = path.join(ROD, "Gamma", "vscode", "Drills");
+const S = require("./semester");
+// Kodefaget i fag.json har drillene i <mappe>/<kode>/Drills
+const KODEFAG = S.fagMed("kode")[0];
+if (!KODEFAG) { console.log("Intet fag har kode i fag.json, så der er ingen drills."); process.exit(0); }
+const DRILLS = path.join(S.ROD, KODEFAG.mappe, KODEFAG.kode, "Drills");
 const alle = process.argv.includes("--alle");
 const noegle = (s) => s.replace(/\s*←.*$/, "").replace(/\s+/g, " ").trim();
 

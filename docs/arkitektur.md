@@ -132,7 +132,7 @@ regnes af `bin/forbindelser.py`, som `opdater.sh` kører til sidst hver gang, og
 `public/forbindelser.json` (ikke i git). Datakilderne vises ud fra seneste vellykkede hentning, serverne spørges
 direkte, garmin-coach testes med et rigtigt MCP-håndtryk, og rutinerne læses fra Claude-appens egne tidsplaner;
 ret `RUTINE_INFO` i scriptet, så id'erne passer til dine planlagte opgaver. Hver planlagt opgave peger kun på sit
-projekts `RUTINE.md` (Karriere: `rutine.md` og `AGENT.md`), så instruktionerne versioneres med koden. Scriptet læser aldrig hemmeligheder
+projekts `RUTINE.md`, så instruktionerne versioneres med koden. Scriptet læser aldrig hemmeligheder
 som kalender-adresser og API-nøgler, kun om de findes, og viser aldrig rå loglinjer.
 
 ## Opsætning
