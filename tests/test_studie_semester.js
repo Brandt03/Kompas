@@ -12,7 +12,7 @@ fs.writeFileSync(path.join(rod, "Scripts", "fag.json"), JSON.stringify({
   semester: "Testsemester",
   fag: [
     { id: "alfa", kort: "Alfa", navn: "Alfa for begyndere", mappe: "Alfa", genkald: true, begreber: { ekstra_kolonne: null } },
-    { id: "beta", kort: "Beta", navn: "Beta og kode", mappe: "Beta", kode: "kode",
+    { id: "beta", kort: "Beta", alias: ["Bet"], navn: "Beta og kode", mappe: "Beta", kode: "kode",
       afleveringer: { mappe: "kode/A-opgaver", praefiks: "A", navn: "A-opgaver" } },
     { id: "gamma", kort: "Gamma", navn: "Gamma", mappe: "Gamma", farve: "#123456" },
   ],
@@ -23,7 +23,7 @@ fs.writeFileSync(path.join(rod, "CLAUDE.md"), `# Testsemester
 
 | Uge | Fag | Hvad |
 |---|---|---|
-| 41 | Beta | **A1** — onsdag 07.10 kl. 23:59 |
+| 41 | Bet | **A1** — onsdag 07.10 kl. 23:59 |
 | 46-47 | Gamma | **Præsentation i øvelsestimen**, forudsætning for eksamen |
 | 50 | Alfa | **Eksamen: skriftlig stedprøve** — torsdag 10.12.2026 kl. 09:00-11:00 |
 | 1 | Gamma | **Eksamen: mundtlig** — torsdag 07.01.2027 |
@@ -56,6 +56,9 @@ tjek("et fags egen farve vinder", fag[2].farve === "#123456", fag[2].farve);
 tjek("fag uden genkald har genkald false", fag[1].genkald === false && fag[2].genkald === false);
 tjek("fagMed finder kun fagene med feltet", vis(S.fagMed("kode").map(f => f.id)) === '["beta"]' && vis(S.fagMed("genkald").map(f => f.id)) === '["alfa"]');
 tjek("find med ukendt id giver null", S.find("delta") === null && S.find("beta").kort === "Beta");
+tjek("fraKort finder et fag på et tidligere kortnavn", S.fraKort("bet")?.id === "beta");
+tjek("en færdig-nøgle gælder også under det tidligere kortnavn", vis(S.noegleVarianter("Beta|andet|41")) === '["Beta|andet|41","Bet|andet|41"]'
+  && vis(S.noegleVarianter("Bet|andet|41")) === '["Bet|andet|41","Beta|andet|41"]' && vis(S.noegleVarianter("Ukendt|x|1")) === '["Ukendt|x|1"]');
 tjek("fraKort er ligeglad med store bogstaver og mellemrum", S.fraKort(" alfa ")?.id === "alfa" && S.fraKort("—") === null);
 tjek("semestrets navn fra fag.json", S.semester() === "Testsemester", S.semester());
 
@@ -70,7 +73,8 @@ const rækker = S.vigtigeDatoer();
 tjek("Vigtige datoer har fem rækker", rækker.length === 5, String(rækker.length));
 const d = r => S.deadline(r, 2026, 36);
 const [a1, praes, alfaEks, gammaEks, betaEks] = rækker.map(d);
-tjek("A1 er en aflevering, selvom ordet ikke står der", a1.type === "aflevering" && a1.fag === "Beta", vis(a1));
+tjek("A1 er en aflevering, selvom ordet ikke står der", a1.type === "aflevering", vis(a1));
+tjek("en frist med et tidligere kortnavn får fagets nuværende", a1.fag === "Beta", a1.fag);
 tjek("A1 får datoen fra teksten", a1.dato === "2026-10-07" && a1.tid === "23.59", vis([a1.dato, a1.tid]));
 tjek("præsentation før eksamen er en præsentation", praes.type === "praesentation" && praes.fra === "2026-11-09" && praes.til === "2026-11-22", vis(praes));
 tjek("Alfas eksamen", alfaEks.type === "eksamen" && alfaEks.dato === "2026-12-10" && alfaEks.tid === "09.00–11.00", vis(alfaEks));

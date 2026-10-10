@@ -505,14 +505,14 @@ function main() {
     d.noegle = g ? `${d.fag}|${g}` : `${d.fag}|${d.type}|${(d.uger.match(/\d+/) || [""])[0]}`;
     const gr = g && (afleveringer[d.fag] || Object.values(afleveringer).flat()).find(r => r.opgave === g);
     const afl = gr?.afleveret && !/^(nej|-|—|–)$/i.test(gr.afleveret) ? gr.afleveret : null;
-    d.faerdig = status[d.noegle]?.faerdig || afl || null;
+    d.faerdig = S.noegleVarianter(d.noegle).map(n => status[n]?.faerdig).find(Boolean) || afl || null;
   }
   const deadlineKilde = [nyeste?.deadlines?.length ? nyeste.fil : null, vigtige.length ? "CLAUDE.md" : null].filter(Boolean).join(" og ") || null;
 
   // Fagene med det, siderne skal vide om dem: farve og hvilke funktioner faget har (fra fag.json)
   const former = S.eksamensformer();
   const fag = S.fag().map(f => ({
-    id: f.id, kort: f.kort, navn: f.navn, mappe: f.mappe, farve: f.farve, genkald: f.genkald,
+    id: f.id, kort: f.kort, alias: f.alias || [], navn: f.navn, mappe: f.mappe, farve: f.farve, genkald: f.genkald,
     begreber: f.begreber, kode: f.kode, afleveringer: f.afleveringer, leetcode: !!f.leetcode,
     eksamenstraening: f.eksamenstraening, forudsaetning: f.forudsaetning,
     eksamen: former.find(r => (r.Fag || "").startsWith(f.readme)) || null,

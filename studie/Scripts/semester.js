@@ -31,8 +31,18 @@ function fag() {
 }
 const fagMed = egenskab => fag().filter(f => f[egenskab]);
 const find = id => fag().find(f => f.id === id) || null;
-// Fag-kolonnen i ugeplaner og CLAUDE.md skriver kortnavnet ("Alfa")
-const fraKort = kort => fag().find(f => f.kort.toLowerCase() === String(kort || "").trim().toLowerCase()) || null;
+// Fag-kolonnen i ugeplaner og CLAUDE.md skriver kortnavnet ("Alfa"). Ældre filer kan have et tidligere kortnavn,
+// som står under "alias" i fag.json (fx "A").
+const fraKort = kort => {
+  const k = String(kort || "").trim().toLowerCase();
+  return fag().find(f => [f.kort, ...(f.alias || [])].some(n => n.toLowerCase() === k)) || null;
+};
+// En færdig-nøgle ("Alfa|andet|41") og de samme nøgler med fagets tidligere kortnavne ("A|andet|41"), så en
+// markering fra før et navneskift stadig gælder
+function noegleVarianter(noegle) {
+  const [kort, rest] = String(noegle).split(/\|(.*)/s), f = fraKort(kort);
+  return f && rest != null ? [noegle, ...[f.kort, ...(f.alias || [])].filter(n => n !== kort).map(n => `${n}|${rest}`)] : [noegle];
+}
 const semester = () => indhold().semester || path.basename(ROD);
 
 // ── markdown-tabeller og afsnit ──────────────────────────────────────
@@ -94,7 +104,9 @@ function deadline(r, aar, planUge = 40) {
   const t = ren.match(/kl\.\s*(\d{1,2})[:.](\d{2})(?:\s*[-–]\s*(\d{1,2})[:.](\d{2}))?/);
   const tid = t ? `${t[1].padStart(2, "0")}.${t[2]}${t[3] ? `–${t[3].padStart(2, "0")}.${t[4]}` : ""}` : null;
   return {
-    uger: r.Uge || "", dato_tekst: r.Dato || null, fag: /^(—|–|-|alle)?$/i.test((r.Fag || "").trim()) ? "Alle" : r.Fag.trim(), hvad, note: r.Bemærkning || null,
+    uger: r.Uge || "", dato_tekst: r.Dato || null, hvad, note: r.Bemærkning || null,
+    // Fagets nuværende kortnavn, også når tabellen bruger et tidligere
+    fag: /^(—|–|-|alle)?$/i.test((r.Fag || "").trim()) ? "Alle" : fraKort(r.Fag)?.kort || r.Fag.trim(),
     type, fra: fra && isoDato(fra), til: til && isoDato(til), dato, tid,
   };
 }
@@ -128,5 +140,5 @@ function eksamensdatoer(nu = new Date()) {
   return ud;
 }
 
-module.exports = { ROD, DATA, fag, fagMed, find, fraKort, semester, tabel, afsnit, isoDato, isoUge, mandagIUge, plusDage,
+module.exports = { ROD, DATA, fag, fagMed, find, fraKort, noegleVarianter, semester, tabel, afsnit, isoDato, isoUge, mandagIUge, plusDage,
   deadline, afleveringsMoenster, afleveringsNr, vigtigeDatoer, egenPlan, eksamensformer, eksamensdatoer };

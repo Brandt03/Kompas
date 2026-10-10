@@ -947,7 +947,9 @@ function gemDeadline({ noegle, faerdig }) {
     skriv(f, linjer.join("\n"));
   } else {
     let st = {}; try { st = JSON.parse(læs(STATUS)); } catch { /* ny fil */ }
-    if (faerdig) st[noegle] = { faerdig: iso }; else delete st[noegle];
+    // Nøglen med et tidligere kortnavn ryddes samtidig, så den ikke holder en frist færdig, du har fjernet markeringen fra
+    for (const n of S.noegleVarianter(noegle)) delete st[n];
+    if (faerdig) st[noegle] = { faerdig: iso };
     skriv(STATUS, JSON.stringify(st, null, 1) + "\n");
   }
   logFoersoeg({ type: "deadline", noegle, faerdig: !!faerdig });

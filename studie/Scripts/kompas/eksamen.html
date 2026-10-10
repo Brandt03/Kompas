@@ -144,7 +144,7 @@ function renderListe() {
 // Din egen plan for prøveeksamener (CLAUDE.md "Egen plan", ikke frister fra uddannelsen). Hver prøveeksamen, du har
 // afleveret i faget, krydser den næste i planen af, uanset hvilket sæt og hvilken uge.
 function proeveplan(saet) {
-  const plan = (S?.proeveplan || []).filter(p => p.fag.toLowerCase() === fag);
+  const plan = (S?.proeveplan || []).filter(p => fagFraKort(p.fag)?.id === fag);
   if (!plan.length) return "";
   const taget = [...new Set(saet.flatMap(x => x.proever.map(p => p.slice(0, 10))))].sort();
   return `<section class="card panel"><div class="panel-head"><h2>Prøveeksamener</h2><span class="meta">din egen plan</span></div>

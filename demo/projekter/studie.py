@@ -179,7 +179,7 @@ FAGNAVN = {f["id"]: f["kort"] for f in FAG}
 
 def _fag_felter(i: int, f: dict) -> dict:
     """Et fag fra fag.example.json, som eksporten skriver det i studie.json (farven efter rækkefølgen)."""
-    return {"id": f["id"], "kort": f["kort"], "navn": f["navn"], "mappe": f["mappe"],
+    return {"id": f["id"], "kort": f["kort"], "alias": f.get("alias", []), "navn": f["navn"], "mappe": f["mappe"],
             "farve": f.get("farve") or f"var(--c{i + 1})", "genkald": f.get("genkald", False),
             "begreber": f.get("begreber"), "kode": f.get("kode"), "afleveringer": f.get("afleveringer"),
             "leetcode": bool(f.get("leetcode")), "eksamenstraening": f.get("eksamenstraening"),
