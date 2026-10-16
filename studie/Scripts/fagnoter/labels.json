@@ -1,0 +1,6 @@
+{
+  "_forklaring": "Label-afsnittene i Fagnoter-skabelonen: et afsnit, der starter med et af navnene i fed, er en label. fill_fagnoter.py indsætter under dem, og Scripts/kompas-eksport.js viser dem som overskrifter på Fag-siden.",
+  "labels": ["Kilder", "Purpose", "Kernebegreber", "I egne ord", "Forbindelser", "Uafklaret", "Modeller",
+    "Mønstre i gamle sæt", "Spørgsmålsformer", "Egne øvelsesspørgsmål", "Feedback fra tidligere afleveringer",
+    "Syntaks og eksempler", "Typiske fejl"]
+}

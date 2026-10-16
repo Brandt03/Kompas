@@ -1,0 +1,15 @@
+# Sures egne filer (hent dem fra github.com/we-promise/sure) og hemmeligheder
+compose.yml
+.env
+*.pem
+backups/
+
+# Dine data: udtrækket fra Sure, sidernes gemte indstillinger og de personlige indstillinger
+dashboard/public/data.json
+dashboard/public/config.json
+dashboard/public/state/*
+!dashboard/public/state/.gitkeep
+
+# Mellemregninger til Excel og logs
+scripts/*.csv
+*.log

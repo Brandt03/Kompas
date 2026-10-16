@@ -1,0 +1,75 @@
+{
+ "omraade": "Økonomi",
+ "ikon": "wallet",
+ "raekkefoelge": 10,
+ "kilde": "Sure + dashboard (okonomi/dashboard/public/kompas.json)",
+ "sider": [
+  {
+   "titel": "Oversigt",
+   "ikon": "pie-chart",
+   "sti": "/okonomi",
+   "match": [
+    "/okonomi",
+    "/",
+    "/accounts",
+    "/properties",
+    "/vehicles",
+    "/holdings",
+    "/trades",
+    "/valuations"
+   ]
+  },
+  {
+   "titel": "Transaktioner",
+   "ikon": "credit-card",
+   "sti": "/transactions",
+   "match": [
+    "/transactions",
+    "/transfers",
+    "/imports",
+    "/rules"
+   ]
+  },
+  {
+   "titel": "Rapporter",
+   "ikon": "chart-bar",
+   "sti": "/reports"
+  },
+  {
+   "titel": "Plan",
+   "ikon": "compass",
+   "sti": "/plan",
+   "match": [
+    "/plan",
+    "/budgets",
+    "/goals"
+   ]
+  },
+  {
+   "titel": "Forbrug",
+   "ikon": "wallet",
+   "sti": "/forbrug/",
+   "praecis": true
+  },
+  {
+   "titel": "Scenarier",
+   "ikon": "chart-spline",
+   "sti": "/forbrug/scenarier/"
+  },
+  {
+   "titel": "SU-vagt",
+   "ikon": "shield-check",
+   "sti": "/forbrug/su/"
+  },
+  {
+   "titel": "Sure-indstillinger",
+   "ikon": "settings",
+   "sti": "/settings/profile",
+   "match": [
+    "/settings",
+    "/users",
+    "/family"
+   ]
+  }
+ ]
+}

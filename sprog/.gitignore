@@ -1,0 +1,3 @@
+# Dine svar, kortene og ugens tekster: data, ikke kode. Backup: bin/backup-data.sh i Kompas
+/data/
+.DS_Store

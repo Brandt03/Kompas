@@ -1,0 +1,29 @@
+# Demodata genereres af demo/lav.py ved hver start
+demo/ud/
+
+# Lokale ting, der aldrig skal med
+.env
+*.db
+*.pem
+*.log
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+node_modules/
+.DS_Store
+
+# Sprogs kort, svar og tekster (data, ikke kode)
+sprog/data/
+
+# Skrives af bin/forbindelser.py hver halve time
+/public/forbindelser.json
+
+# Semestrets egne filer, hvis repoet bruges som semestermappe: noter, backup og det, serveren skriver
+studie/Scripts/fagnoter/backup/
+studie/Scripts/fagnoter/eksempler/
+studie/Scripts/genkald-log.jsonl
+studie/Scripts/laest.json
+studie/Scripts/deadlines-status.json
+studie/Scripts/canvas-log.txt
+studie/Scripts/canvas-tilstand.json

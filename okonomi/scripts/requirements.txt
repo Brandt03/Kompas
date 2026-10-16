@@ -1,0 +1,2 @@
+# Til yearly_excel.py og yearly_overview.py (Excel-regnskaberne fra bin/refresh-excel.sh)
+openpyxl>=3.1

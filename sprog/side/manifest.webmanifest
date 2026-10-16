@@ -1,0 +1,15 @@
+{
+ "name": "Sprog",
+ "short_name": "Sprog",
+ "description": "Dagens sprogkort og ugens tekst uden net. Svarene sendes til Mac'en, når den er vågen.",
+ "lang": "da",
+ "start_url": "/sprog/mobil.html",
+ "scope": "/sprog/",
+ "display": "standalone",
+ "background_color": "#0b0b0b",
+ "theme_color": "#0b0b0b",
+ "icons": [
+  { "src": "/sprog/ikon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+  { "src": "/sprog/ikon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+ ]
+}

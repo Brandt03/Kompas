@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sprog · Oversigt</title>
+<!-- Sprogprojektets side i Kompas (https://kompas.localhost/sprog/). Vises af ~/kompas/sprog/server.js og læser kun
+     (/sprog/api/pakke). Selve øvelsen er Dagens kort (mobil.html), som også virker på telefonen uden net. -->
+<link rel="stylesheet" href="/kompas/assets/tokens.css">
+<link rel="stylesheet" href="/kompas/assets/page.css">
+<style>
+  .idag { padding: 22px 24px; display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
+  .idag .big { font-size: 34px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  .idag .what { font-size: 16px; font-weight: 500; line-height: 1.4; flex: 1; min-width: 200px; }
+  .idag .what small { display: block; color: var(--text-secondary); font-size: 13px; font-weight: 400; margin-top: 3px; }
+  .btn { display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: 14px; font-weight: 500; padding: 9px 14px; border-radius: 10px; background: var(--nav-indicator); color: var(--container); text-decoration: none; }
+  .btn.ghost { background: var(--container); color: var(--text-primary); box-shadow: var(--shadow-border-xs); }
+  .tekst { font-size: 15px; line-height: 1.6; }
+  .svar { white-space: pre-wrap; font-size: 14px; line-height: 1.55; color: var(--text-secondary); background: var(--surface-inset); border-radius: 10px; padding: 12px 14px; }
+  .lbl { font-size: 12px; font-weight: 600; color: var(--text-secondary); margin: 14px 0 6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="page">
+    <div>
+      <h1>Sprog</h1>
+      <p class="sub" id="sub"></p>
+    </div>
+  </header>
+  <div class="stack" id="root"><div class="card empty">Henter …</div></div>
+</div>
+
+<script src="/kompas/assets/icons.js"></script>
+<script src="/kompas/assets/liv.js"></script>
+<script src="/kompas/assets/md.js"></script>
+<script>
+const ROLLE = { aktiv: "aktivt sprog", vedligehold: "holdes ved lige", pause: "på pause", studie: "studiesprog" };
+const root = document.getElementById("root");
+
+async function hent() {
+  let P;
+  try {
+    const r = await fetch("/sprog/api/pakke", { cache: "no-store" });
+    P = await r.json();
+    if (!r.ok) throw new Error(P.fejl || `svarede ${r.status}`);
+  } catch (e) {
+    root.innerHTML = `<div class="card empty">Sprog-serveren svarer ikke (${esc(e.message)}).<br><br>Genstart den: <code>launchctl kickstart -k gui/$(id -u)/local.kompas.sprog</code></div>`;
+    return;
+  }
+  const stat = P.statistik.sprog, orden = Object.keys(stat), aktivt = P.sprog[P.aktivt];
+  document.getElementById("sub").textContent = `${aktivt.navn} er det aktive sprog · rutinen Kompas · Sprog skriver nye kort og ugens tekst søndag aften`;
+  const n = P.kort.length, test = P.kort.filter(k => k.type === "test").length, t = P.tekster[0];
+  const intet = !Object.values(stat).some(x => x.i_alt || x.test_i_alt);
+  root.innerHTML = `
+    <section class="card idag">
+      <div class="big">${n}</div>
+      <div class="what">${n ? `kort i dag · ca. ${P.statistik.minutter} min` : intet ? "Ingen kort endnu" : "Ingen kort tilbage i dag"}
+        <small>${P.statistik.eksamensperiode ? `Eksamensperiode (${esc(P.statistik.eksamensperiode.fag)} ${esc(dayMonth(parseDate(P.statistik.eksamensperiode.dato)).replace(/\.$/, ""))}): ingen nye sprogkort, kun gentagelse. ` : ""}${intet ? "Rutinen Kompas · Sprog skriver de første søndag aften: en kort niveautest i spansk og tysk." : test ? `Heraf ${test} i niveautesten, som rutinen sætter dit niveau ud fra.` : `${P.statistik.klaret_i_dag} klaret i dag.`}${!n && P.statistik.naeste ? ` Næste kort kommer ${esc(dayMonth(new Date(P.statistik.naeste)).replace(/\.$/, ""))}.` : ""}</small></div>
+      <a class="btn" href="/sprog/mobil.html">${icon("check", 15)}Dagens kort</a>
+    </section>
+    <div class="tiles">${orden.map(id => { const s = P.sprog[id], x = stat[id]; return `
+      <div class="card tile"><div class="area">${esc(ROLLE[s.rolle] || s.rolle)}</div><div class="label">${esc(s.navn)}${s.niveau ? ` · ${esc(s.niveau)}` : ""}</div>
+        <div class="value">${x.laert}<small>af ${x.i_alt} lært</small></div>
+        <div class="foot">${s.niveau ? "" : x.test_tilbage ? `<span class="badge">niveautest i gang</span>` : s.rolle === "studie" ? "" : `<span class="badge">niveau ikke sat</span>`}${x.forfaldne ? `<span>${x.forfaldne} forfaldne</span>` : ""}${x.nye_venter ? `<span>${x.nye_venter} ${x.nye_venter === 1 ? "nyt venter" : "nye venter"}</span>` : ""}</div></div>`; }).join("")}</div>
+    ${t ? `<section class="card panel">
+      <div class="panel-head"><h2>Ugens tekst · uge ${+t.uge.slice(-2)}</h2><span class="meta">${esc(P.sprog[t.sprog]?.navn || t.sprog)}${t.niveau ? ` · ${esc(t.niveau)}` : ""}</span></div>
+      <h3 style="margin:0 0 8px;font-size:17px">${esc(t.titel)}</h3>
+      <div class="tekst md">${md(t.tekst)}</div>
+      <div class="lbl">Dit svar</div>
+      ${t.svar ? `<div class="svar">${esc(t.svar.tekst)}</div>` : `<p class="meta" style="margin:0">Ikke svaret endnu. <a href="/sprog/mobil.html#tekst">Svar under Ugens tekst</a>.</p>`}
+      ${t.feedback ? `<div class="lbl">Feedback fra rutinen</div><div class="md">${md(t.feedback.tekst)}</div>` : t.svar ? `<p class="meta">Rutinen giver feedback søndag aften.</p>` : ""}
+    </section>` : `<section class="card empty">Ugens tekst kommer, når dit niveau i ${esc(aktivt.navn.toLowerCase())} er sat ud fra niveautesten.</section>`}
+    <details class="card panel"><summary>Sådan virker det</summary>
+      <ul class="list">
+        <li><b>Dagens kort</b> (5-8 min): ét sprog ad gangen, ${esc(aktivt.navn.toLowerCase())} først. Se forsiden, sig eller skriv svaret, vis svaret, marker. Det virker på telefonen uden net (På farten-mønstret), og svarene sendes, når Mac'en er vågen.</li>
+        <li><b>Ugens tekst</b> (10-15 min): en kort tekst på ${esc(aktivt.navn.toLowerCase())}, som du svarer på i et par sætninger. Rutinen retter svaret søndag og laver kort af fejlene.</li>
+        <li><b>Dansk og engelsk</b>: kort af dine egne fejl og klodsede vendinger i det, du skriver i Studie (I egne ord og begreber), og akademisk engelsk.</li>
+        <li><b>Lært</b>: kort, du med 90 % sandsynlighed stadig kan om tre uger. Repetitionen er den samme som i Studie (FSRS).</li>
+        <li><b>Regler</b>: én ny regel om ugen på spansk og én på dansk, forklaret kort med eksempler og dine typiske fejl. Den øves med udfyld-kort i Dagens kort, og du kan øve den ekstra under <a href="/sprog/regler.html">Regler</a>.</li>
+        <li><b>Eksamensperiode</b>: fra 14 dage før en eksamen i Studie til og med eksamensdagen kommer der ingen nye sprogkort og ingen ny tekst, kun gentagelse. Studiet får tiden.</li>
+      </ul></details>`;
+}
+hent();
+</script>
+</body>
+</html>

@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0b0b">
+<title>Sprog</title>
+<!-- Sprog på telefonen (https://kompas.localhost/sprog/mobil.html, og gennem Tailscale). Vises af ~/kompas/sprog/server.js.
+     Henter en pakke (/sprog/api/pakke), mens Mac'en kan nås, og virker derefter uden net: svarene lægges i en kø på
+     telefonen og sendes med /sprog/api/sync, næste gang Mac'en er vågen. Samme mønster som På farten i Studie.
+     Svaret vises først efter dit forsøg, og siden udfylder aldrig noget selv. Regler viser sprogreglerne fra pakken;
+     "Øv reglen" (#oev/<regel>) tager reglens kort som en ekstra runde, og svarene gemmes som i Dagens kort. -->
+<link rel="manifest" href="/sprog/manifest.webmanifest">
+<link rel="icon" href="/sprog/ikon-192.png">
+<link rel="apple-touch-icon" href="/sprog/ikon-192.png">
+<link rel="stylesheet" href="/kompas/assets/tokens.css">
+<link rel="stylesheet" href="/kompas/assets/page.css">
+<style>
+  body { background: var(--surface); }
+  .wrap { max-width: 640px; padding: 14px 16px calc(96px + env(safe-area-inset-bottom)); }
+  .top { display: flex; align-items: center; gap: 10px; margin: 2px 0 14px; }
+  .top h1 { font-size: 20px; flex: 1; }
+  .status { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-secondary); margin: -8px 0 14px; flex-wrap: wrap; }
+  .status .dot { background: var(--text-subdued); } .status .dot.on { background: var(--success); }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; font: inherit; font-size: 15px; font-weight: 500; line-height: 1.2; min-height: 46px; padding: 10px 14px; border-radius: 10px; border: 0; cursor: pointer; background: var(--nav-indicator); color: var(--container); text-decoration: none; -webkit-tap-highlight-color: transparent; }
+  .btn:disabled { opacity: .45; cursor: default; }
+  .btn.ghost { background: var(--container); color: var(--text-primary); box-shadow: var(--shadow-border-xs); }
+  .btn.quiet { background: none; color: var(--text-secondary); min-height: 40px; padding: 8px 10px; font-size: 14px; }
+  .btn.lille { min-height: 40px; font-size: 14px; padding: 8px 12px; }
+  .btn.m-sad { background: var(--success-tint); color: var(--success); } .btn.m-halvt { background: var(--warning-tint); color: var(--warning); } .btn.m-blankt { background: var(--destructive-tint); color: var(--destructive); }
+  .grid { display: grid; gap: 8px; grid-template-columns: 1fr 1fr; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .spacer { flex: 1; }
+  .lbl-sm { font-size: 12.5px; color: var(--text-secondary); margin-bottom: -2px; }
+  textarea { width: 100%; font: inherit; font-size: 16px; line-height: 1.5; color: var(--text-primary); background: var(--container-inset); border: 0; box-shadow: inset 0 0 0 1px var(--divider); border-radius: 10px; padding: 11px 13px; min-height: 76px; resize: vertical; }
+  textarea:focus { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+  .q { padding: 18px 16px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .kicker { color: var(--text-secondary); font-size: 12.5px; display: flex; gap: 6px 8px; flex-wrap: wrap; align-items: center; }
+  .opgave { color: var(--text-secondary); font-size: 14px; }
+  .forside { font-size: 21px; line-height: 1.4; font-weight: 500; letter-spacing: -0.01em; }
+  .facit { border-radius: 10px; padding: 14px 16px; background: var(--success-tint); display: grid; gap: 8px; }
+  .facit .lbl { font-size: 12px; font-weight: 600; color: var(--success); }
+  .facit .svar { font-size: 19px; line-height: 1.4; font-weight: 500; color: var(--text-primary); }
+  .facit .note { font-size: 14px; line-height: 1.5; color: var(--text-secondary); }
+  .facit .row .btn { min-height: 36px; padding: 6px 10px; font-size: 13.5px; }
+  .mk { display: inline-grid; place-items: center; min-width: 26px; height: 22px; padding: 0 7px; border-radius: 6px; font-size: 12px; font-weight: 600; background: var(--surface-inset); color: var(--text-subdued); }
+  .meter { height: 6px; border-radius: 3px; background: var(--surface-inset); overflow: hidden; } .meter i { display: block; height: 100%; background: var(--mark); }
+  .hint { color: var(--text-subdued); font-size: 13px; line-height: 1.5; margin: 0; }
+  .tekst { font-size: 16.5px; line-height: 1.65; }
+  .tekst p { margin: 0 0 10px; } .tekst p:last-child { margin: 0; }
+  .ordliste { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 14px; font-size: 14px; }
+  .ordliste b { font-weight: 500; }
+  .ordliste span { color: var(--text-secondary); }
+  ol.spm { margin: 0; padding-left: 20px; display: grid; gap: 6px; font-size: 15px; line-height: 1.5; }
+  .liste { display: grid; gap: 12px; }
+  .li { display: grid; gap: 6px; padding-top: 12px; border-top: 1px solid var(--divider); }
+  .li:first-child { border-top: 0; padding-top: 0; }
+  .li .d { font-size: 14px; font-weight: 500; }
+  .res { font-size: 13px; line-height: 1.45; color: var(--destructive); }
+  .sprog { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; padding: 14px 16px; border-top: 1px solid var(--divider); }
+  .sprog:first-child { border-top: 0; }
+  .sprog .n { font-weight: 500; } .sprog .r { color: var(--text-secondary); font-size: 13px; }
+  .sprog .tal { text-align: right; font-variant-numeric: tabular-nums; } .sprog .tal b { font-size: 18px; font-weight: 600; }
+  nav.bund { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; background: var(--container); box-shadow: 0 -1px 0 var(--divider); padding: 6px 8px calc(6px + env(safe-area-inset-bottom)); display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px; }
+  nav.bund button { border: 0; background: none; font: inherit; font-size: 12px; color: var(--text-secondary); display: grid; justify-items: center; gap: 3px; padding: 7px 2px; border-radius: 10px; cursor: pointer; position: relative; -webkit-tap-highlight-color: transparent; }
+  nav.bund button[aria-pressed="true"] { color: var(--text-primary); background: var(--surface-inset); font-weight: 500; }
+  nav.bund .n { position: absolute; top: 3px; left: calc(50% + 8px); font-size: 10.5px; font-weight: 600; min-width: 17px; height: 17px; line-height: 17px; border-radius: 9px; background: var(--surface-inset); color: var(--text-secondary); padding: 0 4px; }
+  nav.bund button[aria-pressed="true"] .n { background: var(--container); }
+  #toast { position: fixed; left: 50%; bottom: calc(84px + env(safe-area-inset-bottom)); transform: translate(-50%, 20px); opacity: 0; transition: .15s; z-index: 50; background: var(--nav-indicator); color: var(--container); border-radius: 10px; padding: 10px 14px; font-size: 14px; pointer-events: none; width: max-content; max-width: calc(100vw - 32px); }
+  #toast.vis { opacity: 1; transform: translate(-50%, 0); }
+  @media (min-width: 700px) { .wrap { padding-top: 28px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <h1 id="titel">Dagens kort</h1>
+    <button type="button" class="btn ghost lille" id="synk"></button>
+  </div>
+  <div class="status" id="status"></div>
+  <div class="stack" id="root"><div class="card empty">Åbner …</div></div>
+</div>
+<nav class="bund" id="faner" aria-label="Vælg">
+  <button type="button" data-fane="idag">ICON:check<span>Dagens kort</span></button>
+  <button type="button" data-fane="tekst">ICON:file-text<span>Ugens tekst</span></button>
+  <button type="button" data-fane="regler">ICON:book-open<span>Regler</span></button>
+  <button type="button" data-fane="overblik">ICON:languages<span>Overblik</span></button>
+</nav>
+<div id="toast" role="status"></div>
+
+<script src="/kompas/assets/icons.js"></script>
+<script src="/kompas/assets/liv.js"></script>
+<script src="/kompas/assets/md.js"></script>
+<script src="/sprog/regel.js"></script>
+<script>
+const API = "/sprog/api";
+const FANENAVN = { idag: "Dagens kort", tekst: "Ugens tekst", regler: "Regler", overblik: "Overblik" };
+const TYPENAVN = { frase: "Frase", ret: "Ret", ord: "Ugens ord", udfyld: "Udfyld", test: "Niveautest" };
+const ROLLE = { aktiv: "aktivt sprog", vedligehold: "holdes ved lige", pause: "på pause", studie: "studiesprog" };
+// Eksamensperiode i Studie (fra 14 dage før en eksamen): ingen nye sprogkort, kun gentagelse
+const eksTekst = e => e ? `Eksamensperiode (${e.fag} ${dayMonth(parseDate(e.dato)).replace(/\.$/, "")}): ingen nye sprogkort, kun gentagelse.` : "";
+// Karakter efter et forsøg, som i Studie (FSRS): 4 let, 3 sad, 2 halvt, 1 blankt
+const KAR = [[4, "sad", "✓ Let"], [3, "sad", "✓ Sad"], [2, "halvt", "~ Halvt"], [1, "blankt", "✗ Blankt"]];
+
+// ── lager på telefonen ──────────────────────────────────────────────
+// pakke: det, Mac'en sendte sidst. koe: svar, der ikke er sendt endnu (bliver der, til Mac'en har gemt dem).
+// gjort: kort, du har svaret på siden pakken.
+const lager = {
+  hent(k, std) { try { const v = localStorage.getItem("sprog:" + k); return v == null ? std : JSON.parse(v); } catch (e) { return std; } },
+  gem(k, v) { try { localStorage.setItem("sprog:" + k, JSON.stringify(v)); } catch (e) { toast("Telefonen kunne ikke gemme. Er lageret fuldt?"); } },
+};
+let P = lager.hent("pakke", null), koe = lager.hent("koe", []), gjort = lager.hent("gjort", {});
+let forbundet = false, synker = false, igen = false, aaben = false;
+const gemAlt = () => { lager.gem("koe", koe); lager.gem("gjort", gjort); };
+const kladde = {
+  hent: k => { try { return localStorage.getItem("sprog:kladde:" + k) || ""; } catch (e) { return ""; } },
+  gem: (k, v) => { try { v ? localStorage.setItem("sprog:kladde:" + k, v) : localStorage.removeItem("sprog:kladde:" + k); } catch (e) {} },
+};
+const nyId = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`);
+// Adressen: #idag, #tekst, #regler, #overblik, #regler/<regel> (reglen foldet ud) eller #oev/<regel> (øv reglen)
+let fane = "idag", øv = null, rÅben = null;
+function læsAdresse() {
+  const [f, id] = location.hash.slice(1).split("/").map(decodeURIComponent);
+  if (f === "oev" && id) { fane = "idag"; øv = id; }
+  else if (f in FANENAVN) { fane = f; øv = null; if (f === "regler" && id) rÅben = id; }
+}
+læsAdresse();
+
+let tt; function toast(t) { const el = document.getElementById("toast"); el.textContent = t; el.classList.add("vis"); clearTimeout(tt); tt = setTimeout(() => el.classList.remove("vis"), 3800); }
+const root = () => document.getElementById("root");
+const tidSiden = iso => {
+  if (!iso) return "aldrig";
+  const d = new Date(iso), min = Math.round((Date.now() - d) / 60000);
+  if (min < 1) return "lige nu"; if (min < 60) return `for ${min} min siden`;
+  const kl = `${String(d.getHours()).padStart(2, "0")}.${String(d.getMinutes()).padStart(2, "0")}`;
+  return new Date().toDateString() === d.toDateString() ? `i dag kl. ${kl}` : `${weekday(d)} ${dayMonth(d)} kl. ${kl}`;
+};
+
+// Kald til Mac'en må ikke hænge: sover den, svarer Tailscale-adressen ikke
+async function kald(sti, krop) {
+  const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 12000);
+  try {
+    const r = await fetch(API + sti, krop ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(krop), signal: ctl.signal } : { cache: "no-store", signal: ctl.signal });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.fejl || `svarede ${r.status}`);
+    return d;
+  } finally { clearTimeout(t); }
+}
+
+// ── synkronisering ──────────────────────────────────────────────────
+// Først sendes køen, så hentes en ny pakke. stille: automatisk (ved åbning, når nettet kommer tilbage).
+// Står et kort åbent med svaret, venter pakken, så kortet ikke skifter under dig.
+const skriver = () => /^(TEXTAREA|INPUT)$/.test(document.activeElement?.tagName || "");
+async function synk(stille) {
+  if (synker) { igen = true; return; }
+  synker = true; igen = false; tegnTop();
+  try {
+    if (koe.length) {
+      const { resultater: rs } = await kald("/sync", { poster: koe.map(({ id, type, tid, data }) => ({ id, type, tid, data })) });
+      let sendt = 0, fejl = 0;
+      for (const r of rs) {
+        const p = koe.find(x => x.id === r.id); if (!p) continue;
+        if (r.ok) { koe = koe.filter(x => x !== p); sendt++; } else { p.fejl = r.fejl; fejl++; }
+      }
+      gemAlt();
+      if (!stille || sendt) toast(`${sendt} svar gemt på Mac'en${fejl ? ` · ${fejl} kunne ikke gemmes` : ""}`);
+    }
+    if (!(stille && aaben)) {
+      P = await kald("/pakke"); lager.gem("pakke", P);
+      // Det, der stadig ligger i køen (fordi det fejlede), er stadig gjort; resten står nu i pakken
+      gjort = Object.fromEntries(koe.map(p => [p.noegle, true])); gemAlt();
+      if (!stille && !koe.length) toast("Ny pakke hentet");
+    }
+    forbundet = true;
+    if (stille && skriver()) tegnTop(); else vis();
+  } catch (e) {
+    forbundet = false;
+    if (!stille) toast(e.name === "AbortError" || e instanceof TypeError ? "Mac'en svarer ikke. Den sover nok; svarene venter på telefonen." : `Fejl: ${e.message}`);
+  } finally {
+    synker = false; tegnTop();
+    if (igen && forbundet && koe.some(p => !p.fejl)) synk(true);
+  }
+}
+function iKoe(type, noegle, data, vis) {
+  koe = koe.filter(p => p.noegle !== noegle || p.type !== type);   // et nyt svar på det samme erstatter det, der ikke er sendt
+  koe.push({ id: nyId(), type, noegle, tid: new Date().toISOString(), data, vis });
+  gjort[noegle] = true; gemAlt(); tegnTop();
+  if (navigator.onLine) synk(true);
+}
+
+function tegnTop() {
+  document.getElementById("titel").textContent = øv && fane === "idag" ? "Øv reglen" : FANENAVN[fane];
+  const b = document.getElementById("synk");
+  b.disabled = synker; b.innerHTML = `${icon("rotate-cw", 15)}${synker ? "Synker …" : koe.length ? `Send ${koe.length}` : "Hent"}`;
+  const gammel = P && new Date(P.genereret).toDateString() !== new Date().toDateString();
+  document.getElementById("status").innerHTML = !P ? `<span class="dot"></span>Ingen pakke endnu`
+    : `<span class="dot${forbundet ? " on" : ""}"></span><span>${forbundet ? "Mac'en er vågen" : "Uden forbindelse"} · pakke ${esc(tidSiden(P.genereret))}${gammel ? " (gammel)" : ""}</span>${koe.length ? `<span>· <b style="color:var(--text-primary)">${koe.length} svar venter</b> på at blive sendt</span>` : ""}`;
+  const n = { idag: kortTilbage().length, tekst: tekstVenter() ? 1 : 0 };   // Regler og Overblik har intet tal
+  document.querySelectorAll("#faner button").forEach(x => {
+    x.setAttribute("aria-pressed", String(x.dataset.fane === fane));
+    let el = x.querySelector(".n"); if (!el) { el = document.createElement("span"); el.className = "n"; x.append(el); }
+    el.textContent = P && n[x.dataset.fane] ? n[x.dataset.fane] : ""; el.hidden = !(P && n[x.dataset.fane]);
+  });
+}
+
+// ── oplæsning ───────────────────────────────────────────────────────
+// Telefonens egen stemme (virker uden net, når sproget er hentet på telefonen). Findes ingen stemme til sproget,
+// læser telefonen med sin standardstemme; så hent sproget under telefonens indstillinger for tekst til tale.
+const kanLæse = "speechSynthesis" in window;
+function læsOp(tekst, sprog) {
+  if (!kanLæse) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(tekst), kort = sprog.split("-")[0];
+  const stemmer = speechSynthesis.getVoices();
+  u.voice = stemmer.find(v => v.lang.replace("_", "-") === sprog) || stemmer.find(v => v.lang.startsWith(kort)) || null;
+  u.lang = sprog; u.rate = 0.9;
+  speechSynthesis.speak(u);
+}
+if (kanLæse) speechSynthesis.getVoices();   // nogle telefoner henter stemmerne først ved første kald
+
+// ── Dagens kort ─────────────────────────────────────────────────────
+// Se forsiden, skriv eller sig svaret, vis svaret, marker. Ét sprog ad gangen, det aktive først (Mac'en sorterer).
+let senere = [];   // "Tag den senere": kort, der er skubbet bagud i denne omgang
+const sorter = ks => [...ks.filter(k => !senere.includes(k.id)), ...senere.map(id => ks.find(k => k.id === id)).filter(Boolean)];
+const kortTilbage = () => P ? sorter(P.kort.filter(k => !gjort[k.id])) : [];
+const st = { cur: null, vist: false };
+// Øv reglen: reglens kort i en ekstra runde (også dem, du har haft i dag). øvet: dem, du har taget i denne runde.
+let øvet = new Set();
+const regelI = id => (P?.regler || []).find(r => r.id === id) || null;
+const øvTilbage = () => P ? sorter((P.regelkort || []).filter(k => k.regel === øv && !øvet.has(k.id))) : [];
+function slutØv() { øv = null; øvet = new Set(); st.cur = null; history.replaceState(null, "", "#idag"); vis(); window.scrollTo({ top: 0 }); }
+
+function renderKort() {
+  const ks = øv ? øvTilbage() : kortTilbage(), k = ks[0];
+  if (!k || st.cur !== k.id) { st.cur = k?.id || null; st.vist = false; }
+  aaben = st.vist;
+  const iDag = koe.filter(p => p.type === "svar" && new Date(p.tid).toDateString() === new Date().toDateString()).length;
+  const klaret = (new Date(P.genereret).toDateString() === new Date().toDateString() ? P.statistik?.klaret_i_dag || 0 : 0) + iDag, ialt = klaret + ks.length;
+  const r = øv ? regelI(øv) : null;
+  const top = øv ? `<div class="row"><span class="meta">${r ? `<b style="color:var(--text-primary)">${esc(r.titel)}</b> · ` : ""}${ks.length ? `${ks.length} kort tilbage` : "færdig"}</span><span class="spacer"></span><button type="button" class="btn quiet" data-oev-slut>${icon("arrow-left", 15)}Dagens kort</button></div>`
+    : `<div class="row"><span class="meta">${ks.length ? `<b style="color:var(--text-primary)">${ks.length} kort tilbage</b> · ca. ${Math.max(1, Math.round(ks.length * 0.5))} min` : "Færdig for i dag"} · ${klaret} klaret</span></div>
+    <div class="meter" style="margin-top:-8px"><i style="width:${ialt ? Math.round(100 * klaret / ialt) : 0}%"></i></div>
+    ${P.statistik?.eksamensperiode ? `<p class="hint">${esc(eksTekst(P.statistik.eksamensperiode))}</p>` : ""}`;
+  if (!k && øv) {
+    root().innerHTML = top + `<div class="card empty">${r ? `Du har taget alle ${(P.regelkort || []).filter(x => x.regel === øv).length} kort til reglen.` : "Reglen er ikke i pakken. Tryk Hent, mens Mac'en er vågen."}<br><br><button type="button" class="btn ghost" data-se-regel="${esc(øv)}">${icon("book-open", 15)}Se reglen igen</button></div>`;
+    return;
+  }
+  if (!k) {
+    const intet = !P.kort.length && !Object.values(P.statistik?.sprog || {}).some(s => s.i_alt || s.test_i_alt);
+    root().innerHTML = top + `<div class="card empty">${intet
+      ? "Der er ingen kort endnu. Rutinen Kompas · Sprog skriver dem søndag aften, først en kort niveautest."
+      : `Du er igennem dagens kort.${P.statistik?.naeste ? ` Næste kort kommer ${dayMonth(new Date(P.statistik.naeste)).replace(/\.$/, "")}.` : ""}${tekstVenter() ? "<br><br>Ugens tekst venter på dit svar." : ""}`}</div>`;
+    return;
+  }
+  const kk = `kort:${k.id}`;
+  const kicker = [k.sprognavn, k.type === "test" && k.niveau ? `niveau ${k.niveau}` : k.situation].filter(Boolean).map(esc).join(" · ");
+  root().innerHTML = top + `<section class="card q">
+    <div class="kicker"><span class="mk">${TYPENAVN[k.type] || esc(k.type)}</span><span>${kicker}</span>${k.ny && k.type !== "test" ? `<span class="mk">ny</span>` : ""}</div>
+    <div class="opgave">${esc(k.opgave)}</div>
+    <div class="forside">${esc(k.forside)}</div>
+    <textarea id="k-svar" lang="${esc(k.stemme)}" autocorrect="off" spellcheck="false" placeholder="Skriv det, eller sig det højt …">${esc(kladde.hent(kk))}</textarea>
+    ${st.vist ? `<div class="facit">
+        <div class="lbl">${k.type === "ret" ? "Rettet" : k.type === "ord" ? "Ordet" : "Svar"}</div>
+        <div class="svar" lang="${esc(k.stemme)}">${esc(k.bagside)}</div>
+        ${k.note ? `<div class="note">${esc(k.note)}</div>` : ""}
+        ${(kanLæse && k.sprog !== "da") || k.regel ? `<div class="row">${kanLæse && k.sprog !== "da" ? `<button type="button" class="btn ghost" data-laes>${icon("volume-2", 15)}Lyt</button>` : ""}${k.regel && regelI(k.regel) ? `<button type="button" class="btn ghost" data-se-regel="${esc(k.regel)}">${icon("book-open", 15)}Se reglen</button>` : ""}</div>` : ""}
+      </div>
+      <div class="lbl-sm">Hvordan gik det?${k.type === "test" ? " <span style=\"color:var(--text-subdued)\">· testen kommer ikke igen; rutinen ser dit svar</span>" : ""}</div>
+      <div class="grid">${KAR.map(([g, m, t]) => `<button type="button" class="btn m-${m}" data-kar="${g}">${t}</button>`).join("")}</div>`
+    : `<div class="grid" style="grid-template-columns:1fr"><button type="button" class="btn" data-vis>Vis svar</button></div>
+      <div class="row"><span class="spacer"></span><button type="button" class="btn quiet" data-senere>Tag den senere</button></div>`}
+  </section>`;
+  const ta = document.getElementById("k-svar");
+  ta.oninput = () => kladde.gem(kk, ta.value);
+}
+function kortMarker(karakter) {
+  const k = (øv ? øvTilbage() : kortTilbage())[0]; if (!k) return;
+  if (øv) øvet.add(k.id);
+  const kk = `kort:${k.id}`, svar = document.getElementById("k-svar")?.value.trim() || "";
+  iKoe("svar", k.id, { id: k.id, karakter: +karakter, svar }, { titel: `${k.sprognavn}: ${k.forside}` });
+  kladde.gem(kk, ""); senere = senere.filter(id => id !== k.id); st.cur = null; aaben = false;
+  vis(); window.scrollTo({ top: 0 });
+}
+
+// ── Ugens tekst ─────────────────────────────────────────────────────
+// Læs teksten, svar på spørgsmålene i et par sætninger. Rutinen retter svaret søndag og laver kort af fejlene.
+const tNoegle = uge => `tekst:${uge}`;
+const svarVenter = uge => koe.find(p => p.type === "tekst-svar" && p.noegle === tNoegle(uge));
+// Den nyeste tekst uden svar (heller ikke i køen)
+const tekstVenter = () => { const t = P?.tekster?.[0]; return t && !t.svar && !svarVenter(t.uge) ? t : null; };
+let tUge = null;
+function renderTekst() {
+  const T = P.tekster || [];
+  if (!T.length) { root().innerHTML = `<div class="card empty">Der er ingen tekst endnu. Rutinen skriver den første, når dit niveau er sat ud fra niveautesten.</div>`; return; }
+  if (!T.find(t => t.uge === tUge)) tUge = T[0].uge;
+  const t = T.find(x => x.uge === tUge), sp = P.sprog?.[t.sprog] || {}, kk = tNoegle(t.uge), venter = svarVenter(t.uge);
+  const tekst = kladde.hent(kk) || venter?.data.tekst || t.svar?.tekst || "";
+  const status = venter ? (venter.fejl ? "kunne ikke gemmes" : "venter på at blive sendt") : t.svar ? `sendt ${tidSiden(t.svar.tid)}` : "";
+  root().innerHTML = `
+    ${T.length > 1 ? `<div class="seg" role="group" aria-label="Uge">${T.map(x => `<button type="button" data-tuge="${esc(x.uge)}" aria-pressed="${x.uge === tUge}">Uge ${+x.uge.slice(-2)}</button>`).join("")}</div>` : ""}
+    <section class="card q">
+      <div class="kicker"><span class="mk">${esc(sp.navn || t.sprog)}</span>${t.niveau ? `<span>niveau ${esc(t.niveau)}</span>` : ""}<span>uge ${+t.uge.slice(-2)}</span></div>
+      <h2 style="font-size:19px">${esc(t.titel)}</h2>
+      <div class="tekst md" lang="${esc(sp.stemme || "")}">${md(t.tekst)}</div>
+      ${kanLæse ? `<div class="row"><button type="button" class="btn ghost lille" data-laes-tekst>${icon("volume-2", 15)}Læs teksten op</button></div>` : ""}
+      ${t.ord?.length ? `<details><summary>Ord i teksten (${t.ord.length})</summary><div class="ordliste" lang="${esc(sp.stemme || "")}">${t.ord.map(o => `<b>${esc(o.ord)}</b><span lang="da">${esc(o.betydning)}</span>`).join("")}</div></details>` : ""}
+    </section>
+    <section class="card q">
+      <ol class="spm" lang="${esc(sp.stemme || "")}">${t.spoergsmaal.map(q => `<li>${esc(q)}</li>`).join("")}</ol>
+      <p class="hint">${esc(t.opgave)}</p>
+      <textarea id="t-svar" lang="${esc(sp.stemme || "")}" autocorrect="off" spellcheck="false" style="min-height:150px" placeholder="Dit svar …">${esc(tekst)}</textarea>
+      <div class="row"><button type="button" class="btn" id="gem-t">${icon("check", 15)}${t.svar || venter ? "Send igen" : "Send svaret"}</button><span class="spacer"></span>${status ? `<span class="meta">${esc(status)}</span>` : ""}</div>
+    </section>
+    ${t.feedback ? `<section class="card q"><div class="kicker"><span class="mk">Feedback</span><span>fra rutinen ${esc(tidSiden(t.feedback.skrevet))}</span></div><div class="md">${md(t.feedback.tekst)}</div></section>`
+      : t.svar ? `<p class="hint">Rutinen giver feedback på dit svar søndag aften.</p>` : ""}`;
+  const ta = document.getElementById("t-svar");
+  ta.oninput = () => kladde.gem(kk, ta.value);
+}
+function tGem() {
+  const t = (P.tekster || []).find(x => x.uge === tUge), tekst = document.getElementById("t-svar")?.value.trim();
+  if (!t) return; if (!tekst) return toast("Skriv et svar først");
+  iKoe("tekst-svar", tNoegle(t.uge), { uge: t.uge, tekst }, { titel: `Ugens tekst, uge ${+t.uge.slice(-2)}` });
+  kladde.gem(tNoegle(t.uge), ""); renderTekst(); toast(navigator.onLine ? "Sender …" : "Gemt på telefonen; sendes, når Mac'en er vågen");
+}
+
+// ── Regler ──────────────────────────────────────────────────────────
+// Reglerne fra pakken, ét sprog ad gangen. "Øv reglen" tager dens kort som en ekstra runde under Dagens kort.
+let rSprog = lager.hent("rsprog", null);
+function renderRegler() {
+  const R = P.regler || [], sprogene = Object.keys(P.sprog).filter(s => R.some(r => r.sprog === s));
+  if (!sprogene.length) { root().innerHTML = `<div class="card empty">Der er ingen regler endnu. Rutinen skriver den første på spansk og dansk søndag aften.</div>`; return; }
+  if (rÅben && regelI(rÅben)) rSprog = regelI(rÅben).sprog;
+  if (!sprogene.includes(rSprog)) rSprog = sprogene.includes(P.aktivt) ? P.aktivt : sprogene[0];
+  root().innerHTML = `${sprogene.length > 1 ? `<div class="seg" role="group" aria-label="Sprog">${sprogene.map(s => `<button type="button" data-rsprog="${esc(s)}" aria-pressed="${s === rSprog}">${esc(P.sprog[s].navn)}</button>`).join("")}</div>` : ""}
+    <div class="regler">${reglerFor(R, rSprog).map(r => {
+      const n = (P.regelkort || []).filter(k => k.regel === r.id).length;
+      return regelHTML(r, P.sprog[rSprog].stemme, { aaben: r.id === rÅben, fod: n ? `<button type="button" class="btn lille" data-oev="${esc(r.id)}">${icon("check", 15)}Øv reglen (${n} kort)</button>` : "" });
+    }).join("")}</div>`;
+  if (rÅben) document.getElementById(`regel-${rÅben}`)?.scrollIntoView({ block: "start" });
+}
+
+// ── Overblik ────────────────────────────────────────────────────────
+function renderOverblik() {
+  if (!P) { root().innerHTML = `<div class="card empty">Ingen pakke endnu. Tryk <b>Hent</b>, mens Mac'en er vågen.</div>`; return; }
+  const stat = P.statistik?.sprog || {};
+  root().innerHTML = `<div class="card">${Object.entries(P.sprog).sort(([a], [b]) => Object.keys(stat).indexOf(a) - Object.keys(stat).indexOf(b)).map(([id, s]) => {
+    const x = stat[id] || {};
+    return `<div class="sprog"><div><div class="n">${esc(s.navn)}</div><div class="r">${esc(ROLLE[s.rolle] || s.rolle)}${s.niveau ? ` · niveau ${esc(s.niveau)}` : x.test_tilbage ? " · niveautest i gang" : ""}</div></div>
+      <div class="tal"><b>${x.laert || 0}</b> <span class="meta">af ${x.i_alt || 0} lært</span><div class="meta">${x.forfaldne ? `${x.forfaldne} forfaldne` : ""}${x.forfaldne && x.nye_venter ? " · " : ""}${x.nye_venter ? `${x.nye_venter} ${x.nye_venter === 1 ? "nyt venter" : "nye venter"}` : ""}</div></div></div>`;
+  }).join("")}</div>
+  <p class="hint">Lært: kort, du med 90 % sandsynlighed stadig kan om tre uger. Det aktive sprog får tre nye kort om dagen, de andre ét, når der er nogle; et sprog på pause får ingen. ${esc(eksTekst(P.statistik?.eksamensperiode))}</p>`;
+}
+
+// Svar, Mac'en ikke kunne gemme (fx et kort, der er væk siden pakken)
+function fejlPanel(typer) {
+  const fs = koe.filter(p => p.fejl && typer.includes(p.type));
+  if (!fs.length) return "";
+  return `<section class="card panel"><div class="panel-head"><h2>Kunne ikke gemmes</h2></div><div class="liste">${fs.map(p => `
+    <div class="li"><div class="d">${esc(p.vis.titel)}</div><div class="res">${esc(p.fejl)}</div>
+      ${p.data.svar || p.data.tekst ? `<div style="font-size:14px;white-space:pre-wrap">${esc(p.data.svar || p.data.tekst)}</div>` : ""}
+      <div><button type="button" class="btn quiet" data-slet="${esc(p.id)}">Slet fra telefonen</button></div></div>`).join("")}</div></section>`;
+}
+
+// ── fælles ──────────────────────────────────────────────────────────
+function vis() {
+  tegnTop();
+  if (fane === "overblik") return renderOverblik();
+  if (!P) {
+    root().innerHTML = `<div class="card empty">Der er ingen pakke på telefonen endnu.<br><br>Tryk <b>Hent</b>, mens Mac'en er vågen (låget åbent og på net). Så kan du bagefter svare uden forbindelse, og svarene sendes, næste gang Mac'en kan nås.</div>`;
+    return;
+  }
+  if (fane === "regler") return renderRegler();
+  if (fane === "idag") renderKort(); else renderTekst();
+  root().insertAdjacentHTML("beforeend", fejlPanel(fane === "idag" ? ["svar"] : ["tekst-svar"]));
+}
+document.querySelectorAll("#faner button").forEach(b => b.innerHTML = b.innerHTML.replace(/ICON:([\w-]+)/, (_, n) => icon(n, 20)));
+document.getElementById("faner").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  fane = b.dataset.fane; øv = null; øvet = new Set(); rÅben = null; history.replaceState(null, "", "#" + fane); vis(); window.scrollTo({ top: 0 });
+});
+document.getElementById("synk").addEventListener("click", () => synk(false));
+root().addEventListener("click", e => {
+  const t = e.target.closest("button"); if (!t) return;
+  if (t.hasAttribute("data-vis")) { st.vist = true; renderKort(); }
+  else if (t.dataset.kar) kortMarker(t.dataset.kar);
+  else if (t.hasAttribute("data-laes")) { const k = (øv ? øvTilbage() : kortTilbage())[0]; if (k) læsOp(k.bagside, k.stemme); }
+  else if (t.hasAttribute("data-senere")) { const k = (øv ? øvTilbage() : kortTilbage())[0]; if (k) { senere = [...senere.filter(id => id !== k.id), k.id]; renderKort(); } }
+  else if (t.dataset.seRegel) { fane = "regler"; rÅben = t.dataset.seRegel; history.replaceState(null, "", `#regler/${encodeURIComponent(rÅben)}`); vis(); }
+  else if (t.dataset.oev) { fane = "idag"; øv = t.dataset.oev; øvet = new Set(); st.cur = null; history.replaceState(null, "", `#oev/${encodeURIComponent(øv)}`); vis(); window.scrollTo({ top: 0 }); }
+  else if (t.hasAttribute("data-oev-slut")) slutØv();
+  else if (t.dataset.rsprog) { rSprog = t.dataset.rsprog; lager.gem("rsprog", rSprog); rÅben = null; renderRegler(); }
+  else if (t.hasAttribute("data-laes-tekst")) { const x = P.tekster.find(y => y.uge === tUge); if (x) læsOp(x.tekst.replace(/[*_#>`]/g, ""), P.sprog?.[x.sprog]?.stemme || "es-ES"); }
+  else if (t.dataset.tuge) { tUge = t.dataset.tuge; renderTekst(); }
+  else if (t.id === "gem-t") tGem();
+  else if (t.dataset.slet) { const p = koe.find(x => x.id === t.dataset.slet); if (p) { koe = koe.filter(x => x !== p); delete gjort[p.noegle]; gemAlt(); vis(); } }
+});
+window.addEventListener("hashchange", () => { læsAdresse(); vis(); });
+// Nettet kommer tilbage, eller siden åbnes igen fra baggrunden: prøv at sende og hente
+window.addEventListener("online", () => synk(true));
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") synk(true); });
+// Service workeren bruges kun på telefonen (gennem Tailscale). På Mac'en skal siderne altid hentes friske.
+if ("serviceWorker" in navigator) {
+  const telefon = !/(^|\.)localhost$/.test(location.hostname);
+  if (!telefon) navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => { if (r.scope.endsWith("/sprog/")) r.unregister(); })).catch(() => {});
+  else navigator.serviceWorker.register("/sprog/sw.js", { scope: "/sprog/" }).catch(() => {});
+}
+vis();
+synk(true);
+</script>
+</body>
+</html>
