@@ -13,7 +13,9 @@ Kun koden er med her. Kortene, svarene og ugens tekster ligger i `data/`, som ik
   skriv svaret, vis svaret (og lyt til det med telefonens stemme), marker 1-4. Repetitionen er FSRS som i Studie.
   Virker på telefonen uden net: siden henter en pakke, mens Mac'en er vågen, og sender svarene bagefter.
 - **Ugens tekst** (10-15 min om ugen): en kort tekst på det aktive sprog, som brugeren svarer på i et par
-  sætninger. Rutinen retter svaret søndag og laver kort af fejlene.
+  sætninger. Rutinen retter svaret søndag og laver kort af fejlene. Feedbacken og den nye tekst kommer i samme
+  kørsel, så feedbacken på ugen før står øverst på Oversigt og fanen Ugens tekst, til du har svaret på den nye
+  (`ny_feedback` i pakken).
 - **Ét aktivt sprog ad gangen** med tre nye kort om dagen. Et fremmedsprog, der ikke er aktivt, holdes ved lige
   (ét nyt kort om dagen) eller står på pause (ingen nye; gentagelsen fortsætter).
 - **Eksamensperiode**: fra 14 dage før en eksamen i Studie til og med eksamensdagen kommer der ingen nye sprogkort og
@@ -57,7 +59,7 @@ fra Kompas' egen origin. JavaScript uden afhængigheder; Node 18 eller nyere.
 | Hvad | Hvordan | Log |
 |---|---|---|
 | Sprog-serveren | LaunchAgent `local.kompas.sprog` (startes og lukkes med Kompas-appen) | `~/.kompas/sprog-server.log` |
-| Telefonen | `tailscale serve` → Caddy `127.0.0.1:8768` → `/sprog/` (sat op med `bin/tailscale-mobil.sh`) | |
+| Telefonen | `tailscale serve` → Caddy `127.0.0.1:8768` → `/sprog/` (sat op med `bin/tailscale.sh`; bærbaren når `/sprog/` i hele Kompas på `:8443`) | |
 | Backup af `data/` | `bin/backup-data.sh` (dagligt + ved Luk Kompas), `sprog-<dato>.tar.gz` | |
 | Rutinen | Sprog (`sprog-ugen`) i Claude-appen, søndag aften | Rutiner i Claude-appen |
 

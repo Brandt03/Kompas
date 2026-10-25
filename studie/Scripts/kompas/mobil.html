@@ -10,7 +10,8 @@
      Mac'en kan nås, og virker derefter uden net: svarene lægges i en kø på telefonen og sendes med /studie/api/sync,
      næste gang Mac'en er vågen. Reglen fra CLAUDE.md gælder: facit vises først efter dit forsøg, og siden udfylder
      aldrig noget selv. Drills rettes først, når de er sendt, fordi det er JavaScript på Mac'en, der afgør dem.
-     I egne ord ligger under Overblik, er samme felt som under ugen på Fag-siden og sendes med samme kø. -->
+     I egne ord ligger under Overblik, er samme felt som under ugen på Fag-siden og sendes med samme kø.
+     Forelæsninger og øvelser åbnes fra Fag; denne og næste uges hentes til telefonen med pakken (varm, mobil-sw.js). -->
 <link rel="manifest" href="/studie/mobil.webmanifest">
 <link rel="icon" href="/studie/mobil-ikon-192.png">
 <link rel="apple-touch-icon" href="/studie/mobil-ikon-192.png">
@@ -189,11 +190,18 @@ async function synk(stille) {
   }
 }
 // Overbliks-siderne og deres data hentes med, mens Mac'en kan nås, så de også kan åbnes uden net bagefter
-// (service workeren gemmer dem). Billeder i fagnoterne kommer kun med, når de er vist.
+// (service workeren gemmer dem). Billeder i fagnoterne kommer kun med, når de er vist. Det samme gælder denne og
+// næste uges forelæsninger og øvelser fra Fag; de hentes kun første gang, og andre uger, når de er åbnet én gang.
 function varm() {
   if (!navigator.serviceWorker?.controller) return;
-  for (const p of ["/studie/", "/studie/fag.html", "/studie/deadlines.html", "/studie/studie.json", "/studie/fagnoter.json", "/studie/kalender.json", "/studie/api/laest", "/studie/api/genkald"])
+  for (const p of ["/studie/", "/studie/fag.html", "/studie/deadlines.html", "/studie/usb.html", "/studie/fagnoter.json", "/studie/kalender.json",
+    "/studie/api/laest", "/studie/api/genkald", "/studie/api/usb-vurdering"])
     fetch(p, { cache: "no-store" }).catch(() => {});
+  const uger = [isoUgeNu(), isoUgeNu(new Date(Date.now() + 7 * 864e5))];
+  fetch("/studie/studie.json", { cache: "no-store" }).then(r => r.json()).then(S => {
+    for (const f of S.fag || []) for (const x of [...(f.status?.pensum?.forelaesninger || []), ...(f.status?.pensum?.oevelser || [])])
+      if (uger.includes(x.uge)) fetch(`/studie/api/pensum/${encodeURIComponent(f.id)}/${encodeURIComponent(x.mappe)}/${encodeURIComponent(x.fil)}`).catch(() => {});
+  }).catch(() => {});
 }
 function iKoe(type, noegle, data, vis) {
   koe = koe.filter(p => p.noegle !== noegle || p.type !== type);  // et nyt svar på det samme erstatter det gamle, der ikke er sendt
@@ -232,9 +240,11 @@ function renderKort(f) {
   const iDag = koe.filter(p => p.type === "repetition" && new Date(p.tid).toDateString() === new Date().toDateString()).length;
   const klaret = (new Date(P.genereret).toDateString() === new Date().toDateString() ? P.statistik?.klaret_i_dag || 0 : 0) + iDag, ialt = klaret + ks.length;
   const maal = P.statistik?.dagsmaal, fortsat = f === "idag" && ks.length && maal && klaret >= maal;
+  // Tiden pr. kort kommer fra Studie-serveren; en gammel pakke uden den viser ingen tid
+  const minTxt = n => P.statistik?.min_pr_kort ? ` · ca. ${Math.max(1, Math.round(n * P.statistik.min_pr_kort))} min` : "";
   const top = f === "idag"
-    ? `<div class="row"><span class="meta">${fortsat ? `<b style="color:var(--success)">✓ Dagens ${maal} kort klaret</b> · fortsætter med ${ks.length} ekstra · ca. ${Math.max(1, Math.round(ks.length * 0.75))} min`
-      : ks.length ? `<b style="color:var(--text-primary)">${ks.length} kort tilbage</b> · ca. ${Math.max(1, Math.round(ks.length * 0.75))} min` : "Færdig for i dag"} · ${klaret} klaret</span></div>
+    ? `<div class="row"><span class="meta">${fortsat ? `<b style="color:var(--success)">✓ Dagens ${maal} kort klaret</b> · fortsætter med ${ks.length} ekstra${minTxt(ks.length)}`
+      : ks.length ? `<b style="color:var(--text-primary)">${ks.length} kort tilbage</b>${minTxt(ks.length)}` : "Færdig for i dag"} · ${klaret} klaret</span></div>
        <div class="meter" style="margin-top:-8px"><i style="width:${ialt ? Math.round(100 * klaret / ialt) : 0}%${fortsat ? ";background:var(--success)" : ""}"></i></div>`
     : `<p class="hint">Ekstra genkaldsspørgsmål ud over dagens kort: først nye fra uger, du har markeret som læst, så dem du havde forkert eller halvt.</p>`;
   if (!k) {
@@ -391,7 +401,7 @@ const eKladde = {   // null = ingen kladde, "" = du har tømt feltet
   hent: k => { try { return localStorage.getItem("farten:kladde:" + k); } catch (e) { return null; } },
   gem: (k, v) => { try { v == null ? localStorage.removeItem("farten:kladde:" + k) : localStorage.setItem("farten:kladde:" + k, v); } catch (e) {} },
 };
-const isoUgeNu = () => { const d = new Date(), t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate() + 3 - (d.getDay() + 6) % 7));
+const isoUgeNu = (d = new Date()) => { const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate() + 3 - (d.getDay() + 6) % 7));
   return Math.ceil(((t - Date.UTC(t.getUTCFullYear(), 0, 1)) / 864e5 + 1) / 7); };
 function renderEgne() {
   const E = P.egne_ord;
@@ -427,19 +437,36 @@ function eGem() {
 }
 
 // ── overblik ────────────────────────────────────────────────────────
-// I egne ord (her på telefonen) og studie-siderne fra Kompas, som de er. Siderne hentes med, når pakken hentes,
-// og kan åbnes uden net bagefter.
+// Alt andet, telefonen kan nå gennem Tailscale (Caddys blok på 127.0.0.1:8768), samlet her pr. område. Fanerne
+// forrest (Dagens kort, Genkald, Begreber, Drills) er telefonens egne; Studies Træning-side er deres computerudgave og
+// står derfor ikke her. Ugeoverblik, Fag, Frister og USB-noter hentes med pakken og kan åbnes uden net (varm, mobil-sw.js);
+// Sprogs telefonside har sin egen pakke; resten vises kun, mens Mac'en kan nås.
 const OVERBLIK = [
-  ["#egne", "pencil", "I egne ord", "Forklar ugens stof med dine egne ord. Virker uden net og sendes med de andre svar"],
-  ["/studie/", "calendar", "Ugeoverblik", "Ugens undervisning dag for dag, det vigtigste i ugen og frister to uger frem"],
-  ["/studie/fag.html", "book-open", "Fag", "Køreplan og fagnoter pr. fag og uge, og Styr på (marker en uge som læst)"],
-  ["/studie/deadlines.html", "clipboard-check", "Frister", "Alle frister og eksamener; marker en frist som færdig"],
+  ["Studie", [
+    ["#egne", "pencil", "I egne ord", "Forklar ugens stof med dine egne ord. Virker uden net og sendes med de andre svar"],
+    ["/studie/", "calendar", "Ugeoverblik", "Ugens undervisning dag for dag, det vigtigste i ugen og frister to uger frem"],
+    ["/studie/fag.html", "book-open", "Fag", "Køreplan, forelæsninger, øvelser og fagnoter pr. fag og uge, og Styr på (marker en uge som læst)"],
+    ["/studie/deadlines.html", "clipboard-check", "Frister", "Alle frister og eksamener; marker en frist som færdig"],
+    ["/studie/usb.html", "hard-drive", "USB-noter", "Fagnoterne til USB'en uge for uge; vurdér en uge (brugbar, for meget, mangler noget). Vurderingen kræver, at Mac'en er vågen"],
+    ["/studie/eksamen.html", "file-text", "Eksamen", "Prøveeksamener pr. fag. Kun mens Mac'en er vågen"],
+    ["/studie/selvstudie.html", "pie-chart", "Selvstudie", "Tiden pr. fag mod kursusbeskrivelsens timer. Kun mens Mac'en er vågen"],
+  ]],
+  ["Sprog", [
+    ["/sprog/mobil.html", "languages", "Sprog", "Dagens sprogkort og ugens tekst. Virker uden net og sender svarene bagefter"],
+    ["/sprog/", "chart-bar", "Sprogoversigt", "Niveau, lærte kort og ugens tekst pr. sprog. Kun mens Mac'en er vågen"],
+    ["/sprog/regler.html", "book-open", "Regler", "Grammatikken bag kortene. Kun mens Mac'en er vågen"],
+  ]],
+  ["Skærmtid", [
+    ["/skaermtid/", "clock", "Skærmtid", "Hvor tiden går hen på alle enheder, korte tjek, kategorier, og hvad du bruger hver enhed til. Kun mens Mac'en er vågen"],
+  ]],
 ];
 function renderOverblik() {
-  root().innerHTML = `<div class="card">${OVERBLIK.map(([href, ic, t, d], i) => `
+  root().innerHTML = OVERBLIK.map(([omraade, sider]) => `
+    <h2 style="font-size:13px;font-weight:500;color:var(--text-secondary);margin:18px 4px 8px">${omraade}</h2>
+    <div class="card">${sider.map(([href, ic, t, d], i) => `
     <a href="${href}" style="display:flex;gap:14px;align-items:center;padding:16px;text-decoration:none;color:inherit${i ? ";border-top:1px solid var(--divider)" : ""}">
-      <span style="color:var(--text-secondary)">${icon(ic, 22)}</span><span style="flex:1;min-width:0"><b style="font-weight:500">${t}</b><br><span class="meta" style="font-size:13px">${d}</span></span>${icon("arrow-right", 16)}</a>`).join("")}</div>
-    <p class="hint">Uden forbindelse viser siderne det, der blev hentet sidst. At markere en uge som læst eller en frist som færdig kræver, at Mac'en er vågen.</p>`;
+      <span style="color:var(--text-secondary)">${icon(ic, 22)}</span><span style="flex:1;min-width:0"><b style="font-weight:500">${t}</b><br><span class="meta" style="font-size:13px">${d}</span></span>${icon("arrow-right", 16)}</a>`).join("")}</div>`).join("") +
+    `<p class="hint">Uden forbindelse viser Ugeoverblik, Fag, Frister og USB-noter det, der blev hentet sidst. Forelæsninger og øvelser fra denne og næste uge ligger på telefonen, andre uger, når du har åbnet dem én gang. At markere en uge som læst, en frist som færdig eller vurdere en uge i USB-noterne kræver, at Mac'en er vågen.</p>`;
 }
 
 // ── fælles ──────────────────────────────────────────────────────────
@@ -493,9 +520,10 @@ window.addEventListener("hashchange", () => { if (location.hash.slice(1) in FANE
 // Nettet kommer tilbage, eller På farten åbnes igen fra baggrunden: prøv at sende og hente
 window.addEventListener("online", () => synk(true));
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") synk(true); });
-// Service workeren bruges kun på telefonen (gennem Tailscale). På Mac'en skal siderne altid hentes friske.
+// Service workeren bruges kun på telefonen (Tailscale-adressen uden port). På Mac'en og på bærbaren (samme adresse
+// med :8443) skal siderne altid hentes friske.
 if ("serviceWorker" in navigator) {
-  const telefon = !/(^|\.)localhost$/.test(location.hostname);
+  const telefon = !/(^|\.)localhost$/.test(location.hostname) && !location.port;
   navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => { if (!telefon || r.scope.endsWith("/studie/mobil")) r.unregister(); })).catch(() => {});
   if (telefon) navigator.serviceWorker.register("/studie/mobil-sw.js", { scope: "/studie/" }).then(() => navigator.serviceWorker.ready).then(varm).catch(() => {});
 }

@@ -5,6 +5,16 @@
 set -euo pipefail
 export PATH=/opt/homebrew/bin:$PATH
 cd "$(dirname "$0")/.."
+# Scenarier and SU-vagt read state/<name>.json; until something is saved it is an empty {} (the pages read that as
+# "nothing saved"), so the browser doesn't log a 404 on every visit. ln never replaces a file Sure has written.
+for name in su scenarier; do
+  f=dashboard/public/state/$name.json
+  [[ -e $f ]] && continue
+  t=$(mktemp dashboard/public/state/.$name.XXXXXX)
+  print '{}' > "$t"; chmod 644 "$t"
+  ln "$t" "$f" 2>/dev/null || true
+  rm -f "$t"
+done
 # Sure runs on demand (Kompas.app) - skip quietly while it is stopped
 colima status >/dev/null 2>&1 || exit 0
 tmp=$(mktemp)

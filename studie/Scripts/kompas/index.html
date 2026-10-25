@@ -190,7 +190,8 @@ document.querySelectorAll(".seg button").forEach(b => b.onclick = () => { which 
 // Kalenderen er livsnerven; køreplanen er et tillæg, så en manglende studie.json vælter ikke siden
 function ugensPlan(uge, monday) {
   if (!studie) return "";
-  const plan = studie.planer.find(p => p.uge === uge);
+  // I weekenden er næste uges køreplan ikke skrevet endnu; så står sidste uges her med et mærke (koereplan i studie.js)
+  const { plan, sidste } = koereplan(studie.planer, uge);
   const til = iso(addDays(parseDate(monday), 13));
   const dl = studie.deadlines.filter(d => d.fra && d.fra <= til && (d.til || d.fra) >= monday);
   const dlHtml = dl.length ? `<ul class="list">${dl.map(d => `<li><b>${esc(d.fag)}</b> · ${d.hvad} <span class="meta">(${esc(d.dato_tekst || `uge ${d.uger}`)})</span></li>`).join("")}</ul>`
@@ -202,7 +203,7 @@ function ugensPlan(uge, monday) {
         <details style="margin-top:10px"><summary>Vis svar – når du har svaret selv</summary><div class="md" style="margin-top:8px">${gk.svar}</div></details></div>`
     : `<details style="${gkStil}"><summary>${esc(gk.titel)}</summary><div class="md" style="margin-top:8px">${gk.html}</div></details>`;
   return `<div class="cols">
-    <section class="card panel"><div class="panel-head"><h2>Vigtigst i uge ${uge}${plan ? ` <span class="meta">· skrevet før ugen</span>` : ""}</h2>${plan ? `<a class="link" href="fag.html">Køreplanen pr. fag ${icon("arrow-right", 14)}</a>` : ""}</div>
+    <section class="card panel"><div class="panel-head"><h2>Vigtigst i uge ${plan?.uge ?? uge}${sidste ? ` <span class="badge">${SIDSTE_UGES}</span>` : plan ? ` <span class="meta">· skrevet før ugen</span>` : ""}</h2>${plan ? `<a class="link" href="fag.html">Køreplanen pr. fag ${icon("arrow-right", 14)}</a>` : ""}</div>
       ${plan?.vigtigst ? `<div class="md">${plan.vigtigst}</div>` : `<p class="meta">Ingen køreplan for uge ${uge}. Studie-rutinen skriver den søndag kl. 18.</p>`}${gkHtml}</section>
     <section class="card panel"><div class="panel-head"><h2>Frister, to uger frem</h2><a class="link" href="deadlines.html">Alle ${icon("arrow-right", 14)}</a></div>${dlHtml}</section>
   </div>`;

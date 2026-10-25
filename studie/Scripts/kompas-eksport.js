@@ -1,8 +1,10 @@
 // Studie → Kompas (https://kompas.localhost)
 //
 // Læser semestermappen og skriver det, Kompas viser under "Studie", til ~/.kompas/studie/ (eller STUDIE_EKSPORT_UD):
-//   studie.json      køreplanerne (fra Studie-rutinen), frister, eksamensformer og status pr. fag
-//   fagnoter.json    ugeblokkene i Fagnoter-dokumenterne (Word) som html, billederne i fagnoter/<fag>/
+//   studie.json      køreplanerne (fra Studie-rutinen), frister, eksamensformer og status pr. fag, også fagets
+//                    rytme: dine svar pr. dag, talt i Scripts/genkald-log.jsonl (som Studie-serveren skriver)
+//   fagnoter.json    ugeblokkene i Fagnoter-dokumenterne (Word) som html med omfang (ord, kodeblokke), dokumentets
+//                    øvrige hovedafsnit (fx Eksamen) og de vurderinger, rutinen har rettet efter; billederne i fagnoter/<fag>/
 //   kompas.json        hvilke sider projektet har (Kompas bygger menuen ud fra den)
 //   *.html, *.js     siderne selv, kopieret fra Scripts/kompas/ (også På fartens manifest og ikoner)
 //
@@ -286,6 +288,133 @@ function aktivitet(fagMappe) {
   return fundet.sort((a, b) => b.ændret.localeCompare(a.ændret)).slice(0, 12);
 }
 
+// Siden Selvstudie: tid pr. fag mod kursusbeskrivelsens arbejdstimer (arbejdsbyrde i fag.json). Det brugte kommer fra
+// overbliks liv.json (studietid): undervisningen pr. kursuskode og det, CalTask har logget som selvstudie ("Selvstudie · …"),
+// begge kun når de er slut, og studieblokkene. Forventet til nu regnes kun for et fag, der løber ét semester og har en
+// eksamensdato: kursets timer jævnt fordelt fra første undervisningsdag til eksamen. Kurser over to semestre deler
+// kursusbeskrivelsen ikke op, så dér er det null med grunden. Siden regner intet selv.
+function selvstudie(liv, nu = new Date()) {
+  const st = liv?.studietid || null, eks = S.eksamensdatoer(nu), r1 = x => Math.round(x * 10) / 10;
+  let dage = {}; try { dage = JSON.parse(læs(path.join(S.DATA, "undervisningsdage.json")) || "{}"); } catch {}
+  const navne = f => [f.kort, ...(f.alias || []), f.id].map(x => String(x).toLowerCase());
+  const brugte = new Set();
+  // Fravær (Scripts/fravaer.json): uger, hvor du ikke var til stede; kalenderens undervisning i dem tæller ikke som brugt
+  // og slags undervisning, du aldrig bruger (bruges_ikke: fag, art og form som i kalenderen), som ikke tæller i nogen uge
+  let fravær = [], brugesIkke = [];
+  try { const fj = JSON.parse(læs(path.join(S.DATA, "fravaer.json")) || "{}"); fravær = fj.ikke_til_stede || []; brugesIkke = fj.bruges_ikke || []; } catch {}
+  const forFag = (f, x) => !x.fag || navne(f).includes(String(x.fag).toLowerCase());
+  const fraværende = (f, mandag) => fravær.some(x => x.uge === isoUge(new Date(`${mandag}T12:00`)) && forFag(f, x));
+  const ubrugt = (f, fo) => brugesIkke.some(x => forFag(f, x) && (x.art == null || x.art === fo.art) && (x.form == null || x.form === fo.form));
+  const fag = S.fag().filter(f => f.arbejdsbyrde?.poster?.length).map(f => {
+    const ab = f.arbejdsbyrde, sum = xs => r1(xs.reduce((a, x) => a + x.timer, 0));
+    const forventet = { i_alt: sum(ab.poster), undervisning: sum(ab.poster.filter(x => x.undervisning)),
+      selvstudie: sum(ab.poster.filter(x => !x.undervisning)), poster: ab.poster, kilde: ab.kilde, semestre: ab.semestre || 1 };
+    const u = (st?.undervisning || []).find(x => x.kode === f.kursuskode);
+    const s = (st?.selvstudie || []).find(x => navne(f).includes(String(x.navn).toLowerCase()));
+    const b = (st?.studieblokke || []).find(x => navne(f).includes(String(x.navn).toLowerCase()));
+    [u, s, b].forEach(x => x && brugte.add(x));
+    // Undervisningen pr. uge: kun de slags, du bruger, og ikke i uger med fravær
+    const former = u?.former || (u ? [{ art: "", form: "", uger: u.uger }] : []), uUger = {};
+    let ikkeTaltFravær = 0, ikkeBrugt = 0;
+    for (const fo of former) for (const [m, x] of Object.entries(fo.uger || {})) {
+      if (ubrugt(f, fo)) ikkeBrugt += x; else if (fraværende(f, m)) ikkeTaltFravær += x; else uUger[m] = (uUger[m] || 0) + x;
+    }
+    const ikkeTalt = r1(ikkeTaltFravær + ikkeBrugt);
+    const brugt = { undervisning: r1(Object.values(uUger).reduce((a, x) => a + x, 0)), selvstudie: r1(s?.timer || 0), studieblokke_forbi: r1(b?.timer || 0),
+      studieblokke_planlagt: r1(b?.planlagt_timer || 0) };
+    brugt.i_alt = r1(brugt.undervisning + brugt.selvstudie);
+    const uger = [...new Set([...Object.keys(u?.uger || {}), ...Object.keys(s?.uger || {})])].sort().map(m => ({
+      mandag: m, uge: isoUge(new Date(`${m}T12:00`)), undervisning: r1(uUger[m] || 0), selvstudie: r1(s?.uger?.[m] || 0),
+      ...(fraværende(f, m) ? { fravaer: true } : {}) }));
+    // Forventet til nu: kun ét semester med kendt start og eksamen
+    const datoer = Object.values(dage[f.kort] || {}).flat().map(x => x?.dato).filter(Boolean).sort();
+    const start = datoer[0] ? new Date(`${datoer[0]}T00:00`) : null, slut = eks[f.id] ? new Date(eks[f.id]) : null;
+    let til_nu = null, grund = null;
+    if (forventet.semestre !== 1) grund = `Kurset løber over ${forventet.semestre} semestre, og kursusbeskrivelsen deler ikke timerne op pr. semester.`;
+    else if (!start || !slut) grund = !slut ? "Eksamensdatoen kendes ikke (Vigtige datoer i CLAUDE.md)." : "Første undervisningsdag kendes ikke (undervisningsdage.json).";
+    else {
+      const andel = Math.min(1, Math.max(0, (nu - start) / (slut - start)));
+      til_nu = { i_alt: r1(forventet.i_alt * andel), undervisning: r1(forventet.undervisning * andel), selvstudie: r1(forventet.selvstudie * andel),
+        andel: Math.round(andel * 100), fra: S.isoDato(start), til: S.isoDato(slut) };
+    }
+    // Forudsigelse: kun med en eksamen forude og et kursus over ét semester: det selvstudie, der mangler, fordelt på ugerne til eksamen
+    let forudsigelse = null;
+    if (forventet.semestre === 1 && slut && slut > nu) {
+      const tilbage = Math.max(0, forventet.selvstudie - brugt.selvstudie), uger = (slut - nu) / (7 * 864e5);
+      forudsigelse = { tilbage: r1(tilbage), uger_tilbage: r1(uger), pr_uge: r1(tilbage / uger), eksamen: S.isoDato(slut) };
+    }
+    return { id: f.id, kort: f.kort, navn: f.navn, farve: f.farve, kursuskode: f.kursuskode, forventet, brugt, forventet_til_nu: til_nu, grund, uger,
+      forudsigelse, undervisning_ikke_talt: ikkeTalt, ikke_talt: { fravaer: r1(ikkeTaltFravær), bruges_ikke: r1(ikkeBrugt) }, _dage: s?.dage || {},
+      _sessioner: s?.sessioner || {} };
+  });
+  const motivation = motivationFor(fag, st, nu);
+  fag.forEach(f => { delete f._dage; delete f._sessioner; });
+  const sum = k => r1(fag.reduce((a, f) => a + f.brugt[k], 0));
+  return { genereret: nu.toISOString(), kalender_fra: st?.fra || null, selvstudie_fra: st?.selvstudie_fra || null, til: st?.til || null, motivation,
+    i_alt: { undervisning: sum("undervisning"), selvstudie: sum("selvstudie"), brugt: sum("i_alt") }, fag,
+    // Logget selvstudie, der ikke kunne knyttes til et fag (fx en ny CalTask-titel)
+    ukendt: (st?.selvstudie || []).filter(x => !brugte.has(x)).map(x => ({ navn: x.navn, timer: r1(x.timer) })),
+    fravaer: fravær.map(x => ({ uge: x.uge, fag: x.fag || null })),
+    bruges_ikke: brugesIkke.map(x => ({ fag: x.fag || null, art: x.art ?? null, form: x.form ?? null, hvorfor: x.hvorfor || null })),
+    mangler: st ? null : "liv.json har ingen studietid (overblik eller træningsdelen mangler)." };
+}
+
+// Athenify-delen af Selvstudie, regnet ud fra det loggede selvstudie pr. dag og dine mål (studiemaal i fag.json):
+// dagens, ugens og månedens fremskridt mod målet, dage i træk, medaljer, saldoen (den samlede forskel til dagsmålet,
+// dag for dag fra logningen begyndte), de seneste 7 dage, en kalender og nedtællingen til eksamen. I dag er ikke slut:
+// dage i træk tæller fra i går, når der ikke er logget noget i dag endnu. Uden mål eller data er den null.
+function motivationFor(fag, st, nu = new Date()) {
+  const m = S.studiemaal(), start = st?.selvstudie_fra;
+  if (!m?.dag_timer || !start) return null;
+  const r1 = x => Math.round(x * 10) / 10, mål = m.dag_timer, med = m.medaljer || {};
+  const medalje = t => t >= med.guld ? "guld" : t >= med.soelv ? "soelv" : t >= med.bronze ? "bronze" : null;
+  const idag = S.isoDato(nu), dage = [];
+  for (let d = new Date(`${start}T12:00`); S.isoDato(d) <= idag; d = S.plusDage(d, 1)) {
+    const dato = S.isoDato(d), pr_fag = {};
+    for (const f of fag) if (f._dage[dato]) pr_fag[f.id] = r1(f._dage[dato]);
+    const timer = r1(Object.values(pr_fag).reduce((a, x) => a + x, 0)), sessioner = fag.reduce((a, f) => a + (f._sessioner[dato] || 0), 0);
+    dage.push({ dato, uge: S.isoUge(d), ugedag: (d.getDay() + 6) % 7, timer, pr_fag, sessioner, naaet: timer >= mål, medalje: medalje(timer) });
+  }
+  let saldo = 0;
+  for (const d of dage) { saldo += d.timer - mål; d.saldo = r1(saldo); }
+  // Dage i træk: fra i dag (eller i går, hvis intet er logget i dag endnu) og bagud
+  const iTræk = krav => { let n = 0, i = dage.length - 1; if (i >= 0 && !krav(dage[i])) i--; for (; i >= 0 && krav(dage[i]); i--) n++; return n; };
+  let længst = 0, løb = 0; for (const d of dage) { løb = d.timer > 0 ? løb + 1 : 0; længst = Math.max(længst, løb); }
+  const periode = (fra, antal) => { const ds = dage.filter(d => d.dato >= fra), timer = r1(ds.reduce((a, d) => a + d.timer, 0)), m2 = antal * mål;
+    return { timer, maal: m2, pct: Math.round(100 * timer / m2), medaljer: { guld: ds.filter(d => d.medalje === "guld").length,
+      soelv: ds.filter(d => d.medalje === "soelv").length, bronze: ds.filter(d => d.medalje === "bronze").length } }; };
+  const mandag = S.isoDato(S.plusDage(nu, -((nu.getDay() + 6) % 7))), første = `${idag.slice(0, 8)}01`;
+  const dageIMåned = new Date(nu.getFullYear(), nu.getMonth() + 1, 0).getDate();
+  // Kalenderen: hele uger (mandag til søndag) fra logningens første uge; dage efter i dag er tomme
+  const kalender = []; const uge0 = S.plusDage(new Date(`${start}T12:00`), -((new Date(`${start}T12:00`).getDay() + 6) % 7));
+  for (let w = uge0; S.isoDato(w) <= idag; w = S.plusDage(w, 7)) kalender.push({ uge: S.isoUge(w), mandag: S.isoDato(w),
+    dage: [0, 1, 2, 3, 4, 5, 6].map(i => { const dato = S.isoDato(S.plusDage(w, i)), d = dage.find(x => x.dato === dato);
+      return { dato, timer: d ? d.timer : null, niveau: d ? Math.min(1, d.timer / (med.guld || mål * 2)) : null, medalje: d?.medalje || null }; }) });
+  // Månedskalenderen (som Athenifys): hver måned fra logningens første til denne, med studietid, mål (hele månedens dage
+  // gange dagsmålet), sessioner og dagene; en dag før logningen eller efter i dag har timer null. trin 0–4: intet, under
+  // bronze, bronze, sølv, guld (cellens farve). Målet tæller kun dagene fra logningen begyndte.
+  const trin = t => t == null ? null : !t ? 0 : t >= med.guld ? 4 : t >= med.soelv ? 3 : t >= med.bronze ? 2 : 1;
+  const MÅNEDER = ["januar", "februar", "marts", "april", "maj", "juni", "juli", "august", "september", "oktober", "november", "december"];
+  const maaneder = [];
+  for (let mm = new Date(`${start.slice(0, 7)}-01T12:00`); S.isoDato(mm).slice(0, 7) <= idag.slice(0, 7); mm = new Date(mm.getFullYear(), mm.getMonth() + 1, 1, 12)) {
+    const n = new Date(mm.getFullYear(), mm.getMonth() + 1, 0).getDate(), ds = [];
+    for (let i = 1; i <= n; i++) { const dato = S.isoDato(new Date(mm.getFullYear(), mm.getMonth(), i, 12)), d = dage.find(x => x.dato === dato);
+      ds.push({ dag: i, dato, timer: d ? d.timer : null, sessioner: d ? d.sessioner : null, medalje: d?.medalje || null, trin: trin(d ? d.timer : null) }); }
+    const timer = r1(ds.reduce((a, d) => a + (d.timer || 0), 0)), maal = ds.filter(d => d.dato >= start).length * mål;  // fra logningen begyndte
+    maaneder.push({ maaned: S.isoDato(mm).slice(0, 7), navn: `${MÅNEDER[mm.getMonth()]} ${mm.getFullYear()}`, forskyd: (mm.getDay() + 6) % 7,
+      timer, maal, pct: Math.round(100 * timer / maal), sessioner: ds.reduce((a, d) => a + (d.sessioner || 0), 0), dage: ds });
+  }
+  const eks = S.eksamensdatoer(nu);
+  return { maal: mål, maaneder, saldo_i_dag: r1((dage.at(-1)?.timer || 0) - mål), gaelder: m.gaelder || "alle dage", medaljer_graenser: med, fra: start,
+    i_dag: { ...periode(idag, 1), medalje: dage.at(-1)?.medalje || null },
+    uge: periode(mandag, 7), maaned: periode(første, dageIMåned), i_alt: periode(start, dage.length),
+    i_traek: iTræk(d => d.timer > 0), i_traek_maal: iTræk(d => d.naaet), laengst_i_traek: længst,
+    saldo: r1(saldo), seneste_7: dage.slice(-7), dage, kalender,
+    eksamener: Object.entries(eks).filter(([, t]) => t >= new Date(idag).getTime() - 864e5).map(([id, t]) => {
+      const f = S.find(id); return { fag: f?.kort || id, dato: S.isoDato(new Date(t)), dage: Math.round((t - new Date(`${idag}T00:00`).getTime()) / 864e5) }; })
+      .sort((a, b) => a.dato.localeCompare(b.dato)) };
+}
+
 // Forelæsninger og øvelser i <mappe>/Pensum/, som canvas-sortering.js har lagt der med undervisningsdagen
 // forrest i navnet. Kun navnene; Studie-serveren udleverer selve filen (/studie/api/pensum/...).
 // Er navnet bare "FL2", får det dagens emne fra undervisningsdage.json.
@@ -305,22 +434,56 @@ function pensum(f) {
   return ud;
 }
 
-function fagStatus(f) {
+// Rytme: dine svar pr. dag i faget, fra genkald-log.jsonl. Drills hører til faget med kode; genkald og eksamen til
+// fagets id forrest i nøglen. En færdig-markeret frist er ikke et svar. fra er mandag i semestrets første
+// køreplansuge, så siden kan vise dage uden svar som tomme.
+let logLinjer = null;
+function rytme(f, fra) {
+  logLinjer ??= (læs(path.join(S.DATA, "genkald-log.jsonl")) || "").split("\n").filter(Boolean);
+  const dage = {};
+  for (const l of logLinjer) {
+    let p; try { p = JSON.parse(l); } catch { continue; }
+    if (!p?.tid || p.type === "deadline") continue;
+    const hvem = /^drill/.test(p.type) ? (f.kode ? f.id : null) : String(p.noegle || "").split("/")[0];
+    if (hvem !== f.id) continue;
+    const dag = isoDato(new Date(p.tid));
+    dage[dag] = (dage[dag] || 0) + 1;
+  }
+  const n = Object.values(dage), datoer = Object.keys(dage).sort();
+  return { fra: fra ? isoDato(fra) : datoer[0] || null, til: isoDato(new Date()), dage,
+    svar: n.reduce((a, x) => a + x, 0), aktive_dage: datoer.length, flest: n.length ? Math.max(...n) : 0, seneste: datoer.at(-1) || null };
+}
+
+// En øvelse (fil eller mappe) tæller som færdig, når der står din egen kode i en .js- eller .css-fil i den.
+// Skabelonerne til kommende øvelsessæt har kun kommentarer, tomme blokke og overskrifter i konsollen.
+function egenKode(p) {
+  if (fs.statSync(p, { throwIfNoEntry: false })?.isDirectory()) return ls(p).some(n => egenKode(path.join(p, n)));
+  if (!/\.(js|css)$/i.test(p)) return false;
+  return (læs(p) || "").replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1")
+    .split("\n").some(l => !/^\s*$|^\s*[{}();]+\s*$|^\s*console\.log\("\\n=== [^"]* ==="\);?\s*$/.test(l));
+}
+
+function fagStatus(f, fra) {
   const d = path.join(ROD, f.mappe);
-  const s = { aktivitet: aktivitet(f.mappe), pensum: pensum(f),
+  const s = { aktivitet: aktivitet(f.mappe), pensum: pensum(f), rytme: rytme(f, fra),
     // De gamle sæt er filer som Alfa_Eksamener.pdf; mappen Eksamenstræning er Kompas' opgaver ud fra dem
     eksamenssaet: ls(d).filter(n => /eksamen/i.test(n) && !/træning/i.test(n) && fs.statSync(path.join(d, n), { throwIfNoEntry: false })?.isFile()),
     fagnoter: ls(d).filter(n => /^Fagnoter.*\.docx$/i.test(n)).map(n => ({ fil: n, ændret: mtime(path.join(d, n))?.toISOString() ?? null })) };
   if (findes(path.join(d, "Genkald"))) {
     s.begreber = begreber(path.join(d, "Genkald", "begreber.md"));
     s.genkald = genkald(path.join(d, "Genkald"));
+    // Fagets genkald i alt, så Fag-siden ikke lægger filerne sammen selv
+    s.genkald_i_alt = s.genkald.reduce((a, x) => ({ spoergsmaal: a.spoergsmaal + x.spoergsmaal, forsoegt: a.forsoegt + x.sad + x.halvt + x.blankt,
+      sad: a.sad + x.sad }), { spoergsmaal: 0, forsoegt: 0, sad: 0 });
   }
   if (findes(path.join(d, "Modeller"))) s.modeller = ls(path.join(d, "Modeller")).filter(n => !/^README/i.test(n)).length;
   if (f.kode) {
     const vs = path.join(d, f.kode);
     s.drills = drills(path.join(vs, "Drills"));
+    s.drills_i_alt = s.drills.reduce((a, x) => ({ pladser: a.pladser + x.pladser, gaettet: a.gaettet + x.gættet, stubbe: a.stubbe + x.stubbe }),
+      { pladser: 0, gaettet: 0, stubbe: 0 });
     s.oevelser_i_gang = ls(vs).filter(n => /\.js$/.test(n));
-    s.oevelser_faerdige = [...ls(path.join(vs, "Bog")), ...ls(path.join(vs, "Øvelser"))].length;
+    s.oevelser_faerdige = [path.join(vs, "Bog"), path.join(vs, "Øvelser")].flatMap(m => ls(m).map(n => path.join(m, n))).filter(egenKode).length;
   }
   if (f.afleveringer) s.afleveringer = afleveringsTabel(path.join(d, f.afleveringer.mappe, "README.md"));
   return s;
@@ -437,7 +600,8 @@ function fagnoterUger(fil, fagId) {
     return `fagnoter/${fagId}/${mål.slice(6)}`;
   };
   const krop = barn(barn(doc, "w:document"), "w:body");
-  const uger = {};
+  // Ugeblokkene under "Ugenoter" og dokumentets øvrige hovedafsnit (Overskrift 1, fx Eksamen) til siden USB-noter
+  const uger = {}, dele = [];
   let nu = null;
   for (const b of elem(krop)) {
     if (b.navn === "w:tbl") { if (nu) nu.afsnit.push({ tabel: wTabel(b, billede) }); continue; }
@@ -446,30 +610,40 @@ function fagnoterUger(fil, fagId) {
     const niveau = +((a.stil.match(/^(?:Overskrift|Heading)\s*(\d)$/i) || [])[1] || 0);
     if (niveau) {
       const u = niveau === 2 && a.ren.trim().match(/^Uge\s+(\d+)\b/i);
-      nu = u ? (uger[+u[1]] = { titel: a.ren.trim(), afsnit: [] }) : null;
+      const h1 = niveau === 1 && a.ren.trim() && !/^Ugenoter\b/i.test(a.ren.trim());
+      nu = u ? (uger[+u[1]] = { titel: a.ren.trim(), afsnit: [] }) : h1 ? dele[dele.push({ titel: a.ren.trim(), afsnit: [] }) - 1] : null;
       continue;
     }
     if (nu) nu.afsnit.push(a);
   }
+  // Ord og kodeblokke pr. blok, så USB-noter kan vise, hvor meget hver uge fylder
+  const omfang = html => ({ ord: afEnt(html.replace(/<[^>]+>/g, " ")).split(/\s+/).filter(Boolean).length,
+    kodeblokke: (html.match(/<pre>/g) || []).length });
   const ud = {};
   for (const [uge, u] of Object.entries(uger)) {
     // Rutinen regner en uge for udfyldt, når blokken har en "Modeller"-label (afsnit 6 i RUTINE.md)
+    const html = wHtml(u.afsnit);
     ud[uge] = { titel: u.titel, udfyldt: u.afsnit.some(a => a.label === "Modeller"),
-      kun_bog: u.afsnit.some(a => /Slides til uge \d+ var ikke uploadet/i.test(a.ren || "")), html: wHtml(u.afsnit) };
+      kun_bog: u.afsnit.some(a => /Slides til uge \d+ var ikke uploadet/i.test(a.ren || "")), html, ...omfang(html) };
   }
-  return { uger: ud, billeder: [...brugt] };
+  const udDele = dele.map(d => { const html = wHtml(d.afsnit); return { titel: d.titel, html, ...omfang(html) }; }).filter(d => d.ord);
+  return { uger: ud, dele: udDele, billeder: [...brugt] };
 }
 
-// Billederne pakkes kun ud, når dokumentet er ændret siden sidst (stempel = ændringstid + størrelse)
+// Billederne pakkes kun ud, når dokumentet er ændret siden sidst (stempel = ændringstid + størrelse).
+// handlet: de vurderinger fra USB-noter, Studie-rutinen har rettet ugen efter (Scripts/fagnoter/vurdering-handlet.json,
+// { "<fag>": { "<uge eller afsnit>": "<vurderingens dato>" } }), så siden kan vise, at en vurdering er taget.
 function fagnoter(forrige) {
   const ud = {};
+  let handlet = {};
+  try { handlet = JSON.parse(læs(path.join(S.DATA, "fagnoter", "vurdering-handlet.json")) || "{}"); } catch { handlet = {}; }
   for (const f of S.fag()) {
     const navn = ls(path.join(ROD, f.mappe)).find(n => /^Fagnoter.*\.docx$/i.test(n));
     if (!navn) continue;
     const fil = path.join(ROD, f.mappe, navn);
     try {
       const st = fs.statSync(fil), stempel = `${st.mtimeMs}:${st.size}`;
-      const { uger, billeder } = fagnoterUger(fil, f.id);
+      const { uger, dele, billeder } = fagnoterUger(fil, f.id);
       const dir = path.join(UD, "fagnoter", f.id);
       if (forrige?.[f.id]?.stempel !== stempel || !findes(dir)) {
         const tmp = `${dir}.${process.pid}.tmp`;   // to eksporter på én gang (opdater.sh og en gemning) deler ikke mappen
@@ -479,10 +653,16 @@ function fagnoter(forrige) {
         fs.rmSync(dir, { recursive: true, force: true });
         fs.renameSync(tmp, dir);
       }
-      ud[f.id] = { fil: `${f.mappe}/${navn}`, ændret: st.mtime.toISOString(), stempel, uger };
+      ud[f.id] = { fil: `${f.mappe}/${navn}`, ændret: st.mtime.toISOString(), stempel, uger, dele };
     } catch (e) {
       console.error(`Fagnoter ${f.kort}: ${e.message.split("\n")[0]}`);
       if (forrige?.[f.id]) ud[f.id] = forrige[f.id];
+    }
+    if (ud[f.id]) {
+      ud[f.id].handlet = handlet[f.id] || {};
+      // Hvor meget dokumentet fylder: de udfyldte uger og de øvrige hovedafsnit (det, USB-noter viser)
+      ud[f.id].ord_i_alt = Object.values(ud[f.id].uger).filter(u => u.udfyldt).reduce((n, u) => n + (u.ord || 0), 0)
+        + (ud[f.id].dele || []).reduce((n, d) => n + d.ord, 0);
     }
   }
   return ud;
@@ -537,10 +717,10 @@ function main() {
   const former = S.eksamensformer();
   const fag = S.fag().map(f => ({
     id: f.id, kort: f.kort, alias: f.alias || [], navn: f.navn, mappe: f.mappe, farve: f.farve, genkald: f.genkald,
-    begreber: f.begreber, kode: f.kode, afleveringer: f.afleveringer, leetcode: !!f.leetcode,
+    begreber: f.begreber, kode: f.kode, afleveringer: f.afleveringer, leetcode: !!f.leetcode, usb_noter: !!f.usb_noter,
     eksamenstraening: f.eksamenstraening, forudsaetning: f.forudsaetning,
     eksamen: former.find(r => (r.Fag || "").startsWith(f.readme)) || null,
-    status: fagStatus(f),
+    status: fagStatus(f, planer[0] ? mandagIUge(planer[0].aar, planer[0].uge) : null),
   }));
 
   const data = {
@@ -554,10 +734,14 @@ function main() {
     opdateret: nu.toISOString(),
     sider: [
       { titel: "Ugeoverblik", ikon: "calendar", sti: "/studie/" },
-      { titel: "Fag", ikon: "book-open", sti: "/studie/fag.html" },
+      // USB-noterne (fag med usb_noter i fag.json) ligger under Fag → faget; menuen markerer Fag, mens du er på dem
+      { titel: "Fag", ikon: "book-open", sti: "/studie/fag.html", match: ["/studie/fag.html", "/studie/usb.html"] },
       { titel: "Træning", ikon: "brain", sti: "/studie/genkald.html" },
       { titel: "Eksamen", ikon: "file-text", sti: "/studie/eksamen.html" },
-      { titel: "Frister", ikon: "clipboard-check", sti: "/studie/deadlines.html" },
+      // Tiden pr. fag mod kursusbeskrivelsens arbejdstimer (selvstudie.json)
+      { titel: "Selvstudie", ikon: "pie-chart", sti: "/studie/selvstudie.html" },
+      // Frister står øverst i menuen, under I dag og Forbindelser (`oeverst`), men er stadig Studies side
+      { titel: "Frister", ikon: "clipboard-check", sti: "/studie/deadlines.html", oeverst: true },
     ],
   };
 
@@ -570,6 +754,7 @@ function main() {
   const liv = (() => { try { return JSON.parse(læs(path.join(LIV_SITE, "liv.json"))); } catch { return null; } })();
   if (liv) skriv("kalender.json", JSON.stringify({ genereret: liv.genereret, selvstudie_fra: liv.selvstudie_fra || null, kalender: liv.kalender || {},
     reviews: (liv.reviews || []).map(r => ({ mandag: r.mandag, kalender: r.kalender || null, kommende: r.kommende || null })) }));
+  skriv("selvstudie.json", JSON.stringify(selvstudie(liv, nu)));
   let forrige = null;
   try { forrige = JSON.parse(læs(path.join(UD, "fagnoter.json"))); } catch { forrige = null; }
   const fn = fagnoter(forrige);

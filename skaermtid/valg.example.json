@@ -1,0 +1,41 @@
+{
+ "_om": "Eksempel. Dine valg fra Skærmtid-siden. Skrives af server.py (det første valg på siden skriver valg.json, som ikke ligger i git); går forud for regler.json og gælder præcis ét program (app: pakkenavn eller programnavn) eller én side (domaene: værten).",
+ "valg": [
+  {
+   "app": "net.activitywatch.android",
+   "navn": "ActivityWatch",
+   "kategori": "Egne projekter",
+   "valgt": "2026-10-05"
+  },
+  {
+   "domaene": "localhost",
+   "navn": "localhost",
+   "kategori": "Egne projekter",
+   "valgt": "2026-10-05"
+  },
+  {
+   "app": "Obsidian",
+   "navn": "Obsidian",
+   "kategori": "Studie",
+   "valgt": "2026-10-07"
+  },
+  {
+   "domaene": "www.wolframalpha.com",
+   "navn": "www.wolframalpha.com",
+   "kategori": "Studie",
+   "valgt": "2026-10-07"
+  },
+  {
+   "app": "com.android.chargingscreen",
+   "navn": "Opladerskærm",
+   "ignorer": true,
+   "valgt": "2026-10-06"
+  },
+  {
+   "app": "com.android.deskclock",
+   "navn": "Ur",
+   "ignorer": true,
+   "valgt": "2026-10-06"
+  }
+ ]
+}

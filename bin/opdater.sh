@@ -8,6 +8,11 @@
 #                                     sidste vellykkede hentning, så en periode med Kompas lukket ikke giver hul
 #   overblik (liv.json)               hver gang
 #   Studie-eksporten                  hver gang
+#   aw-sync                           hver gang; henter Stationær og Telefon fra Syncthing-mappen (~/ActivityWatchSync)
+#                                     ind i Mac'ens ActivityWatch og lægger Mac'ens egne tal derud
+#   Skærmtid (fra ActivityWatch)      hver gang; kører ActivityWatch ikke, står de gamle tal
+#   kopien til bærbaren               hver gang, efter de andre: ~/KompasKopi, som Syncthing sender til bærbaren
+#                                     (bin/kopi.py); kun det ændrede skrives
 #   backup af databaserne             første kørsel hver dag
 #   status til Forbindelser           hver gang: trinnenes udfald i ~/.kompas/opdater-status.json, som
 #                                     bin/forbindelser.py læser og skriver videre til public/forbindelser.json
@@ -43,6 +48,10 @@ liv()      { local bin=$HOME/kompas/overblik/.venv/bin/liv st
              $bin eksport >/dev/null || return $?
              return $st }
 studie()   { /usr/local/bin/node "$SEM/Scripts/kompas-eksport.js" >/dev/null }
+# Bare `aw-sync sync` (uden --mode m.fl.): kun den læser mappelayoutet {vært}/{enheds-id}/, som Android-appen skriver
+aw_sync()  { /Applications/ActivityWatch.app/Contents/Resources/aw-sync --sync-dir $HOME/ActivityWatchSync sync >/dev/null 2>&1 }
+skaermtid() { /usr/bin/python3 $HOME/kompas/skaermtid/skaermtid.py byg >/dev/null }
+kopi()     { /usr/bin/python3 $HOME/kompas/bin/kopi.py >/dev/null }
 feeds_fejlede=null
 
 mkdir -p $STATE
@@ -64,8 +73,13 @@ trin kalender "kalenderen fejlede" kalender
 trin form-byg "Form & Fokus-byg fejlede" form_byg
 trin overblik "overblik fejlede" liv
 trin studie-eksport "studie-eksporten fejlede" studie
+trin aw-sync "aw-sync fejlede (kører ActivityWatch? findes ~/ActivityWatchSync?)" aw_sync
+trin skaermtid "Skærmtid fejlede (kører ActivityWatch?)" skaermtid
+trin kopi "kopien til bærbaren fejlede (se linjerne med kopi: ovenfor)" kopi
 $HOME/kompas/bin/backup-data.sh | while read -r l; do log "backup: $l"; done
-log "ok"
+# Sidste linje: "ok" kun, når alle trin lykkedes; ellers hvilke der fejlede
+fejlede=(${(k)STATUS[(R)fejl]})
+if (( $#fejlede )); then log "færdig med fejl: ${(oj:, :)fejlede}"; else log "ok"; fi
 # Status for siden Forbindelser: kun faste id'er og tal, aldrig fejltekster (kalenderens indeholder hemmelige adresser)
 par=(); for id in ${(ok)STATUS}; do par+=("\"$id\": \"$STATUS[$id]\""); done
 print -r -- "{\"slut\": \"$(date -u +%FT%TZ)\", \"trin\": {${(j:, :)par}}, \"kalenderfeeds_fejlede\": $feeds_fejlede}" \

@@ -29,6 +29,7 @@ MONTERINGER = {
     "/form/": [UD / "form", ROD / "coach" / "site"],
     "/studie/": [UD / "studie", ROD / "studie" / "Scripts" / "kompas"],
     "/sprog/": [UD / "sprog", ROD / "sprog" / "side"],
+    "/skaermtid/": [UD / "skaermtid", ROD / "skaermtid" / "side"],
     "/forbrug/": [UD / "forbrug", ROD / "okonomi" / "dashboard" / "public"],
 }
 TYPER = {".webmanifest": "application/manifest+json", ".js": "text/javascript", ".mjs": "text/javascript",

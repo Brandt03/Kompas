@@ -121,3 +121,22 @@ def test_ingen_kalender_sat_op_gemmer_intet_tidspunkt(conn, monkeypatch):
     monkeypatch.setattr(CONFIG, "ics_sources", [])
     ic.sync_calendar(conn)
     assert get_state(conn, "last_calendar_sync") is None
+
+
+def test_plan_blok_kommer_fra_maerket_i_beskrivelsen(conn, monkeypatch):
+    d = date.today().strftime("%Y%m%d")
+    ics = (f"BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//test//test//DA\r\n"
+           f"BEGIN:VEVENT\r\nUID:plan\r\nDTSTART:{d}T080000Z\r\nDTEND:{d}T090000Z\r\nSUMMARY:Alpha · fagnoter\r\n"
+           f"DESCRIPTION:Databases.\\n{ic.PLAN_MAERKE}\r\nEND:VEVENT\r\n"
+           f"BEGIN:VEVENT\r\nUID:tand\r\nDTSTART:{d}T100000Z\r\nDTEND:{d}T110000Z\r\nSUMMARY:Tandlæge\r\nEND:VEVENT\r\n"
+           f"END:VCALENDAR\r\n").encode()
+    monkeypatch.setattr(CONFIG, "ics_sources", [DELT])
+    monkeypatch.setattr(ic, "_load", lambda source: ics)
+    ic.sync_calendar(conn)
+    plan = dict(conn.execute("SELECT uid, plan_blok FROM calendar_events").fetchall())
+    assert plan == {"plan": 1, "tand": 0}
+
+    # Fjernes mærket, er blokken ikke længere en del af planen
+    monkeypatch.setattr(ic, "_load", lambda source: ics.replace(ic.PLAN_MAERKE.encode(), b""))
+    ic.sync_calendar(conn)
+    assert conn.execute("SELECT plan_blok FROM calendar_events WHERE uid = 'plan'").fetchone()[0] == 0

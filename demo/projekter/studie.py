@@ -3,7 +3,7 @@
 Skriver det, Scripts/kompas-eksport.js og Scripts/kompas-server.js ville levere for en opdigtet studerende med tre
 fag (Alfa, Beta og Gamma), med alle datoer regnet ud fra idag:
 
-  ud/studie/studie.json, fagnoter.json, kalender.json, kompas.json   eksportens filer
+  ud/studie/studie.json, fagnoter.json, kalender.json, selvstudie.json, kompas.json   eksportens filer
   ud/studie/fagnoter/is/lorem-ipsum.svg                               et billede i fagnoterne
   ud/studie/api/<navn>.json                                           svaret på GET /studie/api/<navn>
 
@@ -182,13 +182,17 @@ def _fag_felter(i: int, f: dict) -> dict:
     return {"id": f["id"], "kort": f["kort"], "alias": f.get("alias", []), "navn": f["navn"], "mappe": f["mappe"],
             "farve": f.get("farve") or f"var(--c{i + 1})", "genkald": f.get("genkald", False),
             "begreber": f.get("begreber"), "kode": f.get("kode"), "afleveringer": f.get("afleveringer"),
-            "leetcode": bool(f.get("leetcode")), "eksamenstraening": f.get("eksamenstraening"),
-            "forudsaetning": f.get("forudsaetning")}
+            "leetcode": bool(f.get("leetcode")), "usb_noter": bool(f.get("usb_noter")),
+            "eksamenstraening": f.get("eksamenstraening"), "forudsaetning": f.get("forudsaetning")}
+
+
+# fag.example.json selv: arbejdsbyrde, kursuskode og studiemål til siden Selvstudie
+FAG_EKSEMPEL = json.loads((Path(__file__).resolve().parents[2] / "studie" / "Scripts" / "fag.example.json")
+                          .read_text(encoding="utf-8"))
 
 
 # Fagenes felter (genkald, begreber, kode, afleveringer, eksamensform …) fra eksemplet, som koden selv bruger
-FAG_JSON = {f["id"]: _fag_felter(i, f) for i, f in enumerate(json.loads(
-    (Path(__file__).resolve().parents[2] / "studie" / "Scripts" / "fag.example.json").read_text(encoding="utf-8"))["fag"])}
+FAG_JSON = {f["id"]: _fag_felter(i, f) for i, f in enumerate(FAG_EKSEMPEL["fag"])}
 
 ORD = ("lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore et dolore "
        "magna aliqua enim ad minim veniam quis nostrud exercitation ullamco laboris nisi aliquip ex ea commodo "
@@ -457,7 +461,7 @@ def eksamenssaet(U: dict) -> list:
                  (f"{lorem(5, 690, '')} `Lorem` {lorem(14, 691, '').lower()}.", "Sit amet · kap. 6", _liste(3, 692)),
              ]),
          ],
-         "resultat": {}, "proever": []},
+         "resultat": {1: "sad", 2: "sad", 3: "sad", 4: "halvt"}, "proever": []},
         {"fag": "beta", "id": "ipsum", "titel": "Beta — Lorem ipsum", "meta": "Lorem ipsum · 15 min",
          "intro": lorem(16, 700),
          "sektioner": [
@@ -983,6 +987,11 @@ class Studie:
                 if x:
                     koe.append(x.pop(0))
         naeste = min((k["_forfald"] for k in alle if not k.get("ny") and k["_forfald"] > dag_slut), default=None)
+        # Ulæste uger pr. fag (til I dag): uger, hvis nye genkaldsspørgsmål venter på, at ugen markeres som læst
+        ulaeste = []
+        for fid in dict.fromkeys(k["fag"] for k in venter):
+            ks = [k for k in venter if k["fag"] == fid]
+            ulaeste.append({"fag": fid, "navn": FAGNAVN[fid], "uger": sorted({k["uge"] for k in ks}), "spoergsmaal": len(ks)})
 
         def ud(k):
             o = {x: v for x, v in k.items() if not x.startswith("_")}
@@ -998,7 +1007,8 @@ class Studie:
                              "nye_klar": len([k for k in alle if k.get("ny") and k["laest"]]), "klaret_i_dag": 3, "dagsmaal": 25,
                              "i_alt": len(alle), "laert": len([k for k in alle if not k.get("ny") and k.get("niveau", 0) >= 2]),
                              "naeste": self.iso(naeste) if naeste else None, "kalibrering": kalibrering, "eksamen": {}, "maal_eksamen": 0.95,
-                             "minutter": max(1, round(len(koe) * 0.75))}}
+                             "minutter": max(1, round(len(koe) * 0.75)), "min_pr_kort": 0.75,
+                             "ulaeste_uger": ulaeste, "sidst_svar": self.iso(self.tid(0, 0))}}
         return rep, svar
 
     # ── status pr. fag (eksportens optælling) ──
@@ -1009,7 +1019,7 @@ class Studie:
         ud = []
         for f in FAG:
             fid = f["id"]
-            s = {"aktivitet": [], "eksamenssaet": (["Lorem_ipsum.pdf"] if fid != "beta" else []),
+            s = {"aktivitet": [], "rytme": self.rytme(fid), "eksamenssaet": (["Lorem_ipsum.pdf"] if fid != "beta" else []),
                  "fagnoter": [{"fil": f"Fagnoter - {f['kort']}.docx", "ændret": self.iso(self.tid(2, 3))}]}
             if fid in ("alfa", "beta"):
                 rows = B[fid]["begreber"]
@@ -1028,6 +1038,9 @@ class Studie:
                         n[MARK_RES[q["mark"]] if q["mark"] else "umarkeret"] += 1
                     s["genkald"].append({"fil": g["fil"], "uger": g["uger"], "spoergsmaal": len(g["spoergsmaal"]), **n,
                                          "ændret": self.iso(self.tid(1 if g["_fi"] == 0 else 2, 2))})
+                s["genkald_i_alt"] = {"spoergsmaal": sum(x["spoergsmaal"] for x in s["genkald"]),
+                                      "forsoegt": sum(x["sad"] + x["halvt"] + x["blankt"] for x in s["genkald"]),
+                                      "sad": sum(x["sad"] for x in s["genkald"])}
             if fid == "alfa":
                 s["modeller"] = 3
                 s["aktivitet"] = akt([("Alfa/Genkald/genkald-uge%d-%d.md" % (self.U[1], self.U[3]), 1),
@@ -1043,6 +1056,8 @@ class Studie:
                                 "tomme": sum(t["status"] == "tom" for t in k["tjek"]),
                                 "gættet": sum(t["status"] != "tom" for t in k["tjek"]), "stubbe": len(k["stubbe"]),
                                 "ændret": self.iso(self.tid(1 + i * 3, i))} for i, k in enumerate(D)]
+                s["drills_i_alt"] = {"pladser": sum(x["pladser"] for x in s["drills"]), "gaettet": sum(x["gættet"] for x in s["drills"]),
+                                     "stubbe": sum(x["stubbe"] for x in s["drills"])}
                 s["oevelser_i_gang"] = ["lorem.js"]
                 s["oevelser_faerdige"] = 7
                 rk = []
@@ -1062,6 +1077,243 @@ class Studie:
                 s["aktivitet"].sort(key=lambda a: a["ændret"], reverse=True)
             ud.append({**FAG_JSON[fid], "eksamen": EKSAMENSFORM[fid], "status": s})
         return ud
+
+    # ── rytme (svar pr. dag i faget, talt i genkald-log.jsonl) ──
+    def rytme(self, fid: str) -> dict:
+        fra, dage = self.M[3], {}
+        for i in range((self.idag - fra).days + 1):
+            d = fra + timedelta(days=i)
+            h = _tal(f"rytme:{fid}:{(self.idag - d).days}")
+            n = 0 if h % 7 in (0, 3) or (d.weekday() >= 5 and h % 2) else 2 + h % (9 if fid == "alfa" else 7)
+            if n:
+                dage[d.isoformat()] = n
+        n = list(dage.values())
+        return {"fra": fra.isoformat(), "til": self.idag.isoformat(), "dage": dage, "svar": sum(n), "aktive_dage": len(n),
+                "flest": max(n, default=0), "seneste": max(dage, default=None)}
+
+    # ── Selvstudie (selvstudie.json: tiden pr. fag mod kursusbeskrivelsens arbejdstimer) ──
+    # Det loggede selvstudie pr. dag er opdigtet, men fast i forhold til i dag, så siden ser ens ud hver dag.
+    def selvstudie(self) -> dict:
+        idag, r1 = self.idag, lambda x: round(x * 10) / 10
+        maal = FAG_EKSEMPEL["studiemaal"]
+        start = self.M[1] + timedelta(days=2)                       # logningen begyndte onsdag i kursusuge 1
+        eks = dict(zip(("alfa", "gamma"), eksamensdage(idag)))
+        eks_t = {"alfa": "09:00", "gamma": "13:00"}
+        fravaer_uge = self.U[2]
+        fravaer = [{"uge": fravaer_uge, "fag": None}]
+        bruges_ikke = [{"fag": "Gamma", "art": "Lecture", "form": "Online",
+                        "hvorfor": "Forelæsningerne ses som optagelse og logges som selvstudie"}]
+        # Selvstudie pr. dag og fag
+        dage_fag, sessioner = {}, {}
+        for i in range((idag - start).days + 1):
+            d = start + timedelta(days=i)
+            h = _tal(f"selvstudie:{(idag - d).days}")
+            if d == idag:
+                timer = 1.2                                             # i dag er ikke slut
+            elif h % 9 == 0 or (d.weekday() == 5 and h % 3):
+                timer = 0.0
+            else:
+                timer = [0.8, 1.3, 1.7, 2.0, 2.2, 2.5, 2.8, 3.2, 3.6, 4.3][h % 10] - (0.6 if d.weekday() >= 5 else 0)
+            if (idag - d).days in (1, 2, 3):                            # de seneste dage i træk med målet nået
+                timer = max(timer, [2.4, 3.1, 2.1][(idag - d).days - 1])
+            timer = max(0.0, r1(timer))
+            if timer:
+                fordeling = [("alfa", "beta", "gamma"), ("gamma", "alfa", "beta"), ("beta", "gamma", "alfa")][h % 3]
+                andele = (0.5, 0.3, 0.2) if timer >= 1.5 else (1.0, 0, 0)
+                for fid, a in zip(fordeling, andele):
+                    if a:
+                        dage_fag.setdefault(fid, {})[d.isoformat()] = r1(timer * a)
+                        sessioner.setdefault(fid, {})[d.isoformat()] = max(1, round(timer * a / 0.9))
+        # Undervisningen pr. uge fra kalenderen (SKEMA), kun det, der er slut
+        undervisning = {}
+        for w in range(0, (idag - self.M[1]).days // 7 + 1):
+            m = self.M[1] + timedelta(days=7 * w)
+            for dag, start_kl, slut_kl, fid, art, form in SKEMA:
+                d = m + timedelta(days=dag)
+                if d >= idag:
+                    continue
+                t = (datetime.strptime(slut_kl, "%H:%M") - datetime.strptime(start_kl, "%H:%M")).seconds / 3600
+                former = undervisning.setdefault(fid, {})
+                fo = former.setdefault((art, form), {})
+                fo[m.isoformat()] = fo.get(m.isoformat(), 0) + t
+        blokke = {"alfa": (2.0, 4.0), "beta": (1.5, 3.0), "gamma": (3.0, 4.5)}
+        nu = datetime.combine(idag, datetime.min.time()).replace(hour=12)
+        fag = []
+        for i, f in enumerate(FAG_EKSEMPEL["fag"]):
+            fid, ab = f["id"], f["arbejdsbyrde"]
+            summ = lambda xs: r1(sum(x["timer"] for x in xs))   # noqa: E731
+            forventet = {"i_alt": summ(ab["poster"]), "undervisning": summ([x for x in ab["poster"] if x["undervisning"]]),
+                         "selvstudie": summ([x for x in ab["poster"] if not x["undervisning"]]), "poster": ab["poster"],
+                         "kilde": ab["kilde"], "semestre": ab.get("semestre", 1)}
+            u_uger, fravaer_t, ikke_brugt = {}, 0.0, 0.0
+            for (art, form), uger in undervisning.get(fid, {}).items():
+                for m, x in uger.items():
+                    if any(b["fag"] == f["kort"] and b["art"] == art and b["form"] == form for b in bruges_ikke):
+                        ikke_brugt += x
+                    elif uge(date.fromisoformat(m)) == fravaer_uge:
+                        fravaer_t += x
+                    else:
+                        u_uger[m] = u_uger.get(m, 0) + x
+            ss = dage_fag.get(fid, {})
+            ss_uger = {}
+            for dato, t in ss.items():
+                m = mandag(date.fromisoformat(dato)).isoformat()
+                ss_uger[m] = ss_uger.get(m, 0) + t
+            bf, bp = blokke[fid]
+            brugt = {"undervisning": r1(sum(u_uger.values())), "selvstudie": r1(sum(ss.values())), "studieblokke_forbi": bf,
+                     "studieblokke_planlagt": bp}
+            brugt["i_alt"] = r1(brugt["undervisning"] + brugt["selvstudie"])
+            alle_m = sorted(set(m for uger in undervisning.get(fid, {}).values() for m in uger) | set(ss_uger))
+            uger_ud = [{"mandag": m, "uge": uge(date.fromisoformat(m)), "undervisning": r1(u_uger.get(m, 0)),
+                        "selvstudie": r1(ss_uger.get(m, 0)), **({"fravaer": True} if uge(date.fromisoformat(m)) == fravaer_uge else {})}
+                       for m in alle_m]
+            til_nu, grund, forudsigelse = None, None, None
+            f_start = datetime.combine(self.M[1] + timedelta(days=[d for d, *_x in SKEMA if _x[2] == fid][0]), datetime.min.time())
+            slut = datetime.combine(eks[fid], datetime.strptime(eks_t[fid], "%H:%M").time()) if fid in eks else None
+            if forventet["semestre"] != 1:
+                grund = f"Kurset løber over {forventet['semestre']} semestre, og kursusbeskrivelsen deler ikke timerne op pr. semester."
+            elif not slut:
+                grund = "Eksamensdatoen kendes ikke (Vigtige datoer i CLAUDE.md)."
+            else:
+                andel = min(1, max(0, (nu - f_start) / (slut - f_start)))
+                til_nu = {"i_alt": r1(forventet["i_alt"] * andel), "undervisning": r1(forventet["undervisning"] * andel),
+                          "selvstudie": r1(forventet["selvstudie"] * andel), "andel": round(andel * 100),
+                          "fra": f_start.date().isoformat(), "til": slut.date().isoformat()}
+            if forventet["semestre"] == 1 and slut and slut > nu:
+                tilbage, ug = max(0, forventet["selvstudie"] - brugt["selvstudie"]), (slut - nu).total_seconds() / (7 * 86400)
+                forudsigelse = {"tilbage": r1(tilbage), "uger_tilbage": r1(ug), "pr_uge": r1(tilbage / ug), "eksamen": slut.date().isoformat()}
+            fag.append({"id": fid, "kort": f["kort"], "navn": f["navn"], "farve": f.get("farve") or f"var(--c{i + 1})",
+                        "kursuskode": f["kursuskode"], "forventet": forventet, "brugt": brugt, "forventet_til_nu": til_nu,
+                        "grund": grund, "uger": uger_ud, "forudsigelse": forudsigelse,
+                        "undervisning_ikke_talt": r1(fravaer_t + ikke_brugt),
+                        "ikke_talt": {"fravaer": r1(fravaer_t), "bruges_ikke": r1(ikke_brugt)}})
+        # Motivationsdelen (dagsmål, dage i træk, medaljer, saldo, kalender), som motivationFor() i kompas-eksport.js
+        mål, med = maal["dag_timer"], maal["medaljer"]
+        medalje = lambda t: "guld" if t >= med["guld"] else "soelv" if t >= med["soelv"] else "bronze" if t >= med["bronze"] else None   # noqa: E731
+        dage = []
+        for i in range((idag - start).days + 1):
+            d = start + timedelta(days=i)
+            pr_fag = {x["id"]: dage_fag[x["id"]][d.isoformat()] for x in fag if d.isoformat() in dage_fag.get(x["id"], {})}
+            timer = r1(sum(pr_fag.values()))
+            dage.append({"dato": d.isoformat(), "uge": uge(d), "ugedag": d.weekday(), "timer": timer, "pr_fag": pr_fag,
+                         "sessioner": sum(sessioner.get(x["id"], {}).get(d.isoformat(), 0) for x in fag),
+                         "naaet": timer >= mål, "medalje": medalje(timer)})
+        saldo = 0.0
+        for d in dage:
+            saldo += d["timer"] - mål
+            d["saldo"] = r1(saldo)
+
+        def i_traek(krav):
+            n, j = 0, len(dage) - 1
+            if j >= 0 and not krav(dage[j]):
+                j -= 1
+            while j >= 0 and krav(dage[j]):
+                n, j = n + 1, j - 1
+            return n
+        laengst = loeb = 0
+        for d in dage:
+            loeb = loeb + 1 if d["timer"] > 0 else 0
+            laengst = max(laengst, loeb)
+
+        def periode(fra: str, antal: int) -> dict:
+            ds = [d for d in dage if d["dato"] >= fra]
+            t = r1(sum(d["timer"] for d in ds))
+            return {"timer": t, "maal": antal * mål, "pct": round(100 * t / (antal * mål)),
+                    "medaljer": {k: sum(d["medalje"] == k for d in ds) for k in ("guld", "soelv", "bronze")}}
+        foerste = idag.replace(day=1)
+        naeste_mnd = (foerste + timedelta(days=32)).replace(day=1)
+        kalender = []
+        w = mandag(start)
+        while w <= idag:
+            kalender.append({"uge": uge(w), "mandag": w.isoformat(), "dage": []})
+            for j in range(7):
+                dato = (w + timedelta(days=j)).isoformat()
+                x = next((d for d in dage if d["dato"] == dato), None)
+                kalender[-1]["dage"].append({"dato": dato, "timer": x["timer"] if x else None,
+                                             "niveau": min(1, x["timer"] / med["guld"]) if x else None,
+                                             "medalje": x["medalje"] if x else None})
+            w += timedelta(days=7)
+        trin = lambda t: None if t is None else 0 if not t else 4 if t >= med["guld"] else 3 if t >= med["soelv"] else 2 if t >= med["bronze"] else 1   # noqa: E731
+        maaneder, mm = [], start.replace(day=1)
+        while mm <= foerste:
+            n = ((mm + timedelta(days=32)).replace(day=1) - mm).days
+            ds = []
+            for j in range(1, n + 1):
+                dato = mm.replace(day=j).isoformat()
+                x = next((d for d in dage if d["dato"] == dato), None)
+                ds.append({"dag": j, "dato": dato, "timer": x["timer"] if x else None, "sessioner": x["sessioner"] if x else None,
+                           "medalje": x["medalje"] if x else None, "trin": trin(x["timer"] if x else None)})
+            t = r1(sum(d["timer"] or 0 for d in ds))
+            m_maal = sum(d["dato"] >= start.isoformat() for d in ds) * mål
+            maaneder.append({"maaned": mm.isoformat()[:7], "navn": f"{MDR_LANG[mm.month - 1]} {mm.year}", "forskyd": mm.weekday(),
+                             "timer": t, "maal": m_maal, "pct": round(100 * t / m_maal), "sessioner": sum(d["sessioner"] or 0 for d in ds),
+                             "dage": ds})
+            mm = (mm + timedelta(days=32)).replace(day=1)
+        motivation = {
+            "maal": mål, "maaneder": maaneder, "saldo_i_dag": r1(dage[-1]["timer"] - mål), "gaelder": maal.get("gaelder", "alle dage"),
+            "medaljer_graenser": med, "fra": start.isoformat(),
+            "i_dag": {**periode(idag.isoformat(), 1), "medalje": dage[-1]["medalje"]},
+            "uge": periode(self.m0.isoformat(), 7), "maaned": periode(foerste.isoformat(), (naeste_mnd - foerste).days),
+            "i_alt": periode(start.isoformat(), len(dage)),
+            "i_traek": i_traek(lambda d: d["timer"] > 0), "i_traek_maal": i_traek(lambda d: d["naaet"]), "laengst_i_traek": laengst,
+            "saldo": r1(saldo), "seneste_7": dage[-7:], "dage": dage, "kalender": kalender,
+            "eksamener": sorted([{"fag": FAGNAVN[fid], "dato": d.isoformat(), "dage": (d - idag).days} for fid, d in eks.items()],
+                                key=lambda e: e["dato"]),
+        }
+        s = lambda k: r1(sum(x["brugt"][k] for x in fag))   # noqa: E731
+        return {"genereret": self.iso(self.nu - timedelta(minutes=12)), "kalender_fra": self.M[1].isoformat(),
+                "selvstudie_fra": start.isoformat(), "til": idag.isoformat(), "motivation": motivation,
+                "i_alt": {"undervisning": s("undervisning"), "selvstudie": s("selvstudie"), "brugt": s("i_alt")}, "fag": fag,
+                "ukendt": [{"navn": "Lorem ipsum", "timer": 1.5}], "fravaer": fravaer, "bruges_ikke": bruges_ikke, "mangler": None}
+
+    # ── Eksamen → Opgaver efter niveau (<Fag>/Eksamenstræning/niveauer.json, som GET /eksamen/niveauer) ──
+    def niveauer(self, E: list) -> list:
+        saet = next(s for s in E if s["fag"] == "gamma")
+        sek = saet["sektioner"]
+        foerste = [sum(len(x["spoergsmaal"]) for x in sek[:i]) + 1 for i in range(len(sek))]
+
+        def o(opgave, nr, niveau, fokus, resultat=None, instruktor=False):
+            x = sek[nr - 1]
+            return {"saet": saet["id"], "nr": nr, "opgave": opgave, "saet_navn": "Lorem ipsum A", "niveau": niveau, "fokus": fokus,
+                    **({"instruktor": True} if instruktor else {}), "sektion": x["titel"], "foerste": foerste[nr - 1],
+                    "antal": len(x["spoergsmaal"]), "resultat": resultat or {"sad": 0, "halvt": 0, "blankt": 0}}
+        return [
+            {"fag": "gamma", "titel": "Opgaver efter niveau", "efter": 4, "kilde": "Underviserens oversigt", "note": lorem(18, 960),
+             "fra": (self.M[4] + timedelta(days=1)).isoformat(),
+             "opgaver": [o("Opgave 1", 1, "Let", "funktioner og løkker", {"sad": 2, "halvt": 0, "blankt": 0}),
+                         o("Opgave 2", 2, "Middel", "arrays og objekter", {"sad": 1, "halvt": 1, "blankt": 0}),
+                         o("Opgave 3", 3, "Svær", "klasser", instruktor=True)]},
+            {"fag": "gamma", "titel": "Opgaver efter niveau", "efter": 8, "kilde": "Underviserens oversigt", "note": None,
+             "fra": (self.M[7] + timedelta(days=15)).isoformat(),
+             "opgaver": [o("Opgave 2", 2, "Middel", "højere ordens funktioner"), o("Opgave 3", 3, "Svær", "moduler og asynkron kode")]},
+        ]
+
+    # ── USB-noter: din vurdering af en uge (Scripts/usb-vurdering.json) og det, rutinen har rettet efter ──
+    def usb(self) -> tuple:
+        d = lambda n: (self.idag - timedelta(days=n)).isoformat()   # noqa: E731
+        v = {"gamma": {str(self.U[3]): {"vurdering": "brugbar", "kommentar": "", "dato": d(16)},
+                       str(self.U[4]): {"vurdering": "for_meget", "kommentar": "Kodeblokkene om lorem ipsum siger det samme to gange.",
+                                        "dato": d(9)},
+                       str(self.U[5]): {"vurdering": "mangler", "kommentar": "Mangler et eksempel på dolor sit amet med en løkke.",
+                                        "dato": d(1)}}}
+        handlet = {"gamma": {str(self.U[3]): d(16), str(self.U[4]): d(9)}}
+        return v, handlet
+
+
+def _tal(s: str) -> int:
+    """Et fast tal ud fra en tekst (samme tekst giver samme tal), til opdigtede mønstre."""
+    return int(hashlib.sha1(s.encode()).hexdigest()[:8], 16)
+
+
+def _omfang(html: str) -> dict:
+    """Ord og kodeblokke i en blok, som omfang() i kompas-eksport.js."""
+    tekst = re.sub(r"<[^>]+>", " ", html)
+    return {"ord": len(tekst.split()), "kodeblokke": html.count("<pre>")}
+
+
+GAMMA_EKSAMEN_HTML = (_fn_label("Mønstre i gamle sæt") + "<ul>" + "".join(f"<li>{lorem(12, 970 + i)}</li>" for i in range(4)) + "</ul>"
+                      + _fn_label("Hurtigt opslag") + "<pre><code>"
+                      + _esc("const lorem = [3, 1, 2];\nlorem.sort((a, b) => a - b);   // [1, 2, 3]") + "</code></pre>")
 
 
 def _skriv(sti: Path, data) -> None:
@@ -1095,9 +1347,17 @@ def lav(ud: Path, idag: date) -> None:
         fn[f["id"]] = {"fil": f"{f['kort']}/Fagnoter - {f['kort']}.docx", "ændret": S.iso(S.tid(2, 3)),
                        "stempel": f"{int(S.tid(2, 3).timestamp() * 1000)}:{(310 + 47 * len(f['id'])) * 1024}",
                        "uger": {str(S.U[k]): {"titel": f"Uge {S.U[k]} — {EMNER[f['id']][k - 1]}", "udfyldt": True,
-                                              "kun_bog": (f["id"], k) in FN_UDEN_SLIDES, "html": fagnote_html(f["id"], k, S.U)}
-                                for k in (3, 4, 5)}}
+                                              "kun_bog": (f["id"], k) in FN_UDEN_SLIDES, "html": fagnote_html(f["id"], k, S.U),
+                                              **_omfang(fagnote_html(f["id"], k, S.U))}
+                                for k in (3, 4, 5)},
+                       "dele": [{"titel": "Eksamen", "html": GAMMA_EKSAMEN_HTML, **_omfang(GAMMA_EKSAMEN_HTML)}] if f["id"] == "gamma" else [],
+                       "handlet": {}}
+    usb_vurdering, handlet = S.usb()
+    for fid, x in fn.items():
+        x["handlet"] = handlet.get(fid, {})
+        x["ord_i_alt"] = sum(u["ord"] for u in x["uger"].values() if u["udfyldt"]) + sum(d["ord"] for d in x["dele"])
     _skriv(rod / "fagnoter.json", fn)
+    _skriv(rod / "selvstudie.json", S.selvstudie())
     _skriv(rod / "fagnoter" / "alfa" / "lorem-ipsum.svg", DIAGRAM_SVG)
     # Som eksporten: kun kalenderdelen af overbliks liv.json (form-modulet skriver den først). Uden den bruges
     # demoens egen kalender.
@@ -1118,10 +1378,12 @@ def lav(ud: Path, idag: date) -> None:
         "kilde": "Studie (Scripts/kompas-eksport.js) · køreplaner fra Studie-rutinen", "opdateret": genereret,
         "sider": [
             {"titel": "Ugeoverblik", "ikon": "calendar", "sti": "/studie/", "nyt": f"uge {nyeste}"},
-            {"titel": "Fag", "ikon": "book-open", "sti": "/studie/fag.html", "nyt": f"uge {nyeste} · {fn_uger} fagnote-uger"},
+            {"titel": "Fag", "ikon": "book-open", "sti": "/studie/fag.html", "match": ["/studie/fag.html", "/studie/usb.html"],
+             "nyt": f"uge {nyeste} · {fn_uger} fagnote-uger"},
             {"titel": "Træning", "ikon": "brain", "sti": "/studie/genkald.html"},
             {"titel": "Eksamen", "ikon": "file-text", "sti": "/studie/eksamen.html"},
-            {"titel": "Frister", "ikon": "clipboard-check", "sti": "/studie/deadlines.html",
+            {"titel": "Selvstudie", "ikon": "pie-chart", "sti": "/studie/selvstudie.html"},
+            {"titel": "Frister", "ikon": "clipboard-check", "sti": "/studie/deadlines.html", "oeverst": True,
              "nyt": hashlib.sha1(frister.encode()).hexdigest()[:10]},
         ]})
 
@@ -1162,6 +1424,8 @@ def lav(ud: Path, idag: date) -> None:
             svar("eksamen/saet", saet)
             svar("eksamen/facit", {"facit": alle["1"]})
     svar("eksamen", eksamen)
+    svar("eksamen/niveauer", S.niveauer(E))
+    svar("usb-vurdering", usb_vurdering)
 
     # I egne ord (<mappe>/egne-ord.md): et felt pr. uge på Fag-siden og under Overblik på telefonen
     egne_ord = {"alfa": {S.U[NU - 1]: f"{lorem(18, 41)} {lorem(14, 43)}", S.U[NU - 2]: lorem(22, 47)},
@@ -1192,5 +1456,5 @@ def lav(ud: Path, idag: date) -> None:
         "egne_ord": {"uger": sorted({pl["uge"] for pl in planer}), "tekster": egne_ord,
                      "emner": {f["fag"]: {q["uge"]: re.sub(r"^Uge\s+\d+\s*[—–-]\s*", "", q["afsnit"], flags=re.I)
                                            for q in f["spoergsmaal"] if q["uge"]} for f in G}},
-        "statistik": {x: rep["statistik"][x] for x in ("klaret_i_dag", "dagsmaal", "laert", "i_alt", "naeste", "kalibrering")},
+        "statistik": {x: rep["statistik"][x] for x in ("klaret_i_dag", "dagsmaal", "laert", "i_alt", "naeste", "kalibrering", "min_pr_kort")},
     })

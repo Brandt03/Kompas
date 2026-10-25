@@ -6,7 +6,9 @@
 <title>I dag</title>
 <!-- Forsiden i Kompas: dagen på tværs af projekterne. Læser kun, hvad projekterne selv skriver:
      /form/coach.json og soevn.json (garmin-coach), /form/liv.json (overblik), /studie/studie.json og
-     /studie/api/repetition (studie), /sprog/api/pakke (sprog). Mangler et projekt, udelades dets kort. -->
+     /studie/api/repetition (studie), /sprog/api/pakke (sprog) og /skaermtid/skaermtid.json (skaermtid), og
+     /kompas/forbindelser.json (bin/forbindelser.py) til "Skal tjekkes". Et projekt på pause i projekter.json hentes
+     ikke. Mangler et projekt, udelades dets kort. -->
 <link rel="stylesheet" href="/kompas/assets/tokens.css">
 <link rel="stylesheet" href="/kompas/assets/page.css">
 <style>
@@ -15,6 +17,10 @@
   .s12 { grid-column: span 12; } .s8 { grid-column: span 8; } .s7 { grid-column: span 7; } .s5 { grid-column: span 5; } .s4 { grid-column: span 4; }
 
   /* hero */
+  .stille { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 14px; font-size: 13px; color: var(--text-secondary); }
+  .stille .badge { background: var(--warning-tint); color: var(--warning); text-decoration: none; }
+  .stille .badge.bad { background: var(--destructive-tint); color: var(--destructive); }
+  .stille + .stille { margin-top: 8px; }
   .hero { position: relative; overflow: hidden; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px; align-items: center; padding: 30px 32px; }
   .hero::before { content: ""; position: absolute; inset: 0; pointer-events: none;
     background: radial-gradient(120% 140% at 100% 0%, color-mix(in srgb, var(--mark) 12%, transparent) 0%, transparent 55%),
@@ -69,7 +75,8 @@
   .ev .n { min-width: 0; }
   .ev .n b { display: block; font-weight: 500; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .ev .n small { color: var(--text-secondary); font-size: 12.5px; }
-  .ev.done { opacity: .45; }
+  .ev .n .fakt { display: block; margin-top: 2px; }
+  .ev.done > :not(.n), .ev.done .n > :not(.fakt) { opacity: .45; }  /* "Faktisk" står fuldt, når blokken er færdig */
   .ev.nu { background: var(--container-inset); box-shadow: inset 0 0 0 1px var(--divider); }
   .ev.fri .sw { background: none; border: 1.5px dashed var(--success); width: 2px; }
   .ev.fri b { color: var(--success); }
@@ -84,11 +91,13 @@
   .cal { width: 46px; border-radius: 10px; overflow: hidden; text-align: center; box-shadow: var(--shadow-border-xs); background: var(--container); }
   .cal .m { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; background: var(--surface-inset); color: var(--text-secondary); padding: 2px 0; }
   .cal .d { font-size: 18px; font-weight: 600; padding: 3px 0 4px; font-variant-numeric: tabular-nums; }
-  .cal.hot .m { background: var(--destructive); color: #fff; }
+  /* Rød tone med rød tekst, der er trukket mod tekstfarven: 5,2:1 i lys og 7,2:1 i mørk (hvid på rød var 3,9 og 2,8:1) */
+  .cal.hot .m { background: var(--destructive-tint); color: color-mix(in srgb, var(--destructive) 75%, var(--text-primary)); }
+  .cal .d.uge { font-size: 13px; padding: 6px 0 7px; }
   .dli .n b { display: block; font-weight: 500; font-size: 13.5px; line-height: 1.35; }
   .dli .n small { display: flex; gap: 6px; align-items: center; color: var(--text-secondary); font-size: 12px; margin-top: 2px; }
   .cd { font-size: 12px; font-weight: 600; color: var(--text-secondary); white-space: nowrap; }
-  .cd.hot { color: var(--destructive); }
+  .cd.hot { color: color-mix(in srgb, var(--destructive) 75%, var(--text-primary)); }
 
   /* fokus og genveje */
   .one { display: flex; gap: 12px; align-items: flex-start; }
@@ -115,6 +124,10 @@
   .meter i { display: block; height: 100%; border-radius: 3px; background: var(--mark); }
   .foot { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; color: var(--text-subdued); font-size: 12.5px; }
   .foot a { color: var(--text-secondary); }
+  @media (hover: none) and (pointer: coarse) {  /* som .link i page.css: 44 px at trykke på, samme udseende */
+    .foot a { position: relative; }
+    .foot a::after { content: ""; position: absolute; left: 50%; top: 50%; width: max(100%, 44px); height: 44px; transform: translate(-50%, -50%); }
+  }
   .fade { animation: ind .5s cubic-bezier(.2,.8,.2,1) both; }
   @keyframes ind { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
   @media (prefers-reduced-motion: reduce) { .fade { animation: none; } .ring .arc { transition: none; } }
@@ -124,7 +137,7 @@
     .hero { grid-template-columns: minmax(0, 1fr); padding: 22px 20px; } .hello { font-size: 30px; }
     .ring { justify-items: start; grid-template-columns: auto 1fr; align-items: center; text-align: left; } .ring svg { width: 96px; height: 96px; }
     .ev { grid-template-columns: 78px 4px minmax(0, 1fr); } .ev .pill { display: none; }
-    .band .tick:nth-child(even) { display: none; }
+    .band .tick:nth-of-type(even) { display: none; }  /* tallene er de eneste span i båndet: 7, 11, 15 og 19 står */
   }
 </style>
 </head>
@@ -169,15 +182,36 @@ function ring(v) {
     <text class="v" x="66" y="70" text-anchor="middle">${v ?? "–"}</text><text class="u" x="66" y="89" text-anchor="middle">af 100</text></svg>`;
 }
 
+// Planlagt mod faktisk for én blok: overblik har regnet, hvad der skete i den (`dagsplan[].plan[].faktisk`, opdateres
+// hver halve time). Blokken findes på dato og starttid; har to blokke samme start, vælges den med samme titel.
+function planBlok(liv, idag, tid, titel) {
+  const start = `${idag}T${tid.split("–")[0].trim()}`, ens = (x, y) => x.startsWith(y) || y.startsWith(x);
+  const kandidater = (liv?.dagsplan || []).flatMap(d => d.plan || []).filter(b => b.start === start);
+  return kandidater.find(b => ens(b.titel, titel)) || kandidater[0] || null;
+}
+// "45 min produktiv · 30 min passiv · 45 min uden skærm · intet selvstudie logget". Uden skærmtid fra Skærmtid (null)
+// vides det ikke, så intet vises.
+function faktiskTekst(blok) {
+  const f = blok?.faktisk;
+  if (!f || f.skaerm == null) return "";
+  const min = m => varighed(m / 60);
+  const dele = Object.entries(f.skaerm).map(([g, m]) => `${min(m)} ${g.toLowerCase()}`);
+  if (f.uden_skaerm) dele.push(`${min(f.uden_skaerm)} uden skærm`);
+  if (f.traening) dele.push(`træning ${min(f.traening)}`);
+  if (f.selvstudie) dele.push(`selvstudie ${min(f.selvstudie)} logget`);
+  else if (blok.plan) dele.push("intet selvstudie logget");
+  return dele.join(" · ");
+}
+
 // Dagens program fra garmin-coach, plus frie huller på mindst en time mellem 7 og 22
-function dagen(coach, studie) {
+function dagen(coach, studie, liv) {
   const idag = iso(new Date());
   const dag = coach?.kalender?.dage?.find(d => d.dato === idag);
   if (!dag) return null;
   const evs = (dag.program || []).map(p => {
     const hel = !/\d/.test(p.tid || "");
     const [a, b] = hel ? [null, null] : p.tid.split("–").map(hm);
-    return { ...klassificer(p, studie?.fag || []), titel: p.titel, a, b, hel };
+    return { ...klassificer(p, studie?.fag || []), titel: p.titel, a, b, hel, faktisk: hel ? "" : faktiskTekst(planBlok(liv, idag, p.tid, p.titel)) };
   });
   const timed = evs.filter(e => !e.hel).sort((x, y) => x.a - y.a);
   const fri = []; let cur = 7;
@@ -196,23 +230,61 @@ function frister(studie) {
     const slut = d.dato || d.til;
     // Eksamener kommer altid med, selv om de er langt væk; resten kun tre uger frem
     if (slut < idag || dato > grænse && d.type !== "eksamen") continue;
-    const titel = d.hvad.replace(/<[^>]+>/g, "").split(" — ")[0].replace(/^Eksamen: /, "Eksamen · ");
-    ud.push({ dato, uge: !d.dato, titel, omr: "Studie", sub: d.fag + (d.tid ? ` · kl. ${d.tid}` : ""), ikon: d.type === "eksamen" ? "clipboard-check" : "graduation-cap", href: "/studie/deadlines.html" });
+    const titel = udenHtml(d.hvad).split(" — ")[0].replace(/^Eksamen: /, "Eksamen · ");
+    ud.push({ dato, uge: !d.dato, uger: d.uger, titel, omr: "Studie", sub: d.fag + (d.tid ? ` · kl. ${d.tid}` : ""), ikon: d.type === "eksamen" ? "clipboard-check" : "graduation-cap", href: "/studie/deadlines.html" });
   }
   return ud.sort((a, b) => a.dato.localeCompare(b.dato)).slice(0, 7);
 }
 
+// Står stille: det, der ikke er rørt i flere dage, selvom der venter noget. Tidspunkterne kommer fra projekterne
+// (dit seneste svar, enhedens seneste data); siden tæller kun hele dage siden og
+// sammenligner med grænsen. Enhederne følger Skærmtid-siden: over to døgn uden data, undtagen dem med sjaelden.
+// Studieblokke regner overblik (`glippede`): planens blokke uden logget studietid i flere af de seneste døgn.
+const STILLE_DAGE = { sprog: 3, genkald: 3, enhed: 2 };
+const dageSiden = t => -daysUntil(iso(new Date(t)));
+function stille({ genkald, sprog, skaermtid, liv }) {
+  const ud = [], gammel = (t, grænse) => t && dageSiden(t) >= grænse;
+  const gl = liv?.glippede;
+  if (gl?.vis) {
+    const datoer = gl.glippet.map(d => `${+d.dato.slice(8, 10)}.${+d.dato.slice(5, 7)}.`).join(", ");
+    ud.push({ navn: "Studieblokke", tekst: `${gl.glippet.length} af ${gl.dage} d`, href: "/form/uge.html",
+      titel: `${gl.glippet.length} af de seneste ${gl.dage} døgn havde studieblokke uden logget studietid (${datoer}). Vælg i stedet for at flytte.` });
+  }
+  if (sprog?.kort?.length && gammel(sprog.sidst_svar, STILLE_DAGE.sprog))
+    ud.push({ navn: "Sprog", dage: dageSiden(sprog.sidst_svar), href: "/sprog/mobil.html", hvad: "dage siden dit seneste sprogsvar" });
+  if (genkald?.kort?.length && gammel(genkald.statistik?.sidst_svar, STILLE_DAGE.genkald))
+    ud.push({ navn: "Genkald", dage: dageSiden(genkald.statistik.sidst_svar), href: "/studie/genkald.html#idag", hvad: "dage siden dit seneste svar i Studie" });
+  for (const e of skaermtid?.enheder || []) {
+    if (!e.kendt || e.sjaelden) continue;  // en enhed, du sjældent bruger, står ikke stille
+    if (!e.sidst) ud.push({ navn: e.navn, dage: null, href: "/skaermtid/", hvad: "har aldrig sendt skærmtid" });
+    else if (gammel(e.sidst, STILLE_DAGE.enhed)) ud.push({ navn: e.navn, dage: dageSiden(e.sidst), href: "/skaermtid/", hvad: "dage siden enhedens seneste skærmtid" });
+  }
+  return ud;
+}
+
+// Skal tjekkes: de forbindelser, bin/forbindelser.py har givet status fejl eller advarsel (datakilder, rutiner,
+// baggrundsjob og værktøjer). Siden regner ikke status selv; den viser kun, hvad Forbindelser allerede siger.
+function tjekkes(forbindelser) {
+  const punkter = (forbindelser?.grupper || []).flatMap(g => g.punkter.map(p => ({ ...p, gruppe: g.titel })))
+    .concat((forbindelser?.vaerktoejer || []).map(v => ({ ...v, type: "Værktøj", gruppe: "Værktøjer på Mac'en", tekst: `ikke installeret (${v.til})` })));
+  return punkter.filter(p => p.status === "fejl" || p.status === "advarsel")
+    .sort((a, b) => (a.status === "fejl" ? 0 : 1) - (b.status === "fejl" ? 0 : 1))
+    .map(p => ({ navn: p.type === "Claude-rutine" ? `Rutinen ${p.navn}` : p.navn, fejl: p.status === "fejl", titel: `${p.gruppe}: ${p.tekst}` }));
+}
+
 // Hver sektion bygges for sig: et felt, der mangler i ét projekts data (fx en frist uden `hvad`), skal kun koste
 // den sektion. prøv() fanger fejlen, noterer sektionen og giver `ellers`; øverst står, hvad der ikke kunne vises.
-function render({ coach, soevn, liv, studie, genkald, sprog }) {
+function render({ coach, soevn, liv, studie, genkald, sprog, skaermtid, forbindelser, svarerIkke = [] }) {
   const nu = new Date(), h = nuH(), idag = iso(nu);
   const fejlede = [];
   const prøv = (navn, byg, ellers = "") => {
     try { return byg(); } catch (e) { console.error(`I dag: ${navn}`, e); if (!fejlede.includes(navn)) fejlede.push(navn); return ellers; }
   };
-  const D = prøv("Dagen", () => dagen(coach, studie), null);
+  const D = prøv("Dagen", () => dagen(coach, studie, liv), null);
   const fr = prøv("Frister", () => frister(studie), []);
   const review = prøv("Fokus", () => liv ? latestReview(liv) : null, null);
+  const st = prøv("Står stille", () => stille({ genkald, sprog, skaermtid, liv }), []);
+  const tj = prøv("Skal tjekkes", () => tjekkes(forbindelser), []);
   // Rådet gælder kun den dag, det er regnet for
   const raad = coach?.dagens_raad?.dato === idag ? coach.dagens_raad : null;
 
@@ -235,23 +307,37 @@ function render({ coach, soevn, liv, studie, genkald, sprog }) {
         <div class="eyebrow">${weekday(nu).replace(/^./, c => c.toUpperCase())} ${nu.getDate()}. ${MONTHS[nu.getMonth()].replace(".", "")} · uge ${isoWeek(nu)}</div>
         <h1 class="hello">${hilsen(nu.getHours())}</h1>
         <p class="summary">${dele.length ? dele.join(" · ").replace(/^./, c => c.toUpperCase()) + "." : "Åbn Kompas-appen for at hente dagens tal."}</p>
-        ${raad?.niveau ? `<a class="raad ${raad.niveau}" href="/form/coach.html" style="text-decoration:none">${icon("activity", 16)}<span><b>${esc(raad.titel)}.</b> ${esc(raad.tekst)}<small>Fordi: ${esc(raad.grunde.join(", "))}.</small></span></a>` : ""}
+        ${st.length ? `<div class="stille">${icon("clock", 14)}<span>Står stille:</span>${st.map(x => `<a class="badge" href="${x.href}" title="${esc(x.titel ?? (x.dage == null ? `${x.navn} ${x.hvad}` : `${x.dage} ${x.hvad}`))}">${esc(x.navn)} · ${esc(x.tekst ?? (x.dage == null ? "ingen data" : `${x.dage} d`))}</a>`).join("")}</div>` : ""}
+        ${tj.length ? `<div class="stille">${icon("plug", 14)}<span>Skal tjekkes:</span>${tj.map(x => `<a class="badge${x.fejl ? " bad" : ""}" href="/kompas/forbindelser.html" title="${esc(x.titel)}">${esc(x.navn)}</a>`).join("")}</div>` : ""}
+        ${raad?.niveau ? `<a class="raad ${raad.niveau}" href="/form/kroppen.html" style="text-decoration:none">${icon("activity", 16)}<span><b>${esc(raad.titel)}.</b> ${esc(raad.tekst)}<small>Fordi: ${esc(raad.grunde.join(", "))}.</small></span></a>` : ""}
       </div>
       ${sn.training_readiness != null ? `<div class="ring">${ring(sn.training_readiness)}<div class="lbl">Readiness · <b>${readinessOrd(sn.training_readiness)}</b></div></div>` : ""}
     </section>`;
   });
 
-  const krop = prøv("Søvn og krop", () => {
+  // Søvn i nat, ugens træning og selvstudie (ISO-uge, fra overblik) og dagens skærmtid. Selvstudiet står mod ugens
+  // planlagte studieblokke; begge tal er regnet i overblik. Hvert felt viser "–", når dets projekt mangler, og
+  // hopper til sit afsnit på målsiden (#natten og #aktiviteter i Kroppen i tal, #planlagt i Ugereview, #kat i Skærmtid).
+  const krop = prøv("Søvn, ugen og skærmtid", () => {
     const r = coach?.restitution, sn = r?.seneste_døgn || {}, nat = soevn?.naetter?.find(n => n.dato === idag);
-    return r ? `<section class="s12 fade" style="animation-delay:.05s">
+    const su = liv?.studieuge, uge = su && liv.uger?.find(u => u.mandag === su.mandag);
+    const sk = skaermtid?.perioder?.idag, iGaar = sk && skaermtid.dage?.find(d => d.dato === iso(addDays(parseDate(sk.fra), -1)));
+    if (!r && !su && !sk) return "";
+    const stor = h => h == null ? "–" : varighed(h).replace(/ (t|min)/g, "<small>$1</small>");
+    const lille = h => varighed(h).replace(/ /g, "&nbsp;");  // så en smal skærm ikke knækker "7 t 7 min"
+    const felt = (href, ik, navn, v, sub) => `<a class="card vital" href="${href}" style="text-decoration:none;color:inherit"><span class="k">${icon(ik, 14)}${navn}</span><span class="v">${v}</span><span class="s">${sub}</span></a>`;
+    const studie = !su ? "–" : su.status ? esc(su.status) : su.planlagt_blokke
+      ? `af ${lille(su.planlagt_timer)} planlagt i ${su.planlagt_blokke}&nbsp;${su.planlagt_blokke === 1 ? "blok" : "blokke"}${su.selvstudie_dage ? ` · ${fmt(su.selvstudie_dage)} ${su.selvstudie_dage === 1 ? "dag" : "dage"}` : ""}`
+      : "ingen studieblokke planlagt";
+    return `<section class="s12 fade" style="animation-delay:.05s">
       <div class="vitals">
-        <a class="card vital" href="/form/soevn.html" style="text-decoration:none;color:inherit"><span class="k">${icon("moon", 14)}Søvn i nat</span><span class="v">${nat?.soevn_t != null ? varighed(nat.soevn_t).replace(/ (t|min)/g, "<small>$1</small>") : "–"}</span><span class="s">søvnscore ${fmt(sn.søvnscore)}</span></a>
-        <a class="card vital" href="/form/soevn.html" style="text-decoration:none;color:inherit"><span class="k">${icon("activity", 14)}HRV</span><span class="v">${fmt(nat?.hrv ?? r.hrv?.aktuel)}<small>ms</small></span><span class="s">${sn.hrv_status ? { BALANCED: "i balance", UNBALANCED: "ude af balance", LOW: "lav", POOR: "lav" }[sn.hrv_status] || sn.hrv_status.toLowerCase() : "–"} · normalt ${fmt(r.hrv?.baseline)}</span></a>
-        <a class="card vital" href="/form/soevn.html" style="text-decoration:none;color:inherit"><span class="k">${icon("activity", 14)}Hvilepuls</span><span class="v">${fmt(nat?.hvilepuls ?? r.hvilepuls?.aktuel)}<small>bpm</small></span><span class="s">normalt ${fmt(r.hvilepuls?.baseline)}</span></a>
-        <a class="card vital" href="/form/coach.html" style="text-decoration:none;color:inherit"><span class="k">${icon("sparkles", 14)}Body battery</span><span class="v">${fmt(sn.body_battery_top)}</span><span class="s">top i dag · stress ${fmt(sn.stress_snit)}</span></a>
+        ${felt(`/form/kroppen.html?dag=${idag}#natten`, "moon", "Søvn i nat", stor(nat?.soevn_t), `søvnscore ${fmt(sn.søvnscore)}`)}
+        ${felt("/form/kroppen.html#aktiviteter", "dumbbell", "Træning i ugen", stor(uge?.traening_timer), uge?.traening_pas != null ? `${fmt(uge.traening_pas)} pas` : "–")}
+        ${felt("/form/uge.html#planlagt", "book-open", "Selvstudie i ugen", stor(su?.selvstudie_timer), studie)}
+        ${felt("/skaermtid/#kat", "smartphone", "Skærmtid i dag", stor(sk?.timer), sk ? `passiv ${lille(sk.grupper?.Passiv ?? 0)}${iGaar ? ` · i går ${lille(iGaar.timer)}${iGaar.sen_timer ? `, heraf ${lille(iGaar.sen_timer)} efter kl.&nbsp;23` : ""}` : ""}` : "–")}
       </div>
-      ${(r.flag || []).map(f => `<div class="flag" style="margin-top:12px">${icon("activity", 16)}<span>${esc(f.split(" — ")[0].replace(/^./, c => c.toUpperCase()))}.</span></div>`).join("")}
-    </section>` : "";
+      ${(r?.flag || []).map(f => `<div class="flag" style="margin-top:12px">${icon("activity", 16)}<span>${esc(f.split(" — ")[0].replace(/^./, c => c.toUpperCase()))}.</span></div>`).join("")}
+    </section>`;
   });
 
   const dagenKort = D ? prøv("Dagen", () => `<section class="card panel s8 fade" style="animation-delay:.1s">
@@ -263,7 +349,11 @@ function render({ coach, soevn, liv, studie, genkald, sprog }) {
   const fristerKort = fr.length ? prøv("Frister", () => `<section class="card panel ${D ? "s4" : "s12"} fade" style="animation-delay:.14s">
       <div class="panel-head"><h2>Frister</h2><span class="meta">tre uger frem</span></div>
       <div class="dl">${fr.map(f => { const n = daysUntil(f.dato), hot = n <= 3, d = parseDate(f.dato);
-        return `<a class="dli" href="${f.href}"><div class="cal${hot ? " hot" : ""}"><div class="m">${MON[d.getMonth()]}</div><div class="d">${d.getDate()}</div></div>
+        // En frist med kun en uge får ugen i blokken (Studies `uger`, fx "45" eller "46-47"), ikke mandagens dato
+        const uger = f.uge ? String(f.uger || isoWeek(d)).replace("-", "–") : "";
+        return `<a class="dli" href="${f.href}"><div class="cal${hot ? " hot" : ""}">${f.uge
+          ? `<div class="m">Uge</div><div class="d${uger.length > 2 ? " uge" : ""}">${esc(uger)}</div>`
+          : `<div class="m">${MON[d.getMonth()]}</div><div class="d">${d.getDate()}</div>`}</div>
           <div class="n"><b>${esc(f.titel)}</b><small>${icon(f.ikon, 12)}${esc(f.omr)} · ${esc(f.sub)}</small></div>
           <span class="cd${hot ? " hot" : ""}">${nedtaelling(f.dato, f.uge)}</span></a>`; }).join("")}</div>
     </section>`) : "";
@@ -271,21 +361,29 @@ function render({ coach, soevn, liv, studie, genkald, sprog }) {
   const fokusKort = prøv("Fokus", () => {
     const fokus = coach?.periode?.vurdering?.fokus || [];
     const periode = coach?.periode;
+    // Fokus skrives nu som handlinger; kun ældre fokus har periodens tal i parentes, fx "(nu 5 af 13)"
+    const medTal = fokus.some(x => /\(nu /.test(x));
     return review?.tekst?.en_ting || fokus.length ? `<section class="card panel s7 fade" style="animation-delay:.18s">
-      <div class="panel-head"><h2>Fokus</h2><a class="link" href="/form/uge.html">Ugen i tal ${icon("arrow-right", 14)}</a></div>
+      <div class="panel-head"><h2>Fokus</h2><a class="link" href="/form/uge.html">Ugereview ${icon("arrow-right", 14)}</a></div>
       ${review?.tekst?.en_ting ? `<div class="one"><span class="ic-wrap">${icon("sparkles", 16)}</span><div><div class="lbl">Én ting denne uge</div><p>${esc(review.tekst.en_ting)}</p>${reviewKilde(review) ? `<small class="kilde">${esc(reviewKilde(review))}</small>` : ""}</div></div>` : ""}
       ${fokus.length ? `<ol class="fk">${fokus.map(x => `<li><span>${esc(x)}</span></li>`).join("")}</ol>
-        <p class="fk-kilde">Fokus fra vurderingen af perioden ${dayMonth(parseDate(periode.start))}–${dayMonth(parseDate(periode.slut)).replace(/\.$/, "")}. Tallene i parentes er fra den periode.</p>` : ""}
+        <p class="fk-kilde">Fokus fra vurderingen af perioden ${dayMonth(parseDate(periode.start))}–${dayMonth(parseDate(periode.slut)).replace(/\.$/, "")}.${medTal ? " Tallene i parentes er fra den periode." : ""}</p>` : ""}
     </section>` : "";
   });
 
+  // Ulæste uger: Studie-serveren siger, hvilke uger pr. fag der har spørgsmål, som venter på "markér som læst" under Fag
+  const ugeliste = uger => uger.reduce((ud, u) => { const sidste = ud[ud.length - 1];
+    if (sidste && u === sidste[1] + 1) sidste[1] = u; else ud.push([u, u]); return ud; }, [])
+    .map(([a, b]) => a === b ? `${a}` : `${a}–${b}`).join(", ");
   const genkaldKort = prøv("Genkald", () => {
     const rep = genkald?.statistik, repKort = genkald?.kort?.length ?? 0;
+    const ulæst = (rep?.ulaeste_uger || []).filter(u => u.uger?.length);
     return rep ? `<a class="card cta" href="/studie/genkald.html#idag">
         <div class="top"><span class="ico">${icon("brain", 17)}</span><span class="go">${repKort ? `Tag dem ${icon("arrow-right", 14)}` : "Færdig i dag"}</span></div>
         <div class="big">${repKort}<small>${repKort === 1 ? "kort i dag" : "kort i dag"}${repKort ? ` · ca. ${rep.minutter} min` : ""}</small></div>
         <div class="meter" aria-hidden="true"><i style="width:${Math.round(100 * rep.klaret_i_dag / Math.max(1, rep.klaret_i_dag + repKort))}%"></i></div>
-        <p>${rep.klaret_i_dag} klaret i dag · ${rep.laert} af ${rep.i_alt} sidder. Genkald, begreber og de drills, du tog fejl af.</p></a>` : "";
+        <p>${rep.klaret_i_dag} klaret i dag · ${rep.laert} af ${rep.i_alt} sidder. Genkald, begreber og de drills, du tog fejl af.</p>
+        ${ulæst.length ? `<p><b>Ulæste uger:</b> ${ulæst.map(u => esc(`${u.navn} ${ugeliste(u.uger)}`)).join(" · ")}. ${fmt(rep.nye_venter_paa_laesning)} spørgsmål venter, til du markerer ugen som læst under Fag.</p>` : ""}</a>` : "";
   });
 
   // Sprog: dagens kort og ugens tekst. Tallene er Sprog-serverens; det aktive sprog vises med niveau og lært
@@ -298,12 +396,16 @@ function render({ coach, soevn, liv, studie, genkald, sprog }) {
         <div class="top"><span class="ico">${icon("languages", 17)}</span><span class="go">${n ? `Tag dem ${icon("arrow-right", 14)}` : tekstVenter ? `Ugens tekst ${icon("arrow-right", 14)}` : "Færdig i dag"}</span></div>
         <div class="big">${n}<small>sprogkort i dag${n ? ` · ca. ${st.minutter} min` : ""}</small></div>
         <div class="meter" aria-hidden="true"><i style="width:${Math.round(100 * st.klaret_i_dag / Math.max(1, st.klaret_i_dag + n))}%"></i></div>
-        <p>${test ? `Heraf ${test} i niveautesten. ` : ""}${as.i_alt ? `${esc(a.navn)}${a.niveau ? ` (${esc(a.niveau)})` : ""}: ${as.laert} af ${as.i_alt} lært.` : ""}${tekstVenter ? " Ugens tekst venter på dit svar." : feedback ? " Der er feedback på ugens tekst." : ""}${st.eksamensperiode ? " Eksamensperiode: kun gentagelse." : ""}</p></a>`;
+        <p>${test ? `Heraf ${test} i niveautesten. ` : ""}${as.i_alt ? `${esc(a.navn)}${a.niveau ? ` (${esc(a.niveau)})` : ""}: ${as.laert} af ${as.i_alt} lært.` : ""}${sprog.ny_feedback ? ` Der er feedback på dit svar til uge ${+sprog.ny_feedback.uge.split("-W")[1]}.` : ""}${tekstVenter ? " Ugens tekst venter på dit svar." : feedback ? " Der er feedback på ugens tekst." : ""}${st.eksamensperiode ? " Eksamensperiode: kun gentagelse." : ""}</p></a>`;
   });
 
   const fod = prøv("Bunden", () => `<div class="s12 foot"><span>${coach?.genereret ? `Tal fra ${stamp(coach.genereret)}` : ""}</span><span><a href="/form/uge.html">Ugereview</a> · <a href="/studie/">Studieugen</a> · <a href="/sprog/">Sprog</a></span></div>`);
 
-  const besked = fejlede.length ? `<div class="s12 flag">${icon("activity", 16)}<span>${esc(fejlede.join(", "))} kunne ikke vises; resten er vist. Fejlen står i browserens konsol.</span></div>` : "";
+  // "Sprog og Skærmtid svarer ikke." og/eller "Frister kunne ikke vises; …"
+  const og = l => l.length > 1 ? `${l.slice(0, -1).join(", ")} og ${l[l.length - 1]}` : l[0];
+  const besked = svarerIkke.length || fejlede.length ? `<div class="s12 flag">${icon("activity", 16)}<span>${[
+    svarerIkke.length ? `${esc(og(svarerIkke))} svarer ikke${fejlede.length ? "." : "; resten er vist."}` : "",
+    fejlede.length ? `${esc(fejlede.join(", "))} kunne ikke vises; resten er vist. Fejlen står i browserens konsol.` : ""].filter(Boolean).join(" ")}</span></div>` : "";
 
   document.getElementById("root").innerHTML = `${besked}${hero}${krop}${dagenKort}${fristerKort}${fokusKort}
     <div class="s5 fade" style="animation-delay:.22s;display:grid;gap:16px;align-content:start">${genkaldKort}${sprogKort}</div>
@@ -333,7 +435,7 @@ function tegnDagen(D) {
     const pill = nu ? `<span class="pill nu">Nu</span>` : om != null && om <= 90 ? `<span class="pill snart">om ${om < 60 ? om + " min" : `${Math.floor(om / 60)} t${om % 60 ? ` ${om % 60} min` : ""}`}</span>` : done ? `<span class="pill">Færdig</span>` : "";
     return `<div class="ev${done ? " done" : ""}${nu ? " nu" : ""}" style="--k:${e.farve}" title="${esc(e.titel)}">
       <span class="t">${e.hel ? "Hele dagen" : `${kl(e.a)}–${kl(e.b)}`}</span><span class="sw"></span>
-      <span class="n"><b>${esc(e.kort ? `${e.kort} · ${e.art}` : e.navn)}</b><small>${esc(e.kort ? e.navn + (e.form ? ` · ${e.form}` : "") : e.type === "undervisning" ? [e.art, e.form].filter(Boolean).join(" · ") : e.type === "andet" ? "i kalenderen" : "")}</small></span>${pill}</div>`;
+      <span class="n"><b>${esc(e.kort ? `${e.kort} · ${e.art}` : e.navn)}</b><small>${esc(e.kort ? e.navn + (e.form ? ` · ${e.form}` : "") : e.type === "undervisning" ? [e.art, e.form].filter(Boolean).join(" · ") : e.type === "andet" ? "i kalenderen" : "")}</small>${e.faktisk && e.a <= h ? `<small class="fakt" title="Fra Skærmtid, CalTask og Garmin; opdateres hver halve time">${nu ? "Indtil nu" : "Faktisk"}: ${esc(e.faktisk)}</small>` : ""}</span>${pill}</div>`;
   }).join("") || `<p class="meta">Intet i kalenderen i dag.</p>`;
 }
 
@@ -346,20 +448,27 @@ function tegnDagenSikkert(D) {
   }
 }
 
+// Hvert kald med det projekt, der nævnes, når det ikke svarer (fejl i nettet eller en fejlkode)
+const KILDER = [["coach", "/form/coach.json", "Form & fokus"], ["soevn", "/form/soevn.json", "Form & fokus"], ["liv", "/form/liv.json", "Ugereview"],
+  ["studie", "/studie/studie.json", "Studie"], ["genkald", "/studie/api/repetition", "Genkald"],
+  ["sprog", "/sprog/api/pakke", "Sprog"], ["skaermtid", "/skaermtid/skaermtid.json", "Skærmtid"], ["forbindelser", "/kompas/forbindelser.json", "Forbindelser"]];
 let DATA = null;
 async function hent() {
-  const [coach, soevn, liv, studie, genkald, sprog] = await Promise.allSettled([
-    get("/form/coach.json"), get("/form/soevn.json"), get("/form/liv.json"), get("/studie/studie.json"), get("/studie/api/repetition"),
-    get("/sprog/api/pakke"),
-  ]).then(rs => rs.map(r => r.status === "fulfilled" ? r.value : null));
-  DATA = { coach: coach?.fejl ? null : coach, soevn: soevn?.fejl ? null : soevn, liv, studie, genkald, sprog };
+  // Et projekt på pause (`pause` i projekter.json) hentes ikke og står ikke på I dag; det er med vilje, ikke en fejl
+  let pause = new Set();
+  try { pause = new Set(((await get("/kompas/projekter.json")).pause || []).map(p => p.projekt)); } catch (e) {}
+  const kilder = KILDER.filter(k => !pause.has(k[2]));
+  const rs = await Promise.allSettled(kilder.map(([, url]) => get(url)));
+  const d = Object.fromEntries(kilder.map(([navn], i) => [navn, rs[i].status === "fulfilled" ? rs[i].value : null]));
+  const svarerIkke = [...new Set(kilder.filter((k, i) => rs[i].status === "rejected").map(k => k[2]))];
+  DATA = { ...d, coach: d.coach?.fejl ? null : d.coach, soevn: d.soevn?.fejl ? null : d.soevn, svarerIkke };
   render(DATA);
 }
 hent();
 setInterval(() => {
   if (!DATA?.coach) return;
   let D = null;
-  try { D = dagen(DATA.coach, DATA.studie); } catch (e) { console.error("I dag: Dagen", e); return; }
+  try { D = dagen(DATA.coach, DATA.studie, DATA.liv); } catch (e) { console.error("I dag: Dagen", e); return; }
   if (D) tegnDagenSikkert(D);
 }, 60000);
 setInterval(hent, 10 * 60000);

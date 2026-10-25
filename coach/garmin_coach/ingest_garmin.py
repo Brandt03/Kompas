@@ -456,11 +456,75 @@ def _fetch_day(api, d: date) -> dict | None:
             vo2, 0, "generic", "vo2MaxValue"
         )
 
+    _fetch_curves(api, iso, attempt)
+
     if not raw:
         log.warning("Ingen data for %s — alle kald fejlede", iso)
         return None
     row["raw"] = raw  # flettes med det gemte i sync_daily
     return row
+
+
+# Døgnets kurver: puls hvert 2. min, stress og body battery hvert 3. min, skridt pr. kvarter. Kun rådata;
+# Kroppen i tal læser dem. Omkring 60 KB pr. døgn.
+CURVES = ("heart_rates", "all_day_stress", "steps_day")
+
+
+def _fetch_curves(api, iso: str, attempt) -> None:
+    attempt("heart_rates", lambda: api.get_heart_rates(iso))
+    attempt("all_day_stress", lambda: api.get_stress_data(iso))
+    attempt("steps_day", lambda: api.get_steps_data(iso))
+
+
+def sync_curves(api, conn: sqlite3.Connection, start: date, end: date,
+                max_failures: int | None = None) -> int:
+    """Henter døgnets kurver for dage, der allerede er hentet uden dem, og fletter dem ind i raw.
+
+    Til at fylde historikken op efter, at kurverne kom med i _fetch_day. Dage, der har alle tre, springes
+    over, så kørslen kan gentages. Stopper med GarminUnavailable efter max_failures dage i træk uden svar."""
+    rows = conn.execute("SELECT date, raw FROM daily WHERE date BETWEEN ? AND ? ORDER BY date DESC",
+                        (start.isoformat(), end.isoformat())).fetchall()
+    todo = []
+    for r in rows:
+        try:
+            have = json.loads(r["raw"]) if r["raw"] else {}
+        except ValueError:
+            have = {}
+        if not all(k in have for k in CURVES):
+            todo.append(r["date"])
+    written = failures = 0
+    for n, iso in enumerate(todo, 1):
+        raw: dict[str, Any] = {}
+
+        def attempt(label: str, fn):
+            try:
+                time.sleep(THROTTLE_S)
+                raw[label] = fn()
+            except Exception as exc:  # noqa: BLE001
+                log.debug("%s fejlede for %s: %s", label, iso, exc)
+
+        _fetch_curves(api, iso, attempt)
+        if not raw:
+            failures += 1
+            if max_failures and failures >= max_failures:
+                raise GarminUnavailable(
+                    f"{failures} dage i træk uden svar fra Garmin (senest {iso}). "
+                    "Vent en time og kør igen — hentede dage springes over."
+                )
+            continue
+        failures = 0
+        # Læs raw igen lige før skrivningen: den almindelige sync kan have gemt dagen, mens kørslen stod på
+        cur = conn.execute("SELECT raw FROM daily WHERE date = ?", (iso,)).fetchone()
+        try:
+            have = json.loads(cur["raw"]) if cur and cur["raw"] else {}
+        except ValueError:
+            have = {}
+        conn.execute("UPDATE daily SET raw = ? WHERE date = ?", (json.dumps(have | raw, default=str), iso))
+        conn.commit()
+        written += 1
+        if n % 10 == 0 or n == len(todo):
+            log.info("  %d/%d dage med kurver (%s)", n, len(todo), iso)
+    return written
 
 
 def sync_daily(
@@ -604,6 +668,21 @@ def run_backfill(start: date, end: date | None = None) -> dict:
     return result
 
 
+def run_curves_backfill(start: date, end: date | None = None) -> dict:
+    """Hent døgnets kurver til hentede dage fra `start`, nyeste først. Kan gentages."""
+    end = end or date.today()
+    conn = connect()
+    api = login()
+    result: dict[str, Any] = {"periode": f"{start} → {end}"}
+    try:
+        result["dage_med_kurver"] = sync_curves(api, conn, start, end, max_failures=MAX_FAILURES)
+    except GarminUnavailable as exc:
+        result["stoppet"] = str(exc)
+    finally:
+        conn.close()
+    return result
+
+
 if __name__ == "__main__":
     import argparse
 
@@ -613,11 +692,16 @@ if __name__ == "__main__":
     parser.add_argument("--login", action="store_true", help="Kun login og gem tokens")
     parser.add_argument("--fra", type=date.fromisoformat, metavar="ÅÅÅÅ-MM-DD",
                         help="Hent historik fra denne dato (springer hentede dage over)")
+    parser.add_argument("--kurver", action="store_true",
+                        help="Med --fra: hent kun døgnets kurver (puls, stress, body battery, skridt) "
+                             "til dage, der mangler dem")
     args = parser.parse_args()
 
     if args.login:
         login()
         print("Tokens gemt. Du kan nu fjerne GARMIN_PASSWORD fra miljøet.")
+    elif args.fra and args.kurver:
+        print(json.dumps(run_curves_backfill(args.fra), indent=2, ensure_ascii=False))
     elif args.fra:
         print(json.dumps(run_backfill(args.fra), indent=2, ensure_ascii=False))
     else:

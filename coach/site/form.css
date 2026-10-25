@@ -1,4 +1,7 @@
-/* Fælles for Form & fokus-siderne i Kompas (perioder, uge, søvn, coach). Bygger på /kompas/assets/page.css. */
+/* Fælles for Form & fokus-siderne i Kompas (Perioder og Ugereview). Bygger på /kompas/assets/page.css. */
+/* Faste farver til undervisning og selvstudie; ingen af Skærmtids grupper (Produktiv c3, Passiv c2, Gaming c4,
+   Praktisk c1) bruger dem, så de kan stå på samme side som skærmtiden */
+:root { --undervisning: var(--c6); --selvstudie: var(--c5); }
 .pnav { display: flex; align-items: center; gap: 6px; }
 .pnav select { font: inherit; font-size: 13px; color: var(--text-primary); background: var(--container); border: 0; box-shadow: var(--shadow-border-xs); border-radius: 8px; padding: 6px 8px; max-width: 220px; }
 .nav-btn { display: inline-grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 8px; background: var(--container); box-shadow: var(--shadow-border-xs); color: var(--text-secondary); cursor: pointer; }
@@ -22,11 +25,6 @@
 .fu { display: grid; gap: 8px; }
 .fu div { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: start; color: var(--text-secondary); line-height: 1.5; }
 .fu b { color: var(--text-primary); font-weight: 500; }
-
-button.tile { font: inherit; text-align: left; border: 0; cursor: pointer; width: 100%; }
-button.tile:hover { background: var(--container-hover); }
-button.tile[aria-pressed="true"] { box-shadow: var(--shadow-xs), 0 0 0 1.5px var(--nav-indicator); }
-.tile .hint { color: var(--text-subdued); font-size: 12px; margin-top: 4px; min-height: 1em; }
 
 /* horisontale søjler med tekst (fordeling) */
 .hbars { display: grid; gap: 10px; }
@@ -81,7 +79,7 @@ table.plain .num { text-align: right; font-variant-numeric: tabular-nums; white-
 .wcol .hline { position: absolute; left: 0; right: 0; height: 1px; background: var(--divider); }
 .blk { position: absolute; left: 3px; right: 3px; border-radius: 6px; padding: 3px 6px; font-size: 11px; line-height: 1.25; overflow: hidden; color: var(--text-primary);
   background: var(--container); box-shadow: var(--shadow-border-xs); border-left: 3px solid var(--k, var(--gray-400)); }
-.blk.undervisning { --k: var(--c1); } .blk.selvstudie { --k: var(--c3); } .blk.andet { --k: var(--c4); } .blk.traening { --k: var(--text-primary); }
+.blk.undervisning { --k: var(--undervisning); } .blk.selvstudie { --k: var(--selvstudie); } .blk.andet { --k: var(--gray-400); } .blk.traening { --k: var(--text-primary); }
 .blk.fri { background: none; box-shadow: none; border: 1.5px dashed var(--success); color: var(--success); font-weight: 500; }
 .blk.overlap { box-shadow: 0 0 0 1.5px var(--destructive); }
 

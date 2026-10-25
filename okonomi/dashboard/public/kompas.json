@@ -11,6 +11,7 @@
    "match": [
     "/okonomi",
     "/",
+    "/sessions",
     "/accounts",
     "/properties",
     "/vehicles",
@@ -47,7 +48,7 @@
   },
   {
    "titel": "Forbrug",
-   "ikon": "wallet",
+   "ikon": "trending-up",
    "sti": "/forbrug/",
    "praecis": true
   },

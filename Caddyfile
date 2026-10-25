@@ -3,9 +3,37 @@
 # Alt ligger på samme adresse, så portalen kan vise Sure og de statiske sider i sin ramme.
 # https://localhost er urørt og virker som før.
 # Stierne forudsætter, at repoet ligger i ~/kompas ({$HOME} udfyldes af Caddy fra miljøet).
-kompas.localhost {
-	# Kun denne Mac, aldrig det lokale netværk (samme filter som localhost-blokken)
+#
+# Fejlsiderne, når en server ikke svarer (502/503). Bruges af (kompas) og telefonblokken, så teksten kun står ét
+# sted. Stilen står én gang i {vars.fejlstil}; den følger designkittets farver, lyse og mørke (prefers-color-scheme).
+# Klammerne i stilen står som \\{ og \\}: Caddyfile gør dem til \{ og \}, og så læser vars dem ikke som pladsholdere.
+(fejlsider) {
+	handle_errors 502 503 {
+		header Content-Type "text/html; charset=utf-8"
+		vars fejlstil `<style>:root\\{color-scheme:light dark\\}body\\{font:15px system-ui;margin:15vh auto;max-width:34em;padding:0 16px;color:#737373;background:#f7f7f7\\}h1\\{color:#171717;font-size:21px;font-weight:600\\}a\\{color:#171717\\}@media (prefers-color-scheme:dark)\\{body\\{color:#cfcfcf;background:#0b0b0b\\}h1,a\\{color:#fff\\}\\}</style>`
+		@studie path /studie/api/*
+		respond @studie `<!doctype html><meta charset="utf-8"><title>Studie-serveren er lukket</title>{vars.fejlstil}<h1>Studie-serveren kører ikke</h1><p>Den kører normalt altid i baggrunden (LaunchAgent <code>local.kompas.studie</code>). Log: <code>~/.kompas/studie-server.log</code>. Genstart: <code>launchctl kickstart -k gui/$(id -u)/local.kompas.studie</code></p><p>Studies sider vises stadig, men Genkald og det, du markerer eller skriver, kan ikke gemmes, før serveren kører igen.</p>` 503
+		@skaermtid path /skaermtid/api/*
+		respond @skaermtid `{"fejl": "Skærmtid-serveren kører ikke. Genstart: launchctl kickstart -k gui/$(id -u)/local.kompas.skaermtid (log: ~/.kompas/skaermtid-server.log)"}` 503
+		@sprog path /sprog/*
+		respond @sprog `<!doctype html><meta charset="utf-8"><title>Sprog-serveren er lukket</title>{vars.fejlstil}<h1>Sprog-serveren kører ikke</h1><p>Den kører normalt altid i baggrunden (LaunchAgent <code>local.kompas.sprog</code>). Log: <code>~/.kompas/sprog-server.log</code>. Genstart: <code>launchctl kickstart -k gui/$(id -u)/local.kompas.sprog</code></p><p>På telefonen virker Dagens kort stadig med den sidst hentede pakke; svarene sendes, når serveren kører igen.</p>` 503
+		respond `<!doctype html><meta charset="utf-8"><title>Sure er lukket</title>{vars.fejlstil}<h1>Sure kører ikke lige nu</h1><p>Åbn programmet <b>Kompas</b> (i Programmer eller Dock) for at starte den. Det tager ca. 30 sekunder.</p><p>Kompas, Studie, Form &amp; fokus og <a href="/forbrug/">Forbrug</a> virker stadig med de seneste hentede tal.</p>` 503
+	}
+}
+
+# Hele Kompas står én gang, i stykket (kompas), og bruges to steder: kompas.localhost på Mac'en og blokken på
+# 127.0.0.1:8771, som bærbaren når gennem Tailscale (https://<mac>.<tailnet>.ts.net:8443, se bin/tailscale.sh).
+(kompas) {
+	# Kun denne Mac, aldrig det lokale netværk (samme filter som localhost-blokken). Tailscale kommer også ind
+	# fra 127.0.0.1, fordi `tailscale serve` kører på Mac'en og sender videre til 8771.
 	@remote not remote_ip 127.0.0.1 ::1
+	# Kun de navne, Kompas selv bruger (her og i telefonblokken): en fremmed side, der peger sit eget domæne på
+	# 127.0.0.1 (DNS rebinding), må ikke kunne læse siderne og deres data gennem 8771 eller 8768.
+	@fremmed not host *.*.ts.net kompas.localhost localhost 127.0.0.1
+
+	# Komprimerer svarene (zstd eller gzip, efter hvad browseren beder om). Sider og JSON fylder en femtedel eller
+	# mindre; det mærkes på telefonen og bærbaren gennem Tailscale. Uden Accept-Encoding (fx bin/kopi.py) er de ukomprimerede.
+	encode zstd gzip
 
 	# "/" er altid Kompas. Sures forside ligger på /okonomi (Caddy omskriver til "/").
 	# Undtagelse: Sures egne kald til "/" inde i rammen skal til Sure. Det er Turbo-kald (har
@@ -20,6 +48,7 @@ kompas.localhost {
 
 	route {
 		abort @remote
+		abort @fremmed
 
 		handle @sure_turbo {
 			reverse_proxy 127.0.0.1:3000
@@ -35,7 +64,15 @@ kompas.localhost {
 			file_server
 		}
 
-		# Portalens egne sider (Kompas) og designkittet under /kompas/assets/, som projekternes sider bruger
+		# Designkittet (/kompas/assets/): alle projekternes sider henter det ved hver sidevisning. no-cache betyder,
+		# at browseren spørger med ETag og får 304 i stedet for filerne igen; en rettet fil slår stadig igennem straks.
+		handle_path /kompas/assets/* {
+			root * {$HOME}/kompas/public/assets
+			header Cache-Control "no-cache"
+			file_server
+		}
+
+		# Portalens egne sider (Kompas) og projekter.json: altid friske
 		redir /kompas /kompas/
 		redir /kompas/studie/* /studie/
 		handle_path /kompas/* {
@@ -79,28 +116,52 @@ kompas.localhost {
 			file_server
 		}
 
+		# Skærmtid: dine kategorivalg (~/kompas/skaermtid/server.py), LaunchAgent local.kompas.skaermtid
+		handle /skaermtid/api/* {
+			reverse_proxy 127.0.0.1:8770
+		}
+
+		# Skærmtid (bygges af ~/kompas/skaermtid/skaermtid.py fra ActivityWatch)
+		redir /skaermtid /skaermtid/
+		handle_path /skaermtid/* {
+			root * {$HOME}/.kompas/skaermtid
+			header Cache-Control "no-store"
+			file_server
+		}
+
 		# Alt andet er Sure
 		reverse_proxy 127.0.0.1:3000
 	}
 
-	handle_errors 502 503 {
-		header Content-Type "text/html; charset=utf-8"
-		@studie path /studie/api/*
-		respond @studie `<!doctype html><meta charset="utf-8"><title>Studie-serveren er lukket</title><body style="font:15px system-ui;margin:15vh auto;max-width:34em;padding:0 16px;color:#737373;background:#f7f7f7"><h1 style="color:#171717;font-size:21px;font-weight:600">Studie-serveren kører ikke</h1><p>Den kører normalt altid i baggrunden (LaunchAgent <code>local.kompas.studie</code>). Log: <code>~/.kompas/studie-server.log</code>. Genstart: <code>launchctl kickstart -k gui/$(id -u)/local.kompas.studie</code></p><p>Studies sider vises stadig, men Genkald og det, du markerer eller skriver, kan ikke gemmes, før serveren kører igen.</p></body>` 503
-		@sprog path /sprog/*
-		respond @sprog `<!doctype html><meta charset="utf-8"><title>Sprog-serveren er lukket</title><body style="font:15px system-ui;margin:15vh auto;max-width:34em;padding:0 16px;color:#737373;background:#f7f7f7"><h1 style="color:#171717;font-size:21px;font-weight:600">Sprog-serveren kører ikke</h1><p>Den kører normalt altid i baggrunden (LaunchAgent <code>local.kompas.sprog</code>). Log: <code>~/.kompas/sprog-server.log</code>. Genstart: <code>launchctl kickstart -k gui/$(id -u)/local.kompas.sprog</code></p><p>På telefonen virker Dagens kort stadig med den sidst hentede pakke; svarene sendes, når serveren kører igen.</p></body>` 503
-		respond `<!doctype html><meta charset="utf-8"><title>Sure er lukket</title><body style="font:15px system-ui;margin:15vh auto;max-width:34em;padding:0 16px;color:#737373;background:#f7f7f7"><h1 style="color:#171717;font-size:21px;font-weight:600">Sure kører ikke lige nu</h1><p>Åbn programmet <b>Kompas</b> (i Programmer eller Dock) for at starte den. Det tager ca. 30 sekunder.</p><p>Kompas, Studie, Form &amp; fokus og <a href="/forbrug/" style="color:#171717">Forbrug</a> virker stadig med de seneste hentede tal.</p></body>` 503
-	}
+	import fejlsider
+}
+
+kompas.localhost {
+	import kompas
+}
+
+# Bærbaren: hele Kompas, som på Mac'en, gennem Tailscale. `tailscale serve` tager imod på
+# https://<mac>.<tailnet>.ts.net:8443 (kun dine egne enheder) og sender videre hertil. Lytter kun på denne Mac.
+# Siderne kender den på porten: med en port i adressen er det Mac-udgaven, uden er det telefonen (På farten).
+http://:8771 {
+	bind 127.0.0.1
+	import kompas
 }
 
 # På farten: telefonen gennem Tailscale. `tailscale serve` tager imod på https://<mac>.<tailnet>.ts.net (kun dine
-# egne enheder i dit tailnet) og sender videre hertil. Lytter kun på denne Mac. Kun Studie, Sprog og designkittet;
-# Økonomi og Form er stadig kun på Mac'en. Forsiden er Studies mobilside (Scripts/kompas/mobil.html i
+# egne enheder i dit tailnet) og sender videre hertil. Lytter kun på denne Mac. Kun Studie, Sprog, Skærmtid og
+# designkittet; Økonomi og Form er stadig kun på Mac'en. Forsiden er Studies mobilside (Scripts/kompas/mobil.html i
 # semestermappen); Sprog er /sprog/mobil.html.
 http://:8768 {
 	bind 127.0.0.1
+	encode zstd gzip
+	import fejlsider
+
+	# Samme navne som i (kompas), mod DNS rebinding
+	@fremmed not host *.*.ts.net kompas.localhost localhost 127.0.0.1
 
 	route {
+		abort @fremmed
 		redir / /studie/mobil.html
 		handle /studie/api/* {
 			reverse_proxy 127.0.0.1:8767
@@ -117,11 +178,20 @@ http://:8768 {
 		handle /sprog/* {
 			reverse_proxy 127.0.0.1:8769
 		}
-		handle_path /kompas/assets/* {
-			root * {$HOME}/kompas/public/assets
+		handle /skaermtid/api/* {
+			reverse_proxy 127.0.0.1:8770
+		}
+		redir /skaermtid /skaermtid/
+		handle_path /skaermtid/* {
+			root * {$HOME}/.kompas/skaermtid
 			header Cache-Control "no-store"
 			file_server
 		}
-		respond "Ikke her. På telefonen er kun Studie og Sprog med; resten af Kompas er på Mac'en." 404
+		handle_path /kompas/assets/* {
+			root * {$HOME}/kompas/public/assets
+			header Cache-Control "no-cache"
+			file_server
+		}
+		respond "Ikke her. På telefonen er kun Studie, Sprog og Skærmtid med; resten af Kompas er på Mac'en." 404
 	}
 }

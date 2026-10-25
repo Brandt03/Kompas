@@ -109,6 +109,8 @@
   .more { margin-top: 6px; background: none; border: 0; color: var(--ink-2); font: inherit; font-size: 13px; cursor: pointer; padding: 6px 10px; text-align: left; }
   .more:hover { color: var(--ink); text-decoration: underline; }
   .empty { color: var(--muted); padding: 32px 0; text-align: center; }
+  .row.fast { cursor: default; } .row.fast:hover { background: transparent; }
+  .row.fast .nm { flex-wrap: wrap; gap: 2px 8px; } .row.fast .nm b { flex: none; } .row.fast .nm small { white-space: normal; }
 
   /* trend */
   .hint { color: var(--muted); font-size: 12.5px; margin: -6px 0 10px; }
@@ -199,8 +201,17 @@
       <h2 id="trendTitle">Udvikling pr. måned</h2>
       <div class="legend" id="trendLegend"></div>
     </div>
-    <p class="hint">Klik på en post i fordelingen for at se den alene. Klik på en søjle for at se dens posteringer. Står en postering forkert, så vælg en anden kategori under Posteringer; den gemmes i Sure.</p>
+    <p class="hint">Søjlerne er delt som fordelingen ovenfor, med samme farver; resten står som Andet. Klik på en post i fordelingen for at se den alene. Klik på en søjle for at se dens posteringer. Står en postering forkert, så vælg en anden kategori under Posteringer; den gemmes i Sure.</p>
     <svg id="trend" role="img" aria-label="Forbrug pr. måned"></svg>
+  </section>
+
+  <section class="card panel" id="ugerPanel" hidden>
+    <div class="panel-head">
+      <h2>Uge for uge</h2>
+      <span class="hint" id="ugerMeta" style="margin:0"></span>
+    </div>
+    <div class="rows" id="uger"></div>
+    <p class="hint" style="margin:10px 0 0">Variabelt forbrug pr. uge, mandag til søndag, regnet af Overblik med samme definition som ugereviewet: udgifter i Variable udgifter uden deling med venner. Tallene følger ikke den periode, du har valgt ovenfor.</p>
   </section>
 
   <section class="card panel">
@@ -453,9 +464,16 @@
     if (sel) {
       series = [{ key: sel.key, color: colorOf(sel.dim, sel.key), match: (t) => t[sel.dim] === sel.key }];
       $("trendTitle").textContent = `Udvikling pr. ${yearly ? "år" : "måned"} · ${sel.key}`;
-    } else {
+    } else if (state.dim === "group") {
       const groups = breakdown(DATA, "group").map((g) => g.key);
       series = groups.map((g) => ({ key: g, color: colorOf("group", g), match: (t) => t.group === g }));
+      $("trendTitle").textContent = `Udvikling pr. ${yearly ? "år" : "måned"}`;
+    } else {
+      // Same slices and colours as the donut above (its top 5 in the chosen period, the rest as Andet), so a colour
+      // means the same thing in both charts
+      const dim = state.dim, shown = donutItems(breakdown(DATA.filter((t) => t.ym >= pa && t.ym <= pb), dim)).map((x) => x.key), named = new Set(shown);
+      series = shown.map((k) => ({ key: k, color: colorOf(dim, k), match: (t) => t[dim] === k }));
+      if (DATA.some((t) => t.spend && !named.has(t[dim]))) series.push({ key: OTHER, color: "var(--other)", match: (t) => !named.has(t[dim]) });
       $("trendTitle").textContent = `Udvikling pr. ${yearly ? "år" : "måned"}`;
     }
     const tl = $("trendLegend"); tl.replaceChildren();
@@ -655,6 +673,27 @@
     return { ...t, amount, group, category, ym: ym(t.date), spend, merchant: payee(t) };
   }
 
+  // ---------- uge for uge (Overblik) ----------
+  // Ugetallene regnes af Overblik (/form/liv.json); siden viser dem kun. Kan filen ikke læses, skjules panelet.
+  // Bjælken er neutral: farverne ovenfor betyder kategorier eller grupper, og ugetallene er ingen af dem.
+  function renderUger(liv) {
+    const uger = (liv.uger || []).filter((u) => u.variabelt_kr != null).slice(-12).reverse();
+    if (!uger.length) return;
+    const nu = new Date(), mandag = new Date(nu.getFullYear(), nu.getMonth(), nu.getDate() - (nu.getDay() + 6) % 7);
+    const iGang = (u) => new Date(`${u.mandag}T00:00`) >= mandag;
+    const dato = (s) => { const [, m, d] = s.split("-").map(Number); return `${d}. ${MONTHS[m - 1]}`; };
+    const max = Math.max(...uger.map((u) => u.variabelt_kr), 1);
+    $("uger").replaceChildren(...uger.map((u) => el("div", { class: "row fast" },
+      el("span", { class: "nm" }, el("b", { text: `Uge ${Number(u.uge.split("-W")[1])}` }),
+        el("small", { text: `· ${dato(u.mandag)} · take-away ${kr.format(u.takeaway_kr ?? 0)} · café og bar ${kr.format(u.cafe_bar_kr ?? 0)}` })),
+      el("span", { class: "amt", text: kr.format(u.variabelt_kr) }),
+      el("span", { class: "pct", text: iGang(u) ? "i gang" : "" }),
+      el("span", { class: "bar" }, el("i", { style: `width:${(u.variabelt_kr / max) * 100}%;background:var(--ink-2);opacity:${iGang(u) ? 0.4 : 0.75}` })))));
+    $("ugerMeta").textContent = `${uger.length} uger fra Overblik`;
+    $("ugerPanel").hidden = false;
+  }
+  fetch("/form/liv.json", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).then((liv) => liv && renderUger(liv)).catch(() => {});
+
   // ---------- load ----------
   Promise.all([
     fetch("data.json", { cache: "no-store" }).then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); }),
@@ -679,7 +718,9 @@
     assignSlots();
 
     const fmt = (s) => s ? new Date(s).toLocaleString("da-DK", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "–";
-    $("meta").replaceChildren(`Bank synkroniseret ${fmt(d.last_sync)} · data hentet ${fmt(d.generated_at)} · `, el("a", { href: "/", text: "Åbn Sure" }));
+    // "Åbn Sure" -> Sure's overview: stays in Kompas' frame (parent on "/"), replaces Sure's own /forbrug-side page
+    const sureTarget = window.parent === window ? null : (() => { try { return parent.location.pathname === "/" ? null : "_top"; } catch { return "_top"; } })();
+    $("meta").replaceChildren(`Bank synkroniseret ${fmt(d.last_sync)} · data hentet ${fmt(d.generated_at)} · `, el("a", { href: "/okonomi", ...(sureTarget && { target: sureTarget }), text: "Åbn Sure" }));
     render();
   }).catch((e) => {
     $("tiles").replaceChildren(el("div", { class: "card tile", style: "grid-column:1/-1" }, el("div", { class: "label", text: "Kunne ikke hente data.json" }), el("div", { class: "sub", text: String(e) })));

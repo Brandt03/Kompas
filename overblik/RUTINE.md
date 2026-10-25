@@ -43,14 +43,14 @@ Skriv reviewet som markdown, maks ca. 250 ord, med disse afsnit. Skriv ugedage m
 
 **Sammenhænge** — kun stærke/antydninger. Er der ingen, så skriv det i én linje.
 
-**Den kommende uge** — ud fra kalenderen og køreplanen (trin 1.5): nævn frister i ugen, og læg forslag til selvstudie efter køreplanens "Vigtigst i ugen" frem for at finde på egne. Gentag ikke hele køreplanen; brugeren har den på Kompas. Derudover: hvilke dage er tunge (meget undervisning, arrangementer, fester), og hvor er der realistisk plads til træning og selvstudie. Tag højde for restitutionsstatus.
+**Den kommende uge** — ud fra kalenderen og køreplanen (trin 1.5): nævn frister i ugen, og læg forslag til selvstudie efter køreplanens "Vigtigst i ugen" frem for at finde på egne. Gentag ikke hele køreplanen; brugeren har den på Kompas. Derudover: hvilke dage er tunge (meget undervisning, arrangementer, fester), og hvor er der realistisk plads til træning og selvstudie. Træningstiderne tager du fra fokus i den seneste periodes vurdering (`periode.vurdering.fokus` i `~/.garmin-coach/site/coach.json`) frem for at finde på egne. Har fokus ingen tider, så foreslå selv. Foreslå kun en anden tid, når kalenderen har ændret sig, så fokusets tid ikke længere kan bruges, og sig det. Tag højde for restitutionsstatus.
 
 **Én ting at gøre anderledes** — én konkret, lille handling der følger af data (fx "læg selvstudie før forelæsningen tirsdag, du har fri 8–10"). Ikke generelle råd.
 
 ## 4. Gem og giv besked
 
 - Gem reviewet som `~/kompas/overblik/reviews/<uge>.md` (fx `2026-W40.md`, ugen fra rapportens `uge`-felt). Opret mappen hvis den mangler.
-- Læg reviewet på Kompas: forsiden I dag (fokus) og Form & fokus → Ugen i tal (https://kompas.localhost/form/uge.html). Skriv samme tekst som JSON til `~/kompas/overblik/reviews/<uge>.json`:
+- Læg reviewet på Kompas: forsiden I dag (fokus) og Form & fokus → Ugereview (https://kompas.localhost/form/uge.html). Skriv samme tekst som JSON til `~/kompas/overblik/reviews/<uge>.json`:
   ```json
   {
     "saetning": "Uge NN i én sætning (uden overskriften)",

@@ -3,19 +3,41 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Ugen i tal</title>
+<title>Ugereview</title>
 <!-- Vises i Kompas (https://kompas.localhost/form/uge.html), som leverer designkittet under /kompas/assets/.
      Data: liv.json, som overblik skriver med `liv eksport` (ugereviewet). Afvigelser, normalområder
-     og sammenhænge er regnet dér; siden viser dem kun. -->
+     og sammenhænge er regnet dér; siden viser dem kun. Planlagt mod faktisk (`dagsplan`) er også regnet dér. -->
 <link rel="stylesheet" href="/kompas/assets/tokens.css">
 <link rel="stylesheet" href="/kompas/assets/page.css">
 <link rel="stylesheet" href="form.css">
+<style>
+  /* Planlagt mod faktisk: én række pr. døgn, plan over det faktiske på samme tidsakse (kl. 6 til kl. 2) */
+  .dp-dag + .dp-dag { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--divider); }
+  .dp-head { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; margin-bottom: 6px; }
+  .dp-head b { font-weight: 600; } .dp-head span { color: var(--text-secondary); }
+  .dp-grid { display: grid; grid-template-columns: 58px minmax(0, 1fr); gap: 4px 8px; align-items: center; }
+  .dp-l { font-size: 11.5px; color: var(--text-subdued); }
+  .dp-spor { position: relative; height: 18px; border-radius: 5px; background: var(--surface-inset); overflow: hidden; }
+  .dp-spor i { position: absolute; top: 2px; bottom: 2px; border-radius: 4px; min-width: 2px; }
+  .dp-spor i.undervisning { background: var(--undervisning); }
+  .dp-spor i.blok { background: var(--container); box-shadow: inset 0 0 0 1.5px var(--text-secondary); }
+  .dp-spor i.selvstudie { background: var(--selvstudie); } .dp-spor i.traening { background: var(--text-primary); }
+  /* Nøgletal inden for normalen, samlet på én linje under de tydelige afvigelser */
+  .normal-linje { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline; padding: 14px 20px; font-size: 13px; color: var(--text-secondary); }
+  .normal-linje .bl { font-weight: 500; color: var(--text-primary); }
+  .normal-linje b { font-weight: 500; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+  .dp-spor.tom::after { content: "ingen skærmdata"; position: absolute; left: 8px; top: 1px; font-size: 11px; color: var(--text-subdued); }
+  .dp-akse { position: relative; height: 14px; font-size: 10.5px; color: var(--text-subdued); }
+  .dp-akse span { position: absolute; transform: translateX(-50%); font-variant-numeric: tabular-nums; }
+  .dp-blokke { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; font-size: 12.5px; color: var(--text-secondary); }
+  .dp-blokke b { color: var(--text-primary); font-weight: 500; }
+</style>
 </head>
 <body>
 <div class="wrap">
   <header class="page">
     <div>
-      <h1>Ugen i tal</h1>
+      <h1>Ugereview</h1>
       <p class="sub" id="sub">Ugereviewet på tværs af træning, søvn, økonomi og studie</p>
     </div>
     <div class="pnav" id="pnav"></div>
@@ -61,14 +83,18 @@ const shortTitle = ev => { const e = parseEvent(ev);
 let L = null, sel = 0;
 const $ = id => document.getElementById(id);
 
+// En flise pr. tydelig afvigelse; nøgletallene inden for normalen står samlet på én linje, så fliserne ikke drukner
 function kpi(k, a) {
-  if (!a) return "";
   const arrow = a.retning === "over" ? "arrow-up" : a.retning === "under" ? "arrow-down" : "minus";
-  const badge = a.tydelig ? `<span class="badge ${a.vurdering === "godt" ? "good" : a.vurdering === "skidt" ? "bad" : ""}">${icon(arrow, 12)}${a.vurdering === "godt" ? "Godt" : a.vurdering === "skidt" ? "Skidt" : "Usædvanligt"}</span>`
-    : `<span class="badge">Inden for normalen</span>`;
+  const badge = `<span class="badge ${a.vurdering === "godt" ? "good" : a.vurdering === "skidt" ? "bad" : ""}">${icon(arrow, 12)}${a.vurdering === "godt" ? "Godt" : a.vurdering === "skidt" ? "Skidt" : "Usædvanligt"}</span>`;
   return `<div class="card tile"><div class="label">${esc(LIV[k].l)}</div>
     <div class="value">${fmt(a.vaerdi, LIV[k].d)}${a.vaerdi != null && LIV[k].u ? `<small>${esc(LIV[k].u)}</small>` : ""}</div>
     <div class="foot">${badge}<span>normalt ${fmt(a.normal, LIV[k].d)}</span></div></div>`;
+}
+function kpis(af) {
+  const ks = KPI.filter(k => af[k]), tyd = ks.filter(k => af[k].tydelig), ok = ks.filter(k => !af[k].tydelig);
+  return (tyd.length ? `<section class="tiles">${tyd.map(k => kpi(k, af[k])).join("")}</section>` : "")
+    + (ok.length ? `<section class="card normal-linje"><span class="bl">${tyd.length ? "Resten er inden for normalen" : "Ingen tydelige afvigelser"}</span>${ok.map(k => `<span>${esc(LIV[k].l)} <b>${esc(uv(k, af[k].vaerdi))}</b></span>`).join("")}</section>` : "");
 }
 
 function hero(r) {
@@ -80,7 +106,7 @@ function hero(r) {
       ${t?.forbehold?.length ? `<div class="banner warn" style="padding:0"><span class="bi">${icon("activity", 16)}</span><div><div class="bl">Manglede i data</div>${t.forbehold.map(x => `<p>${esc(x)}</p>`).join("")}</div></div>` : ""}
       ${t?.en_ting ? `<div class="one"><span class="ic-wrap">${icon("sparkles", 16)}</span><div><div class="lbl">Én ting at gøre anderledes</div><p>${esc(t.en_ting)}</p></div></div>` : ""}
     </section>
-    <section class="tiles">${KPI.map(k => kpi(k, af[k])).join("")}</section>
+    ${kpis(af)}
     ${t ? `<div class="cols"><section class="card panel"><div class="panel-head"><h2>Det skilte sig ud</h2></div>${list(t.udskilte)}</section>
       <section class="card panel"><div class="panel-head"><h2>Sammenhænge</h2></div>${list(t.sammenhaenge)}</section></div>` : ""}`;
 }
@@ -175,7 +201,7 @@ function weekGrid(m, events, pas, visFri) {
   }
   return `<div class="wk-wrap"><div class="wk">${head}${anyAll ? allday : ""}${cols}</div></div>`;
 }
-const wkLegend = (fri, trn) => `<div class="legend"><span><i style="background:var(--c1)"></i>Undervisning</span><span><i style="background:var(--c3)"></i>Selvstudie</span><span><i style="background:var(--c4)"></i>Andet</span>${trn ? `<span><i style="background:var(--text-primary)"></i>Træning</span>` : ""}${fri ? `<span><i style="border:1.5px dashed var(--success)"></i>Fri ≥ 1½ t</span>` : ""}<span><i style="box-shadow:0 0 0 1.5px var(--destructive)"></i>Overlapper</span></div>`;
+const wkLegend = (fri, trn) => `<div class="legend"><span><i style="background:var(--undervisning)"></i>Undervisning</span><span><i style="background:var(--selvstudie)"></i>Selvstudie</span><span><i style="background:var(--gray-400)"></i>Andet</span>${trn ? `<span><i style="background:var(--text-primary)"></i>Træning</span>` : ""}${fri ? `<span><i style="border:1.5px dashed var(--success)"></i>Fri ≥ 1½ t</span>` : ""}<span><i style="box-shadow:0 0 0 1.5px var(--destructive)"></i>Overlapper</span></div>`;
 const hoursBy = (ev, type) => ev.filter(e => e.type === type && e.start && e.slut).reduce((s, e) => s + hm(e.slut) - hm(e.start), 0);
 
 function cal(r) {
@@ -235,6 +261,53 @@ function sources(r) {
     ${r.rapport.metode ? `<p class="meta" style="margin:10px 0 0;line-height:1.5">${esc(r.rapport.metode)}</p>` : ""}</section>`;
 }
 
+// ---------- Planlagt mod faktisk (liv.json dagsplan) ----------
+// Minutterne i hver planlagt blok er regnet af overblik; siden placerer blokkene på aksen og skriver dem ud.
+// Afsnittet gælder de seneste døgn til i dag, ikke den valgte uge, så det står nederst.
+// Skærmtidens grupper har Skærmtids egne farver (skaermtid/side/index.html); undervisning og selvstudie har deres egne
+// (--undervisning, --selvstudie i form.css), som ingen af grupperne bruger.
+const DP_A = 6, DP_B = 26;  // kl. 6 til kl. 2 om natten
+const GRUPPEFARVE = { Produktiv: "var(--c3)", Passiv: "var(--c2)", Gaming: "var(--c4)", Praktisk: "var(--c1)", Ukategoriseret: "var(--gray-400)" };
+const kl = t => t.slice(11, 16).replace(":", ".");
+function dpSpor(dag, xs, klasse) {
+  const fra = new Date(dag.fra);
+  const x = t => Math.max(0, Math.min(100, ((new Date(t) - fra) / 36e5) * 100 / (DP_B - DP_A)));
+  return xs.map(b => { const a = x(b.start), z = x(b.slut); if (z <= a) return "";
+    return `<i class="${klasse(b)}" style="left:${a.toFixed(2)}%;width:${(z - a).toFixed(2)}%${b.gruppe ? `;background:${GRUPPEFARVE[b.gruppe] || GRUPPEFARVE.Ukategoriseret}` : ""}" title="${esc(`${kl(b.start)}–${kl(b.slut)} ${b.kategori || b.titel || ""}`)}"></i>`; }).join("");
+}
+function dpFaktisk(f) {
+  if (!f) return "";
+  const dele = [];
+  if (f.skaerm == null) dele.push("ingen skærmdata");
+  else { Object.entries(f.kategorier).slice(0, 2).forEach(([k, m]) => dele.push(`${esc(k)} ${m} min`)); dele.push(`uden skærm ${f.uden_skaerm} min`); }
+  if (f.selvstudie) dele.push(`selvstudie logget ${f.selvstudie} min`);
+  if (f.traening) dele.push(`træning ${f.traening} min`);
+  return dele.join(" · ");
+}
+function dagsplan() {
+  const D = (L.dagsplan || []).slice().reverse();
+  if (!D.length) return "";
+  let akse = ""; for (let h = DP_A; h <= DP_B; h += 4) akse += `<span style="left:${((h - DP_A) * 100 / (DP_B - DP_A)).toFixed(2)}%">${String(h % 24).padStart(2, "0")}</span>`;
+  const dag = d => `<div class="dp-dag">
+      <div class="dp-head"><b>${weekday(parseDate(d.dato)).replace(/^./, c => c.toUpperCase())} ${dayMonth(parseDate(d.dato))}</b><span>${d.studiesvar ? `${d.studiesvar} genkaldssvar · ` : ""}${d.plan.length} planlagt</span></div>
+      <div class="dp-grid">
+        <span class="dp-l">Plan</span><div class="dp-spor">${dpSpor(d, d.plan, b => b.type)}</div>
+        <span class="dp-l">Skærm</span><div class="dp-spor${d.skaerm == null ? " tom" : ""}">${dpSpor(d, d.skaerm || [], () => "")}</div>
+        <span class="dp-l">Logget</span><div class="dp-spor">${dpSpor(d, d.logget, b => b.type)}</div>
+        <span></span><div class="dp-akse">${akse}</div>
+      </div>
+      ${d.plan.length ? `<ul class="dp-blokke">${d.plan.map(p => `<li><b>${kl(p.start)}–${kl(p.slut)} ${esc(p.fag || p.titel)}</b>: ${dpFaktisk(p.faktisk)}</li>`).join("")}</ul>` : ""}
+    </div>`;
+  const legend = `<div class="legend" style="margin-top:12px"><span><i style="background:var(--undervisning)"></i>Undervisning</span><span><i style="box-shadow:inset 0 0 0 1.5px var(--text-secondary)"></i>Egen blok</span><span><i style="background:var(--selvstudie)"></i>Selvstudie (CalTask)</span><span><i style="background:var(--text-primary)"></i>Træning</span></div>
+    <div class="legend" style="margin-top:6px"><span>Skærm:</span>${Object.entries(GRUPPEFARVE).map(([g, c]) => `<span><i style="background:${c}"></i>${g}</span>`).join("")}</div>`;
+  return `<section class="card panel" id="planlagt"><div class="panel-head"><h2>Planlagt mod faktisk</h2><span class="meta">de seneste ${D.length} døgn til i dag, kl. 6 til kl. 2 · ikke den valgte uge</span></div>
+    <p class="meta" style="margin:0 0 12px">Gælder de seneste ${D.length} døgn til i dag, uanset hvilken uge der er valgt ovenfor. Dagens blokke med det faktiske står også på I dag.</p>
+    ${D.slice(0, 7).map(dag).join("")}
+    ${D.length > 7 ? `<details style="margin-top:14px"><summary class="meta">De 7 døgn før</summary><div style="margin-top:12px">${D.slice(7).map(dag).join("")}</div></details>` : ""}
+    ${legend}
+    <p class="meta" style="margin:10px 0 0">Plan er undervisningen og dine egne blokke i kalenderen. Skærm er Skærmtids største kategori pr. kvarter; Logget er det, CalTask har logget som selvstudie, og Garmins pas. Minutterne under hver blok er regnet af overblik.</p></section>`;
+}
+
 function render() {
   const R = L.reviews, r = R[sel];
   $("pnav").innerHTML = `
@@ -242,7 +315,7 @@ function render() {
     <select id="wsel" aria-label="Vælg uge">${R.map((x, i) => `<option value="${i}"${i === sel ? " selected" : ""}>Uge ${weekNo(x.uge)} · ${range(x.mandag)}${x.tekst ? "" : " (kun tal)"}</option>`).join("")}</select>
     <button type="button" class="nav-btn" data-step="1" aria-label="Ugen efter"${sel === R.length - 1 ? " disabled" : ""}>${icon("arrow-right", 14)}</button>`;
   $("sub").textContent = `Ugereview · opdateret ${stamp(L.genereret)}`;
-  $("root").innerHTML = hero(r) + dev(r) + days(r) + cal(r) + hyp(r) + trend(r) + sources(r);
+  $("root").innerHTML = hero(r) + dev(r) + days(r) + cal(r) + hyp(r) + trend(r) + sources(r) + dagsplan();
   $("wsel").onchange = e => { sel = +e.target.value; render(); };
   document.querySelectorAll(".nav-btn").forEach(b => b.onclick = () => { sel = Math.max(0, Math.min(R.length - 1, sel + +b.dataset.step)); render(); });
 }
@@ -251,6 +324,8 @@ fetch("liv.json", { cache: "no-store" }).then(r => { if (!r.ok) throw new Error(
   L = d; L.reviews = [...(L.reviews || [])].sort((a, b) => a.uge.localeCompare(b.uge)); sel = L.reviews.length - 1;
   if (!L.reviews.length) { $("root").innerHTML = `<div class="card empty">Ingen uger endnu. Kør <code>liv opdater</code> og <code>liv eksport</code>.</div>`; return; }
   render();
+  // Et anker i adressen (fx #planlagt fra I dag) findes først nu, hvor siden er tegnet
+  if (location.hash.length > 1) document.getElementById(location.hash.slice(1))?.scrollIntoView({ block: "start" });
 }, e => { $("root").innerHTML = `<div class="card empty">${esc(e.message)}. Skriv den med <code>~/kompas/overblik/.venv/bin/liv eksport</code>.</div>`; });
 </script>
 </body>

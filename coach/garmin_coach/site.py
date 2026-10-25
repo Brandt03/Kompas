@@ -5,10 +5,10 @@
     python -m garmin_coach.site gem-periode START SLUT VURDERING.json [--foreloebig]
     python -m garmin_coach.site importer MAPPE
 
-byg          skriver index.html og data (perioder, måneder, oversigt) til
+byg          skriver data (perioder, oversigt) og index.html, der sender /form/ videre til Perioder, til
              ~/.garmin-coach/site, som Caddy leverer. Kører når programmet Kompas åbnes.
-             Skriver også Kompas-siderne (perioder, uge, søvn og coach, med
-             soevn.json og coach.json) og kompas.json, som fortæller Kompas
+             Skriver også Kompas-siderne (perioder, ugereview og kroppen, med
+             kroppen.json; soevn.json og coach.json til Kompas' I dag) og kompas.json, som fortæller Kompas
              (https://kompas.localhost) hvilke sider projektet har.
 perioder     udskriver alle gemte perioder som JSON.
 gem-periode  regner periodens tal med periode_rapport, lægger vurderingen fra
@@ -33,34 +33,37 @@ from pathlib import Path
 
 from . import metrics
 from .db import connect
+from .kroppen import byg_filer, kroppen
 from .metrics import maanedsoversigt, periode_rapport
 
 log = logging.getLogger(__name__)
 
 SITE_DIR = Path(os.environ.get("GC_SITE", "~/.garmin-coach/site")).expanduser()
-PAGE = Path(__file__).resolve().parent.parent / "site" / "index.html"
+PAGE = Path(__file__).resolve().parent.parent / "site" / "index.html"  # sender /form/ videre til Perioder
 VURDERING_LISTER = ("gaar_godt", "gaar_daarligt", "forbedring", "fokus", "opfoelgning")
 UGEDAGE = ("mandag", "tirsdag", "onsdag", "torsdag", "fredag", "lørdag", "søndag")
-EKSTRA_SIDER = ("perioder.html", "uge.html", "soevn.html", "coach.html", "form.css")
+EKSTRA_SIDER = ("perioder.html", "uge.html", "kroppen.html", "form.css")
+# Sider og data, der er lagt sammen med andre eller ikke bruges mere; byg fjerner den gamle kopi, så Caddy ikke
+# leverer den. maaneder.json hørte til den gamle samlede side på /form/.
+FJERNEDE_SIDER = ("soevn.html", "coach.html", "maaneder.json")
 
 # Det Kompas viser i menuen for dette projekt. Stierne er dem Caddy leverer siden på.
-# Siderne er Kompas' version af Form & fokus i Sures stil; index.html er stadig den samlede side på
-# https://localhost/form/.
+# Siderne er Kompas' version af Form & fokus i Sures stil; index.html sender https://kompas.localhost/form/ og
+# https://localhost/form/ videre til Perioder.
 KOMPAS = {
     "omraade": "Form & fokus", "ikon": "activity", "raekkefoelge": 30,
     "kilde": "garmin-coach (python -m garmin_coach.site byg)",
     "sider": [
         {"titel": "Perioder", "ikon": "calendar-range", "sti": "/form/perioder.html"},
-        {"titel": "Ugen i tal", "ikon": "calendar", "sti": "/form/uge.html"},
-        {"titel": "Søvn & restitution", "ikon": "moon", "sti": "/form/soevn.html"},
-        {"titel": "Coach", "ikon": "message-circle", "sti": "/form/coach.html"},
+        {"titel": "Ugereview", "ikon": "calendar", "sti": "/form/uge.html"},
+        {"titel": "Kroppen i tal", "ikon": "chart-bar", "sti": "/form/kroppen.html"},
     ],
 }
 
 
 def _kompas(conn: sqlite3.Connection, out: Path, ps: list[dict] | None = None) -> dict:
     """Manifestet med "nyt" pr. side: en nøgle for sidens nyeste indhold. Skifter den, viser
-    menuen i Kompas en prik, til siden er åbnet. Ugen i tal viser ugereviewet fra overblik i
+    menuen i Kompas en prik, til siden er åbnet. Ugereview viser ugereviewet fra overblik i
     liv.json, som `liv` skriver i samme mappe."""
     nyt = {}
     endelige = [p for p in (perioder(conn) if ps is None else ps) if p.get("status") == "endelig"]
@@ -179,8 +182,8 @@ def _write(path: Path, text: str) -> None:
 
 
 def soevn(conn: sqlite3.Connection, dage: int = 60) -> dict:
-    """Nat for nat de seneste `dage` dage plus restitutionsstatus fra metrics.recovery.
-    En nat uden måling står med null, ikke 0."""
+    """Nat for nat de seneste `dage` dage plus restitutionsstatus fra metrics.recovery, til Kompas' I dag
+    (Søvn i nat). En nat uden måling står med null, ikke 0."""
     t = lambda s: None if s is None else round(s / 3600, 2)
     rows = conn.execute(
         """SELECT date, sleep_s, deep_s, rem_s, light_s, awake_s, sleep_score, hrv_last_night, hrv_status,
@@ -196,8 +199,8 @@ def soevn(conn: sqlite3.Connection, dage: int = 60) -> dict:
 
 
 def coach(conn: sqlite3.Connection, ps: list[dict] | None = None) -> dict:
-    """Coach-siden: dagens restitution, råd og belastning, de næste tre dage og fokus fra den
-    seneste endelige periode. Rådet bruges også af Kompas' forside. Siden viser kun tal og tekst herfra; selve
+    """Til Kompas' forside I dag: dagens restitution, råd og belastning, de næste tre dage og fokus fra den
+    seneste endelige periode. Kroppen i tal viser rådet, belastningen og intensiteten fra kroppen.json; selve
     samtalen med coachen foregår i Claude via garmin-coach-værktøjerne."""
     tl = metrics.training_load(conn, weeks=6)
     endelige = [p for p in (perioder(conn) if ps is None else ps) if p.get("status") == "endelig"]
@@ -240,19 +243,29 @@ def byg(conn: sqlite3.Connection, out: Path = SITE_DIR) -> dict:
         if (PAGE.parent / navn).exists():
             shutil.copyfile(PAGE.parent / navn, out / f"{navn}.tmp")
             os.replace(out / f"{navn}.tmp", out / navn)
+    for navn in FJERNEDE_SIDER:
+        (out / navn).unlink(missing_ok=True)
     ps, sprunget = _laes_perioder(conn)  # defekte perioder springes over med én advarsel hver
     # Søvn, Coach og belastningen må ikke vælte resten af siden, hvis data er for tynde til en beregning
-    for navn, f in (("soevn.json", soevn), ("coach.json", lambda c: coach(c, ps)), ("belastning.json", belastning)):
+    for navn, f in (("soevn.json", soevn), ("kroppen.json", kroppen), ("coach.json", lambda c: coach(c, ps)),
+                    ("belastning.json", belastning)):
         try:
             data = f(conn)
         except Exception as e:  # noqa: BLE001
             log.warning("%s kunne ikke beregnes: %s: %s", navn, type(e).__name__, e)
             data = {"fejl": f"{type(e).__name__}: {e}", "genereret": _now()}
         _write(out / navn, json.dumps(data, ensure_ascii=False, default=str))
+    # Kroppen i tal: døgn- og månedsfilerne, så siden kan gå tilbage i tid; kun de ændrede skrives
+    try:
+        byg_filer(conn, out, _write)
+    except Exception as e:  # noqa: BLE001
+        log.warning("Kroppen i tal: døgn- og månedsfilerne kunne ikke bygges: %s: %s", type(e).__name__, e)
     ov = maanedsoversigt(conn)
     months = [r["maaned"] for r in ov["maaneder"]]
+    # Perioder gemt før løb og svømning kom med, får dem regnet her ud fra aktiviteterne, som ikke ændrer sig
+    ps = [p if "kondition" in p else p | {"kondition": metrics.kondition(conn, p["start"], p["slut"])} for p in ps]
     _write(out / "perioder.json", json.dumps(ps, ensure_ascii=False))
-    _write(out / "maaneder.json", json.dumps(ov["maaneder"], ensure_ascii=False))
+
     _write(out / "oversigt.json", json.dumps({
         "udvikling": ov.get("udvikling"), "forbehold": ov.get("forbehold", []),  # uden data: ingen udvikling
         "fra": months[0] if months else None, "til": months[-1] if months else None,

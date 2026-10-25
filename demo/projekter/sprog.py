@@ -203,9 +203,16 @@ def lav(ud: Path, idag: date) -> None:
                       "naeste": _iso(datetime.combine(idag + timedelta(days=1), time(0, 0)).astimezone()),
                       "sprog": stat, "eksamensperiode": None},
         "regler": regler, "regelkort": regelkort,
+        # Dit seneste svar (til "Står stille" på I dag): det sidste af dagens kort
+        "sidst_svar": _iso(nu - timedelta(minutes=35)),
+        # Som nyFeedback() i kerne.js: den nye tekst er ikke besvaret, og feedbacken på ugen før står forrest
+        "ny_feedback": ({"uge": tekster[1]["uge"], "titel": tekster[1]["titel"], "skrevet": tekster[1]["feedback"]["skrevet"]}
+                        if not tekster[0]["svar"] and tekster[1]["feedback"] else None),
     }
 
-    nyt_tekst = f"{tekster[0]['uge']}{'-feedback' if tekster[0]['feedback'] else ''}"
+    # Som manifest() i server.js: den nyeste tekst og den nyeste feedback
+    f = next((x for x in tekster if x["feedback"]), None)
+    nyt_tekst = f"{tekster[0]['uge']}{'' if not f else '-feedback' if f is tekster[0] else '+' + f['uge'] + '-feedback'}"
     manifest = {"omraade": "Sprog", "ikon": "languages", "raekkefoelge": 25, "kilde": "sprog/server.js (live, port 8769) · demodata",
                 "opdateret": _iso(nu), "sider": [
                     {"titel": "Oversigt", "ikon": "languages", "sti": "/sprog/", "praecis": True, "nyt": nyt_tekst},

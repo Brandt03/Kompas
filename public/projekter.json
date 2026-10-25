@@ -1,9 +1,11 @@
 {
- "_om": "Hvert projekt beskriver selv sine sider i en kompas.json, som det skriver ved siden af sine sider. Kompas læser listen her og bygger menuen. Tilføj et projekt ved at tilføje stien til dets kompas.json.",
+ "_om": "Hvert projekt beskriver selv sine sider i en kompas.json, som det skriver ved siden af sine sider. Kompas læser listen her og bygger menuen. Tilføj et projekt ved at tilføje stien til dets kompas.json. Et projekt under pause er taget ud af menuen, I dag, kopien og Forbindelsernes advarsler med vilje; mappen, data og koden er urørt. Sæt det på pause med en post under pause ({\"projekt\": navnet, \"manifest\": stien, \"siden\": \"ÅÅÅÅ-MM-DD\", \"hvorfor\": tekst}) i stedet for under manifester, og tag det op igen ved at flytte manifestet tilbage og slette posten.",
  "manifester": [
   "/forbrug/kompas.json",
   "/studie/kompas.json",
   "/form/kompas.json",
-  "/sprog/kompas.json"
- ]
+  "/sprog/kompas.json",
+  "/skaermtid/kompas.json"
+ ],
+ "pause": []
 }

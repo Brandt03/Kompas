@@ -17,13 +17,13 @@ logline "starter"
 logline "Caddy"
 brew services list | grep -q '^caddy.*started' || brew services start caddy >/dev/null 2>&1
 
-# The background jobs: the update every 30 minutes, the Studie and Sprog servers and Sure's export.
+# The background jobs: the update every 30 minutes, the Studie, Sprog and Skærmtid servers and Sure's export.
 # Luk Kompas disables them (so they stay off after a restart); enable and load them again here.
 # The update fetches Garmin now instead of waiting up to 3 hours, and from the last successful fetch,
 # so a period with Kompas closed leaves no gap.
 logline "baggrundsjobbene"
 mkdir -p "$HOME/.kompas" && touch "$HOME/.kompas/hent-garmin-nu"
-for l in local.kompas.studie local.kompas.sprog local.kompas.opdater local.sure.dashboard-export; do
+for l in local.kompas.studie local.kompas.sprog local.kompas.skaermtid local.kompas.opdater local.sure.dashboard-export; do
   launchctl enable $U/$l
   if launchctl print $U/$l >/dev/null 2>&1; then
     [[ $l == local.kompas.opdater ]] && launchctl kickstart $U/$l
@@ -50,5 +50,5 @@ dashboard/export.sh || logline "dashboard/export.sh fejlede"
 
 # Form & Fokus, overblik and Studie are refreshed by the update started above (~/.kompas/opdater.log).
 
-# Kompas (~/kompas, https://kompas.localhost): økonomi, studie, sprog og form samlet bag én menu
+# Kompas (~/kompas, https://kompas.localhost): økonomi, studie, sprog, form og skærmtid samlet bag én menu
 open "https://kompas.localhost/"

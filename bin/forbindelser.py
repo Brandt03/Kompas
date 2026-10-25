@@ -27,9 +27,11 @@ HJEM = Path.home()
 KOMPAS = HJEM / "kompas"
 UD = KOMPAS / "public" / "forbindelser.json"
 STATE = HJEM / ".kompas"
+KOPI = HJEM / "KompasKopi"  # kopien til bærbaren (bin/kopi.py)
 COACH = KOMPAS / "coach"
 COACH_DB = HJEM / ".garmin-coach" / "coach.db"
 SURE_DATA = KOMPAS / "okonomi" / "dashboard" / "public" / "data.json"
+SKAERMTID = STATE / "skaermtid" / "skaermtid.json"
 SEMESTER = Path(os.environ.get("KOMPAS_SEMESTER", KOMPAS / "studie"))
 CLAUDE_DESKTOP = HJEM / "Library/Application Support/Claude/claude_desktop_config.json"
 CLAUDE_CODE = HJEM / ".claude.json"
@@ -131,7 +133,8 @@ def db_vaerdi(db, sql, *args):
 
 # opdater.sh's trin (id'erne i dens statusfil) → navne på siden. Et ukendt id vises, som det er.
 TRIN = {"garmin": "garmin", "kalender": "kalender", "form-byg": "Form & fokus-byg", "overblik": "Overblik",
-        "studie-eksport": "studie-eksporten"}
+        "studie-eksport": "studie-eksporten", "aw-sync": "aw-sync", "skaermtid": "Skærmtid",
+        "kopi": "kopien til bærbaren"}
 
 
 def seneste_koersel(fil=STATE / "opdater-status.json"):
@@ -254,13 +257,45 @@ def datakilder(koersel, fejl, feeds):
                         link="/okonomi"))
     except (OSError, ValueError):
         ud.append(punkt("Banken", "via Sure", "Økonomi", "fejl", "Sures udtræk mangler",
-                        hjaelp="Åbn Kompas-appen, så laves udtrækket (`sure/dashboard/export.sh`)."))
+                        hjaelp="Åbn Kompas-appen, så laves udtrækket (`okonomi/dashboard/export.sh`)."))
 
     # Filens tid, ikke dens indhold: under launchd må python stat'e filer i OneDrive, men ikke læse dem
     t = mtime(SEMESTER / "Scripts" / "canvas-log.txt")
     ud.append(punkt("Canvas", "downloads", "Studie", "info", "sorteres, når du kører scriptet", t,
                     hjaelp="Flyt Canvas-downloads til fagmapperne: `node Scripts/canvas-sortering.js --kør` "
                     "(uden `--kør` er det en prøvekørsel)."))
+    return ud + skaermtid_enheder()
+
+
+def skaermtid_enheder(fil=SKAERMTID, nu=None):
+    """Ét punkt pr. enhed i Skærmtid: hvornår ActivityWatch dér sidst sendte data (`enheder[].sidst`, som
+    skaermtid.py skriver). Samme grænse som Skærmtid-siden: to hele dage uden data er en advarsel, undtagen for en
+    enhed med `sjaelden` i regler.json, som du sjældent bruger; den står som info."""
+    nu = (nu or NU).astimezone()
+    try:
+        enheder = json.loads(Path(fil).read_text()).get("enheder") or []
+    except (OSError, ValueError):
+        return [punkt("ActivityWatch", "enheder", "Skærmtid", "fejl", "Skærmtid er ikke bygget",
+                      hjaelp="Se linjerne med `skaermtid` i `~/.kompas/opdater.log`.")]
+    ud = []
+    for e in enheder:
+        navn, t = e.get("navn") or "?", tid(e.get("sidst"))
+        if not e.get("kendt"):
+            ud.append(punkt(f"Skærmtid · {navn}", "ActivityWatch", "Skærmtid", "info", "ukendt enhed sender data", t,
+                            hjaelp="Giv værtsnavnet et navn i `~/kompas/skaermtid/regler.json`.", link="/skaermtid/"))
+            continue
+        dage = (nu.date() - t.astimezone().date()).days if t else None
+        if e.get("sjaelden") and (dage is None or dage >= 2):
+            s, tekst = "info", "bruges sjældent" + (f" · ingen data i {dage} dage" if dage is not None else "")
+        elif dage is None:
+            s, tekst = "advarsel", "har aldrig sendt data"
+        elif dage >= 2:
+            s, tekst = "advarsel", f"ingen data i {dage} dage"
+        else:
+            s, tekst = "ok", "sender data"
+        ud.append(punkt(f"Skærmtid · {navn}", "ActivityWatch", "Skærmtid", s, tekst, t, link="/skaermtid/",
+                        hjaelp=None if s in ("ok", "info") else "Tjek, at ActivityWatch kører på enheden, og at Syncthing har sendt "
+                        "`~/ActivityWatchSync` til Mac'en (se `skaermtid/OPSAETNING.md`)."))
     return ud
 
 
@@ -273,6 +308,7 @@ RUTINE_INFO = {
     "traening-rapport": ("vurdering af perioden", "Form & fokus"),
     "overblik-ugereview": ("ugereview", "I dag · Form & fokus"),
     "sprog-ugen": ("nye sprogkort og ugens tekst", "Sprog"),
+    "skaermtid-ugen": ("ugens gennemgang og kategorierne", "Skærmtid"),
 }
 UGEDAGE = ["mandag", "tirsdag", "onsdag", "torsdag", "fredag", "lørdag", "søndag"]
 
@@ -389,9 +425,16 @@ def claude(cfg, rutiner, nu=NU):
         else:
             l = forrige.astimezone()
             s, tekst = "advarsel", f"{skriver} · skulle have kørt {UGEDAGE[l.weekday()]} kl. {l:%H.%M}"
+        if s == "ok":
+            hjaelp = None
+        elif not r["slaaet_til"]:
+            hjaelp = (f"Rutinen er slået fra i Claude-appen. Slå den til under Rutiner (Kompas · {r['navn']}), "
+                      "eller lad den være, hvis det er med vilje.")
+        else:
+            hjaelp = ("Rutiner kører kun, mens Claude-appen er åben, og en glemt kørsel tages, næste gang appen åbnes. "
+                      f"Du kan også køre den nu under Rutiner ({r['navn']}).")
         ud.append(punkt(r["navn"], "Claude-rutine", projekt, s, tekst, r["sidst"], naeste=naeste if r["slaaet_til"] else None,
-                        hjaelp=None if s == "ok" else "Rutiner kører kun, mens Claude-appen er åben, og en glemt kørsel "
-                        f"tages, næste gang appen åbnes. Du kan også køre den nu under Rutiner ({r['navn']})."))
+                        hjaelp=hjaelp))
     return ud
 
 
@@ -419,14 +462,16 @@ def drift(koersel, fejl):
 
     s, tekst = frisk(koersel, 45 * 60, "henter og bygger hver halve time", "har ikke kørt den sidste halve time")
     andre = sorted(TRIN.get(i, i) for i in fejl - {"garmin", "kalender"})
+    hjaelp = None if s == "ok" else "Den er slået fra, når Kompas er lukket. Åbn Kompas-appen. Log: `~/.kompas/opdater.log`"
     if andre:
+        # Opdateringen kørte; det er et af dens trin, der fejlede. Trinnet står med sin egen linje i loggen.
         s, tekst = "advarsel", "sidste kørsel: " + ", ".join(andre) + " fejlede"
-    ud.append(punkt("Opdatering", "LaunchAgent", "Kompas", s, tekst, koersel,
-                    hjaelp=None if s == "ok" else "Den er slået fra, når Kompas er lukket. Åbn Kompas-appen. "
-                    "Log: `~/.kompas/opdater.log`"))
+        hjaelp = "Se, hvad der fejlede, i `~/.kompas/opdater.log` (de sidste linjer før \"færdig med fejl\")."
+    ud.append(punkt("Opdatering", "LaunchAgent", "Kompas", s, tekst, koersel, hjaelp=hjaelp))
 
     for navn, port, label, projekt, log in [("Studie-server", 8767, "studie", "Studie", "studie-server.log"),
-                                            ("Sprog-server", 8769, "sprog", "Sprog", "sprog-server.log")]:
+                                            ("Sprog-server", 8769, "sprog", "Sprog", "sprog-server.log"),
+                                            ("Skærmtid-server", 8770, "skaermtid", "Skærmtid", "skaermtid-server.log")]:
         oppe = http(f"http://127.0.0.1:{port}/") is not None
         ud.append(punkt(navn, "LaunchAgent", projekt, "ok" if oppe else "fejl",
                         f"svarer på 127.0.0.1:{port}" if oppe else "svarer ikke",
@@ -440,7 +485,7 @@ def drift(koersel, fejl):
 
     ts = TAILSCALE if os.access(TAILSCALE, os.X_OK) else shutil.which("tailscale", path=PATH)
     if not ts:
-        ud.append(punkt("Tailscale", "VPN", "Studie · Sprog", "info", "ikke installeret (kun til telefonen)",
+        ud.append(punkt("Tailscale", "VPN", "Kompas", "info", "ikke installeret (kun til telefonen og bærbaren)",
                         link="https://tailscale.com/download"))
     else:
         rc, ud_json = koer(ts, "status", "--json")
@@ -449,20 +494,47 @@ def drift(koersel, fejl):
         except ValueError:
             koerer = False
         rc, serve = koer(ts, "serve", "status", "--json")
-        deler = "127.0.0.1:8768" in serve
-        s = "ok" if koerer and deler else "advarsel" if koerer else "info"
-        ud.append(punkt("Tailscale", "VPN", "Studie · Sprog", s,
-                        "På farten og Sprog er tilgængelige på telefonen" if s == "ok" else
-                        "kører, men deler ikke På farten og Sprog" if koerer else "ikke forbundet",
-                        hjaelp=None if s == "ok" else "`~/kompas/bin/tailscale-mobil.sh`" if koerer
-                        else "Åbn Tailscale og log ind, hvis du vil bruge På farten."))
+        # 8768 er Caddys blok til telefonen (På farten), 8771 hele Kompas til bærbaren (se bin/tailscale.sh)
+        mangler = [hvad for hvad, port in (("telefonen", "8768"), ("bærbaren", "8771")) if f"127.0.0.1:{port}" not in serve]
+        s = "ok" if koerer and not mangler else "advarsel" if koerer else "info"
+        ud.append(punkt("Tailscale", "VPN", "Kompas", s,
+                        "På farten på telefonen og hele Kompas på bærbaren" if s == "ok" else
+                        f"kører, men deler ikke Kompas med {' og '.join(mangler)}" if koerer else "ikke forbundet",
+                        hjaelp=None if s == "ok" else "`~/kompas/bin/tailscale.sh`" if koerer
+                        else "Åbn Tailscale og log ind, hvis du vil bruge Kompas på telefonen eller bærbaren."))
 
-    # backup-data.sh noterer dagens backup; OneDrive-mappen kan ikke listes, når launchd starter os
+    ud.append(kopi_punkt(fejl))
+
+    # backup-data.sh noterer dagens backup; backupmappen i skyen kan ikke listes, når launchd starter os
     t = mtime(STATE / "backup-sidst")
-    s, tekst = frisk(t, 2 * 24 * TIME, "coach.db, liv.db og Sprogs data, 14 dage tilbage", "ingen backup de sidste to dage")
+    s, tekst = frisk(t, 2 * 24 * TIME, "coach.db, liv.db, Sprogs data og ActivityWatch, 14 dage tilbage", "ingen backup de sidste to dage")
     ud.append(punkt("Backup", "mappe i skyen", "Kompas", s, tekst, t,
                     hjaelp=None if s == "ok" else "`~/kompas/bin/backup-data.sh --tving`"))
     return ud
+
+
+def kopi_punkt(fejl, fil=KOPI / "site" / "kompas" / "kopi.json", nu=None):
+    """Kopien til bærbaren. bin/kopi.py skriver kopi.json til sidst i hver kørsel, også når noget ikke kunne
+    hentes, så filens alder siger kun, at kopien er bygget. Om det lykkedes, står i opdateringens trin `kopi`;
+    ellers ville punktet sige ok, mens Opdatering siger, at kopien fejlede."""
+    t = mtime(fil)
+    if not t:
+        s, tekst = "fejl", "ingen kørsel fundet"
+    elif ((nu or NU) - t).total_seconds() > 45 * 60:
+        s, tekst = "advarsel", "ikke bygget den sidste halve time"
+    elif "kopi" in fejl:
+        s, tekst = "advarsel", "bygget, men sidste kørsel fejlede"
+    else:
+        s, tekst = "ok", "bygget den sidste halve time; Syncthing sender den til bærbaren"
+    if s == "ok":
+        hjaelp = None
+    elif "kopi" in fejl:
+        hjaelp = ("Linjerne med `kopi:` i `~/.kompas/opdater.log` siger, hvad der ikke kunne hentes; resten af kopien "
+                  "er bygget. Byg igen: `/usr/bin/python3 ~/kompas/bin/kopi.py`")
+    else:
+        hjaelp = ("Den bygges af opdateringen. Log: `~/.kompas/opdater.log` (linjerne med `kopi:`). "
+                  "Byg nu: `/usr/bin/python3 ~/kompas/bin/kopi.py`")
+    return punkt("Kopi til bærbaren", "Syncthing", "Kompas", s, tekst, t, hjaelp=hjaelp)
 
 
 # ── værktøjer ─────────────────────────────────────────────────────────────────
@@ -475,12 +547,12 @@ VAERKTOEJER = [
     # Node og Python kan komme fra Homebrew eller fra installerne på nodejs.org og python.org. Installernes faste
     # stier prøves først, fordi Studie-serveren og opdater.sh kører /usr/local/bin/node, og LaunchAgents ikke har
     # Homebrews PATH; ellers bruges den, der ligger på PATH.
-    ("Node.js", ["/usr/local/bin/node", "node"], "--version", "Studie, Sprog", "https://nodejs.org/en/download"),
+    ("Node.js", ["/usr/local/bin/node", "node"], "--version", "Studie, Sprog, opdater.sh", "https://nodejs.org/en/download"),
     ("Python", ["/Library/Frameworks/Python.framework/Versions/Current/bin/python3", "python3"], "--version",
      "Form & fokus, Overblik, Excel", "https://www.python.org/downloads/macos/"),
     ("SQLite", ["sqlite3"], "--version", "backup", "brew install sqlite"),
     ("Git", ["git"], "--version", "projekterne", "xcode-select --install"),
-    ("Tailscale", [TAILSCALE, "tailscale"], "version", "telefonen (valgfri)", "https://tailscale.com/download"),
+    ("Tailscale", [TAILSCALE, "tailscale"], "version", "telefonen og bærbaren (valgfri)", "https://tailscale.com/download"),
     ("GitHub CLI", ["gh"], "--version", "GitHub (valgfri)", "brew install gh"),
 ]
 
@@ -501,6 +573,23 @@ def vaerktoejer():
     return ud
 
 
+# ── projekter på pause ────────────────────────────────────────────────────────
+def pausede(fil=KOMPAS / "public" / "projekter.json"):
+    """Projekterne under `pause` i projekter.json: {projekt: {siden, hvorfor}}. Ingen fil eller ingen pause giver {}."""
+    try:
+        return {p["projekt"]: p for p in json.loads(fil.read_text()).get("pause", []) if p.get("projekt")}
+    except (OSError, ValueError, TypeError, AttributeError):
+        return {}
+
+
+def paa_pause(grupper, pause):
+    """Et projekt på pause er det med vilje: dets punkter (rutinen, datakilden, serveren) vises ikke. Siden nævner i stedet
+    pausen én gang (feltet `pause` i forbindelser.json), så det er tydeligt, at de mangler med vilje."""
+    for g in grupper:
+        g["punkter"] = [p for p in g["punkter"] if p.get("projekt") not in pause]
+    return [g for g in grupper if g["punkter"]]
+
+
 def main():
     koersel, fejl, feeds = seneste_koersel()
     cfg, rutiner = mcp_konfig(), app_rutiner()
@@ -510,7 +599,10 @@ def main():
         {"id": "claude", "titel": "Claude", "undertitel": "MCP-server og planlagte rutiner", "punkter": claude(cfg, rutiner)},
         {"id": "drift", "titel": "Kører i baggrunden", "undertitel": "Servere, baggrundsjob og backup", "punkter": drift(koersel, fejl)},
     ]
+    pause = pausede()
+    grupper = paa_pause(grupper, pause)
     data = {"genereret": iso(NU), "kilde": "kompas/bin/forbindelser.py (via opdater.sh)", "grupper": grupper,
+            "pause": [{"projekt": n, "siden": pp.get("siden"), "hvorfor": pp.get("hvorfor")} for n, pp in pause.items()],
             "vaerktoejer": vaerktoejer(), "mcp": mcp_guide(cfg)}
     UD.parent.mkdir(parents=True, exist_ok=True)
     tmp = UD.with_suffix(".tmp")

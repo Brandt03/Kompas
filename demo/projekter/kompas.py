@@ -56,11 +56,17 @@ def lav(ud: Path, idag: date) -> None:
                hjaelp="Flyt Canvas-downloads til fagmapperne: `node Scripts/canvas-sortering.js --kør` "
                       "(uden `--kør` er det en prøvekørsel)."),
     ]
+    # Én linje pr. Skærmtid-enhed (samme navne som regler.example.json i Skærmtid); Stationær bruges sjældent
+    for navn, sidst in [("Mac", for_(minutes=12)), ("Telefon", for_(minutes=41)), ("Bærbar", for_(hours=20, minutes=5))]:
+        kilder.append(_punkt(f"Skærmtid · {navn}", "ActivityWatch", "Skærmtid", "ok", "sender data", sidst, link="/skaermtid/"))
+    kilder.append(_punkt("Skærmtid · Stationær", "ActivityWatch", "Skærmtid", "info", "bruges sjældent · ingen data i 4 dage",
+                         for_(days=4, hours=3), link="/skaermtid/"))
 
     rutiner = [("Studie", "køreplan for næste uge", "Studie", [6], 18, 0),
                ("Træning", "vurdering af perioden", "Form & fokus", [5], 10, 0),
                ("Overblik", "ugereview", "I dag · Form & fokus", [0], 7, 0),
-               ("Sprog", "nye sprogkort og ugens tekst", "Sprog", [6], 20, 0)]
+               ("Sprog", "nye sprogkort og ugens tekst", "Sprog", [6], 20, 0),
+               ("Skærmtid", "ugens gennemgang og kategorierne", "Skærmtid", [0], 8, 0)]
     claude = [_punkt("garmin-coach", "MCP-server", "Form & fokus", "ok", "svarer med 12 værktøjer · i Claude-appen (Chat og Code)")]
     for navn, skriver, projekt, dage, t, m in rutiner:
         hvornaar = (UGEDAGE[dage[0]] if len(dage) == 1 else " og ".join(UGEDAGE[d] for d in dage)) + f" kl. {t:02d}.{m:02d}"
@@ -72,10 +78,14 @@ def lav(ud: Path, idag: date) -> None:
         _punkt("Opdatering", "LaunchAgent", "Kompas", "ok", "henter og bygger hver halve time", sidste_halve),
         _punkt("Studie-server", "LaunchAgent", "Studie", "ok", "svarer på 127.0.0.1:8767"),
         _punkt("Sprog-server", "LaunchAgent", "Sprog", "ok", "svarer på 127.0.0.1:8769"),
+        _punkt("Skærmtid-server", "LaunchAgent", "Skærmtid", "ok", "svarer på 127.0.0.1:8770"),
         _punkt("Sure", "Docker (Colima)", "Økonomi", "info", "lukket, startes af Kompas-appen",
                hjaelp="Åbn Kompas-appen. Det tager ca. 30 sekunder."),
-        _punkt("Tailscale", "VPN", "Studie · Sprog", "ok", "På farten og Sprog er tilgængelige på telefonen"),
-        _punkt("Backup", "mappe i skyen", "Kompas", "ok", "coach.db, liv.db og Sprogs data, 14 dage tilbage", for_(hours=9, minutes=3)),
+        _punkt("Tailscale", "VPN", "Kompas", "ok", "På farten på telefonen og hele Kompas på bærbaren"),
+        _punkt("Kopi til bærbaren", "Syncthing", "Kompas", "ok", "bygget den sidste halve time; Syncthing sender den til bærbaren",
+               sidste_halve + timedelta(seconds=40)),
+        _punkt("Backup", "mappe i skyen", "Kompas", "ok", "coach.db, liv.db, Sprogs data og ActivityWatch, 14 dage tilbage",
+               for_(hours=9, minutes=3)),
     ]
 
     vaerktoejer = [
@@ -83,11 +93,11 @@ def lav(ud: Path, idag: date) -> None:
         ("Caddy", "kompas.localhost", "2.10.0", "brew install caddy"),
         ("Colima", "Docker-maskinen til Sure", "0.8.1", "brew install colima"),
         ("Docker", "Sure", "28.3.2", "brew install docker docker-compose"),
-        ("Node.js", "Studie, Sprog", "22.18.0", "https://nodejs.org/en/download"),
+        ("Node.js", "Studie, Sprog, opdater.sh", "22.18.0", "https://nodejs.org/en/download"),
         ("Python", "Form & fokus, Overblik, Excel", "3.13.5", "https://www.python.org/downloads/macos/"),
         ("SQLite", "backup", "3.50.2", "brew install sqlite"),
         ("Git", "projekterne", "2.50.1", "xcode-select --install"),
-        ("Tailscale", "telefonen (valgfri)", "1.86.2", "https://tailscale.com/download"),
+        ("Tailscale", "telefonen og bærbaren (valgfri)", "1.86.2", "https://tailscale.com/download"),
         ("GitHub CLI", "GitHub (valgfri)", None, "brew install gh"),
     ]
 
@@ -99,6 +109,7 @@ def lav(ud: Path, idag: date) -> None:
             {"id": "claude", "titel": "Claude", "undertitel": "MCP-server og planlagte rutiner", "punkter": claude},
             {"id": "drift", "titel": "Kører i baggrunden", "undertitel": "Servere, baggrundsjob og backup", "punkter": drift},
         ],
+        "pause": [],
         "vaerktoejer": [{"navn": n, "til": til, "version": v, "installeret": v is not None,
                          "status": "ok" if v else ("info" if "valgfri" in til else "fejl"), "kommando": k}
                         for n, til, v, k in vaerktoejer],

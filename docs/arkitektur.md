@@ -1,6 +1,6 @@
 # Kompas: sådan hænger det sammen
 
-Én side på **https://kompas.localhost** med økonomi, studie, sprog og form bag samme menu, i Sures farver og
+Én side på **https://kompas.localhost** med økonomi, studie, sprog, form og skærmtid bag samme menu, i Sures farver og
 skrift. Alt kører lokalt og svarer kun på den Mac, det kører på.
 
 Kompas ejer kun selve rammen, siden "I dag" og designkittet. **Hvert projekt leverer selv sine sider** og
@@ -10,13 +10,16 @@ I dette repo ligger projekterne som undermapper. I brug har hvert sit eget git-r
 `.gitignore` holder dem ude af Kompas' git.
 
 ```
-I dag           dagen på tværs: kalender, frister, form, fokus, Genkald og sprogkort  public/index.html
+I dag           dagen på tværs: kalender med det faktiske, frister, form, selvstudie,  public/index.html
+                skærmtid, står stille, fokus, Genkald og sprogkort
 Forbindelser    om datakilder, Claude, baggrundsjob og værktøjer virker              bin/forbindelser.py
 Økonomi         Oversigt, Transaktioner, Rapporter, Plan (Sure)                       Sure (ikke i repoet)
                 Forbrug, Scenarier, SU-vagt                                           okonomi/
-Studie          Ugeoverblik, Fag, Træning, Eksamen, Frister, På farten (telefon)     studie/
+Studie          Ugeoverblik, Fag, Træning, Eksamen, Selvstudie, USB-noter, Frister,  studie/
+                På farten (telefon)
 Sprog           Oversigt, Dagens kort og Ugens tekst (også telefon), Regler          sprog/
-Form & fokus    Perioder, Ugen i tal, Søvn & restitution, Coach                       coach/ + overblik/
+Form & fokus    Perioder, Ugereview, Kroppen i tal                                    coach/ + overblik/
+Skærmtid        Skærmtid (alle enheder, også på telefonen)                           skaermtid/
 ```
 
 ## Kontrakten: kompas.json
@@ -78,8 +81,10 @@ Rammen (`public/shell.html`) har menuen til venstre og en iframe til højre. Alt
 | `/studie/…` | Studie | `~/.kompas/studie` (skrevet af eksporten) |
 | `/studie/api/…` | Genkald, færdig-markering og telefonens synk | `127.0.0.1:8767` |
 | `/forbrug/…` | Forbrug, Scenarier, SU-vagt | `okonomi/dashboard/public` |
-| `/form/…` | Form & fokus, Søvn, Coach, `liv.json` | `~/.garmin-coach/site` |
+| `/form/…` | Perioder, Ugereview, Kroppen i tal, `liv.json` | `~/.garmin-coach/site` |
 | `/sprog/…` | Sprog (sider og API) | `127.0.0.1:8769` |
+| `/skaermtid/…` | Skærmtid | `~/.kompas/skaermtid` (skrevet af `skaermtid.py byg`) |
+| `/skaermtid/api/…` | dit kategorivalg for et program eller en side | `127.0.0.1:8770` |
 | alt andet | Sure | `127.0.0.1:3000` |
 
 Adressen i browseren følger siden, så `https://kompas.localhost/#/transactions` åbner direkte på
@@ -89,10 +94,11 @@ Inde i rammen skjules Sures egen ikonmenu, fordi Kompas' menu erstatter den. Det
 `public/assets/embed-sure.css`, som rammen lægger ind i Sures sider. Sures image er urørt. Hvis Sure ændrer sin
 markup, dukker ikonmenuen bare op igen.
 
-Siderne skriver kun det, brugeren selv taster eller klikker, og kun gennem tre servere: Studie-serveren
-(Genkald-svar og -markeringer, begreber, drill-gæt, læste uger, I egne ord, prøveeksamener, telefonens sync og
-færdig-markering af frister), Sprog-serveren (karakter og svar på sprogkort, svar på ugens tekst og telefonens sync)
-og Sure (input på Scenarier og SU-vagt gennem `PUT /dashboard-state/<navn>` og kategorien på en postering under
+Siderne skriver kun det, brugeren selv taster eller klikker, og kun gennem fire servere: Studie-serveren
+(Genkald-svar og -markeringer, begreber, drill-gæt, læste uger, I egne ord, prøveeksamener, din vurdering af
+USB-noterne, telefonens sync og færdig-markering af frister), Sprog-serveren (karakter og svar på sprogkort, svar på
+ugens tekst og telefonens sync), Skærmtid-serveren (dit kategorivalg for ét program eller én side, i `valg.json`; den
+bygger siden igen bagefter) og Sure (input på Scenarier og SU-vagt gennem `PUT /dashboard-state/<navn>` og kategorien på en postering under
 Forbrug gennem `PUT /dashboard-category/<id>`, begge bag Sures login). Resten er læsning, og siderne regner ikke
 selv videre på tal; de viser det, projekterne har beregnet. Sprogkort, ugens tekst og niveau skriver Sprog-rutinen
 kun gennem `sprog.js`.
@@ -101,8 +107,21 @@ kun gennem `sprog.js`.
 
 **På farten** (`/studie/mobil.html`) og **Sprog** (`/sprog/mobil.html`) henter hver en pakke med dagens kort,
 mens Mac'en er vågen, virker uden net og sender svarene bagefter med `/sync`. Telefonen når Mac'en gennem
-Tailscale: `tailscale serve` sender videre til en ekstra Caddy-blok på `127.0.0.1:8768`, der kun har Studie, Sprog
-og designkittet. Økonomi og Form er aldrig på telefonen. Sættes op med `bin/tailscale-mobil.sh`.
+Tailscale: `tailscale serve` sender videre til en ekstra Caddy-blok på `127.0.0.1:8768`, der kun har Studie, Sprog,
+Skærmtid og designkittet. Økonomi og Form er aldrig på telefonen. Sættes op med `bin/tailscale.sh`, som også sætter
+`*_ORIGINS` for de skrivende servere.
+
+## Bærbaren
+
+Bærbaren får hele Kompas på `https://<mac>.<tailnet>.ts.net:8443`: `tailscale serve` sender porten videre til en
+Caddy-blok på `127.0.0.1:8771`, der bruger samme stykke `(kompas)` som `kompas.localhost`. Siderne kender telefonen
+på, at adressen ikke har en port. Alle enheder i tailnettet kan nå porten, så begræns den med Tailscales ACL'er,
+hvis andre er med i dit tailnet; de skrivende servere tjekker stadig Origin, og Sure kræver login.
+
+Når Mac'en er slukket, viser bærbaren en læsekopi: `bin/kopi.py` skriver siderne og deres data til `~/KompasKopi`
+sidst i hver opdatering, Syncthing sender mappen over, og Caddy på bærbaren (`baerbar/`) viser kopien, når Mac'en
+ikke svarer. Rammen skriver "Kopi fra …", og intet kan gemmes. En ny side, der henter fra en server, skal på listen
+`API` i `kopi.py`.
 
 ## Drift: hvad kører hvornår
 
@@ -115,23 +134,25 @@ Garmin med det samme og åbner siden (`okonomi/bin/kompas-start.sh` og `kompas-s
 | Caddy (https://kompas.localhost) | `brew services` |
 | Studie-serveren (`/studie/api/`) | LaunchAgent `local.kompas.studie` |
 | Sprog-serveren (`/sprog/`) | LaunchAgent `local.kompas.sprog` |
+| Skærmtid-serveren (`/skaermtid/api/`) | LaunchAgent `local.kompas.skaermtid` |
+| ActivityWatch og Syncthing | egne apps, starter ved login |
 | Opdatering hvert 30. min (`bin/opdater.sh`) | LaunchAgent `local.kompas.opdater` |
 | Sure + forbrugssiden | Kompas-appen |
 
-`bin/opdater.sh` henter kalenderen og bygger Form & fokus-siderne, overblikkets `liv.json` og
-studie-eksporten hver gang, Garmin højst hver 3. time, og tager dagens backup ved første kørsel. Alt, den og trinnene
+`bin/opdater.sh` henter kalenderen, de andre enheders skærmtid (aw-sync) og bygger Form & fokus-siderne,
+Skærmtid, overblikkets `liv.json`, studie-eksporten og læsekopien til bærbaren hver gang, Garmin højst hver 3. time, og tager dagens backup ved første kørsel. Alt, den og trinnene
 skriver til loggen, går gennem et filter, der kun lader skema og vært stå i adresser, så kalenderens hemmelige
 iCal-adresser aldrig havner i `opdater.log`.
 
 Planlagte Claude-rutiner står for det, der kræver vurdering: køreplanen for studieugen (søndag), vurderingen
-af perioden i Form & fokus (hver anden lørdag), ugereviewet (mandag) og nye sprogkort med ugens tekst (søndag). De skriver filer,
+af perioden i Form & fokus (hver anden lørdag), ugereviewet (mandag), nye sprogkort med ugens tekst (søndag) og ugens skærmtid med kategorierne (mandag). De skriver filer,
 som projekterne viser; de sender eller indsender aldrig noget.
 
-**Backup:** `bin/backup-data.sh` gemmer `~/.garmin-coach/coach.db` og `~/.overblik/liv.db` gzippet og Sprogs
-`data/` som `.tar.gz` i `$KOMPAS_BACKUP` (14 dage tilbage), én gang om dagen og igen ved "Luk Kompas".
+**Backup:** `bin/backup-data.sh` gemmer `~/.garmin-coach/coach.db` og `~/.overblik/liv.db` og ActivityWatch' database
+gzippet og Sprogs `data/` som `.tar.gz` i `$KOMPAS_BACKUP` (14 dage tilbage), én gang om dagen og igen ved "Luk Kompas".
 
 **Forbindelser** (`/kompas/forbindelser.html`) viser, om alt det, Kompas henter fra og kører på, virker:
-datakilderne (Garmin, Hevy, kalendere, banken via Sure, Canvas), Claude (MCP-serveren og rutinerne),
+datakilderne (Garmin, Hevy, kalendere, banken via Sure, Canvas, hver enhed i Skærmtid), Claude (MCP-serveren og rutinerne),
 baggrundsjobbene og værktøjerne på Mac'en, plus en MCP-guide til Claude-appen og `claude` i Terminal. Statussen
 regnes af `bin/forbindelser.py`, som `opdater.sh` kører til sidst hver gang, og skrives til
 `public/forbindelser.json` (ikke i git). Datakilderne vises ud fra seneste vellykkede hentning, serverne spørges

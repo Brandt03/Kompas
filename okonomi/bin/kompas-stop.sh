@@ -1,6 +1,6 @@
 #!/bin/zsh
 # Turns off everything Kompas runs in the background: Sure and the Docker VM, the update every 30 minutes,
-# the Studie and Sprog servers, Sure's export and Caddy. The jobs are disabled, so they stay off after
+# the Studie, Sprog and Skærmtid servers, Sure's export and Caddy. The jobs are disabled, so they stay off after
 # a restart until Kompas.app (kompas-start.sh) is opened again. Data stays in the Docker volumes,
 # ~/.garmin-coach and ~/.overblik. The scheduled Claude routines are not affected.
 # Used by /Applications/Luk Kompas.app.
@@ -22,7 +22,7 @@ pkill -f 'garmin_coach\.(ingest_garmin|ingest_calendar|site)' >/dev/null 2>&1 ||
 
 # Kompas' background jobs. disable keeps them off after a restart; bootout stops them now.
 U=gui/$(id -u)
-for l in local.kompas.opdater local.kompas.studie local.kompas.sprog local.sure.dashboard-export; do
+for l in local.kompas.opdater local.kompas.studie local.kompas.sprog local.kompas.skaermtid local.sure.dashboard-export; do
   launchctl disable $U/$l
   launchctl bootout $U/$l 2>/dev/null || true
 done

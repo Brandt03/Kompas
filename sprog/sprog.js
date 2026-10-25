@@ -72,7 +72,9 @@ function rapport(args) {
     t.kort++;
     if (hs.length) { t.besvaret++; t.svar.push({ id: k.id, niveau: k.niveau || null, forside: k.forside, bagside: k.bagside, karakter: hs[0].g, svar: hs[0].svar || null }); }
   }
-  const næsteUge = K.isoUge(K.næsteMandag(nu)), eks = K.eksamener(nu);
+  // Eksamensperiode et sted i den uge, teksten skrives til: en eksamen senest 14 dage efter ugens søndag
+  const mandag = K.næsteMandag(nu), næsteUge = K.isoUge(mandag);
+  const eks = K.eksamener(nu, Math.round((Date.parse(K.isoDato(mandag)) - Date.parse(K.isoDato(nu))) / K.DAG) + 6 + K.EKSAMEN_DAGE_FØR);
   ud({
     i_dag: K.isoDato(nu), uge_nu: K.isoUge(nu), ny_tekst_til_uge: næsteUge, dage,
     aktivt: S.aktivt, sprog: S.sprog, statistik: r.statistik.sprog,
@@ -83,7 +85,8 @@ function rapport(args) {
     // Reglerne, der findes, med antal kort og hvor mange af dem du har haft blankt eller halvt i perioden
     regler: K.reglerListe().map(g => ({ id: g.id, sprog: g.sprog, titel: g.titel, niveau: g.niveau || null, oprettet: g.oprettet,
       kort: kort.filter(k => k.regel === g.id).length, svaere_svar: svar.filter(s => byId.get(s.id).regel === g.id && s.karakter <= 2).length })),
-    // Eksamener i Studie fra i dag til 14 dage frem. Er listen ikke tom, er det eksamensperiode (se RUTINE.md)
+    // Eksamener i Studie fra i dag til 14 dage efter næste uges søndag. Er listen ikke tom, er det eksamensperiode i den
+    // uge, teksten skrives til (se RUTINE.md). Navnet er det gamle, som rutinen læser
     eksamener_kendt: eks !== null, eksamener_inden_for_14_dage: eks || [],
     egne_tekster: egneTekster(),
   });

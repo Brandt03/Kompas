@@ -18,7 +18,9 @@ from .kilder import sidste_hele_uge
 # afvigelser eller sammenhænge regnes (konstanterne herunder, _afvigelse, _fra_normalen, spearman, HYPOTESER).
 # 2026-10-08: sammenhænge på afvigelsen fra nabougerne med blok-permutation og lige mange naboer på hver side;
 # afvigelser, når de fleste uger er ens (MAD 0), og belastning fra garmin-coach.
-METODE = "2026-10-08"
+# 2026-10-25: takeaway_kr og cafe_bar_kr kan ikke blive negative (en tilbagebetaling større end ugens køb trækkes
+# kun fra op til ugens køb), så afvigelser og sammenhænge på dem regnes på andre tal end før.
+METODE = "2026-10-25"
 
 BASELINE_UGER = 8
 # |robust z| over denne grænse regnes som en tydelig afvigelse.

@@ -5,10 +5,12 @@
 //     (karakteren 1-4, som repetitionen planlægges efter, står kun i genkald-log.jsonl)
 //   - skrive dine begreber med egne ord (og for Beta: "Hvad det får dig til at se") i */Genkald/begreber.md
 //   - skrive det, du skriver under "I egne ord" for en uge på Fag-siden, i */egne-ord.md
+//   - skrive din vurdering af en uge i USB-noterne (brugbar, for meget, mangler noget + en kommentar) i usb-vurdering.json
 //   - erstatte TOM med DIT gæt i en tjek(...)-linje i kodefagets Drills/kap*.js og køre filen
 // På farten (mobil.html) henter en pakke med dagens kort, så du kan svare uden net, og sender svarene
 // tilbage med /sync, når Mac'en er vågen. Det er de samme skrivninger som ovenfor (også I egne ord), bare senere.
-// Fag-siden åbner forelæsninger og øvelser i */Pensum/ gennem /pensum/... (kun læsning).
+// Fag-siden åbner forelæsninger og øvelser i */Pensum/ gennem /pensum/... (kun læsning), også på telefonen, hvor
+// På fartens service worker gemmer dem (mobil-sw.js).
 // Alt, der skrives, er tekst du selv har tastet. Serveren finder aldrig på et svar, og facit
 // udleveres kun ét spørgsmål ad gangen, når siden beder om det efter dit forsøg (se CLAUDE.md).
 //
@@ -131,6 +133,7 @@ function parseBlok(linjer, b) {
   return { nr: b.nr, afsnit: b.afsnit, tekst, mark, svar, dato };
 }
 
+const ulæselige = new Set();
 function genkaldListe() {
   const log = sidst(), ud = [];
   for (const fag of genkaldsFag()) {
@@ -138,7 +141,11 @@ function genkaldListe() {
     let filer = [];
     try { filer = fs.readdirSync(dir).filter(n => /^genkald-.*\.md$/.test(n) && !/-svar\.md$/.test(n)).sort(); } catch { continue; }
     for (const fil of filer) {
-      const tekst = læs(path.join(dir, fil));
+      // En fil, der ikke kan læses (fx en fil i en skymappe, der kun ligger i skyen: fejl -11 under launchd), springes over,
+      // så den ikke tager Dagens kort, Træning, Styr på og På farten med sig. Det står i loggen én gang pr. fil og fejl.
+      let tekst;
+      try { tekst = læs(path.join(dir, fil)); }
+      catch (e) { const k = `${fag}/${fil}: ${e.code || e.message}`; if (!ulæselige.has(k)) { ulæselige.add(k); console.error(`genkald: ${k} kunne ikke læses og springes over`); } continue; }
       const { linjer, blokke: bs } = blokke(tekst);
       const titel = (tekst.match(/^# (.*)$/m) || [])[1] || fil;
       const u = fil.match(/uge(\d+)-(\d+)/);
@@ -154,7 +161,11 @@ function genkaldListe() {
 function facit(fag, fil, nr) {
   const f = genkaldFil(fag, fil).replace(/\.md$/, "-svar.md");
   if (!fs.existsSync(f)) return null;
-  const { linjer, blokke: bs } = blokke(læs(f));
+  // Som i genkaldListe: en facitfil, der ikke kan læses, giver intet facit i stedet for at vælte pakken til På farten
+  let tekst;
+  try { tekst = læs(f); }
+  catch (e) { const k = `${fag}/${path.basename(f)}: ${e.code || e.message}`; if (!ulæselige.has(k)) { ulæselige.add(k); console.error(`genkald: ${k} kunne ikke læses og springes over`); } return null; }
+  const { linjer, blokke: bs } = blokke(tekst);
   const b = bs.find(x => x.nr === nr);
   return b ? linjer.slice(b.start, b.slut).join("\n").trim().replace(/^\*\*\d+\.\*\*\s*/, "") : null;
 }
@@ -585,6 +596,28 @@ function eksamenListe() {
   }
   return ud;
 }
+// Lærerens oversigter over gamle opgaver (<Fag>/Eksamenstræning/niveauer.json): niveau og fokus pr. opgave og
+// forelæsningen, listen gælder fra. Hver opgave får sin sektion i sættet og dine seneste markeringer i den.
+function eksamenNiveauer() {
+  const log = eksamensLog(), ud = [];
+  let dage = {}; try { dage = JSON.parse(læs(path.join(S.DATA, "undervisningsdage.json"))); } catch {}
+  for (const { id: fag, kort } of S.fagMed("eksamenstraening")) {
+    let n; try { n = JSON.parse(læs(path.join(eksDir(fag), "niveauer.json"))); } catch { continue; }
+    const saet = {};
+    const sektioner = id => saet[id] ??= (() => { try { return parseEksamen(læs(eksFil(fag, id))).sektioner; } catch { return null; } })();
+    for (const l of n.lister || []) ud.push({ fag, titel: l.titel, efter: l.efter, kilde: l.kilde, note: l.note,
+      fra: dage[kort]?.Forelæsninger?.[l.efter - 1]?.dato || null,
+      opgaver: (l.opgaver || []).map(o => {
+        const sek = sektioner(o.saet)?.[o.nr - 1];
+        if (!sek) return { ...o, sektion: null };
+        const nr = new Set(sek.spoergsmaal.map(q => q.nr)), sidste = {};
+        for (const p of log[`${fag}/${o.saet}`] || []) if (nr.has(+p.noegle.split("#")[1])) sidste[p.noegle] = p;
+        const resultat = Object.values(sidste).reduce((a, p) => (a[RES[p.mark]]++, a), { sad: 0, halvt: 0, blankt: 0 });
+        return { ...o, sektion: sek.titel, foerste: sek.spoergsmaal[0]?.nr ?? null, antal: nr.size, resultat };
+      }) });
+  }
+  return ud;
+}
 function eksFacitAlle(fag, id) {
   const f = path.join(eksDir(fag), `${id}-svar.md`);
   if (!fs.existsSync(f)) return {};
@@ -640,6 +673,28 @@ function gemLæst({ fag, uge, laest }) {
   skriv(LAEST, JSON.stringify(l, null, 1) + "\n");
   return { fag, uge: +uge, laest: l[fag][uge] || null };
 }
+// ── vurdering af USB-noterne (Studie → USB-noter) ─────────────────────
+// Scripts/usb-vurdering.json: { "gamma": { "39": { "vurdering": "for_meget", "kommentar": "…", "dato": "2026-10-22" } } }.
+// Nøglen er ugen eller et af dokumentets hovedafsnit (fx "Eksamen"). Studie-rutinen læser filen og strammer ugen ind
+// efter den (RUTINE.md, afsnit 6); hvad den har rettet, står i fagnoter/vurdering-handlet.json, som kun rutinen skriver.
+const USB = path.join(S.DATA, "usb-vurdering.json");
+const VURDERINGER = ["brugbar", "for_meget", "mangler"];
+function usbVurdering() { try { return JSON.parse(læs(USB)); } catch { return {}; } }
+function gemUsbVurdering({ fag, del, vurdering, kommentar }) {
+  if (!S.find(fag)?.usb_noter) throw new Error("ukendt fag");
+  del = String(del ?? "").trim();
+  if (!/^(\d{1,2}|[\p{L}][\p{L} ]{0,39})$/u.test(del)) throw new Error("ukendt uge eller afsnit");
+  if (vurdering != null && !VURDERINGER.includes(vurdering)) throw new Error("ukendt vurdering");
+  kommentar = String(kommentar ?? "").replace(/\r\n?/g, "\n").trim();
+  if (kommentar.length > 2000) throw new Error("kommentaren er for lang");
+  const v = usbVurdering();
+  v[fag] ||= {};
+  if (vurdering || kommentar) v[fag][del] = { vurdering: vurdering || null, kommentar, dato: idagIso() };
+  else delete v[fag][del];
+  skriv(USB, JSON.stringify(v, null, 1) + "\n");
+  return { fag, del, ...(v[fag][del] || { vurdering: null, kommentar: "", dato: null }) };
+}
+
 // ── I egne ord (Fag → køreplanen) ────────────────────────────────────
 // <mappe>/egne-ord.md: det, du skriver under "I egne ord" på Fag-siden, én "## Uge NN" pr. uge. Fagnoterne i Word
 // røres ikke; står der også noget under "I egne ord" dér, viser Fag-siden begge. Teksten før første uge beholdes.
@@ -699,6 +754,7 @@ const nyOrden = (a, b) => (a.uge ?? 99) - (b.uge ?? 99) || a.i - b.i;
 //   drill    tjek-opgaver, du har gættet forkert på eller sat flueben i "gættede" ved (rigtigt og sikkert i første hug giver intet kort)
 // Hvornår et kort kommer igen, regnes med FSRS-6 (se nedenfor) ud fra karaktererne i loggen.
 const NYE_PR_DAG = 5, MAKS_KORT = 25, DAG = 864e5;
+const MIN_PR_KORT = 0.75;  // skønnet tid pr. kort; siderne ganger de kort, der er tilbage, med det
 const RES = { sad: "sad", halvt: "halvt", blankt: "blankt", "✓": "sad", "~": "halvt", "✗": "blankt" };
 // Karakter efter et forsøg, som i FSRS: 1 blankt (Again), 2 halvt (Hard), 3 sad (Good), 4 let (Easy).
 // "Let" er sad uden at tænke sig om; i genkald-*.md står den som [✓] ligesom sad.
@@ -860,6 +916,12 @@ async function repetitionsKort() {
     .filter(({ k }) => k.ny && k.laest).sort(nyOrden).map(({ k }) => k)
     .slice(0, Math.max(0, NYE_PR_DAG - nyeTaget));
   const venter = alle.filter(k => k.ny && !k.laest);
+  // Ulæste uger pr. fag (til I dag): de uger, hvis nye genkaldsspørgsmål venter på, at ugen markeres som læst under Fag
+  const ulæste = new Map();
+  for (const k of venter) {
+    const u = ulæste.get(k.fag) || ulæste.set(k.fag, { fag: k.fag, navn: kort(k.fag), uger: new Set(), spoergsmaal: 0 }).get(k.fag);
+    u.uger.add(k.uge); u.spoergsmaal++;
+  }
   // Nye spørgsmål kommer altid med; typerne blandes (genkald, begreb, drill på skift), fordi blandet
   // øvelse (interleaving) husker bedre end blokke af det samme
   const valgt = [...forfaldne.slice(0, Math.max(0, MAKS_KORT - nye.length)), ...nye];
@@ -884,9 +946,12 @@ async function repetitionsKort() {
   return {
     kort: kø.map(({ forfald, sidst, s, d, ...k }) => ({ ...k, id: `${k.type}:${k.noegle}`, stabilitet: s != null ? +s.toFixed(1) : null, svaerhed: d != null ? +d.toFixed(1) : null, forfald: forfald ? new Date(forfald).toISOString() : null, sidst: sidst ? new Date(sidst).toISOString() : null })),
     statistik: { forfaldne: forfaldne.length, nye: nye.length, nye_venter_paa_laesning: venter.length,
+      ulaeste_uger: [...ulæste.values()].map(u => ({ ...u, uger: [...u.uger].sort((a, b) => a - b) })),
       nye_klar: alle.filter(k => k.ny && k.laest).length, klaret_i_dag: klaretIdag, dagsmaal: MAKS_KORT, i_alt: alle.length,
       laert: alle.filter(k => !k.ny && k.s >= LÆRT).length, naeste: næste ? new Date(næste.forfald).toISOString() : null,
-      kalibrering: kal, minutter: Math.max(1, Math.round(kø.length * 0.75)), eksamen, maal_eksamen: MÅL_EKSAMEN },
+      kalibrering: kal, minutter: Math.max(1, Math.round(kø.length * MIN_PR_KORT)), min_pr_kort: MIN_PR_KORT, eksamen, maal_eksamen: MÅL_EKSAMEN,
+      // Dit seneste svar (drill, genkald, eksamen), til "Står stille" på I dag; en færdig-markeret frist er ikke et svar
+      sidst_svar: poster.findLast(p => p.type !== "deadline")?.tid || null },
   };
 }
 async function repetitionSvar(noegle) {
@@ -994,7 +1059,7 @@ async function sync({ poster }) {
       // Står samme id to gange i én sending, gemmes det kun første gang
       set.set(id, { type: p.type, rigtig: r.status === "rigtig" });
       ud.push({ id, ok: true, ...r });
-    } catch (e) { ud.push({ id, ok: false, fejl: e.message }); }
+    } catch (e) { ud.push({ id, ok: false, fejl: fejltekst(e) }); }
   }
   return { resultater: ud };
 }
@@ -1036,7 +1101,9 @@ function gemDeadline({ noegle, faerdig }) {
 // ── http ─────────────────────────────────────────────────────────────
 // Fag-siden åbner forelæsninger og øvelser herfra: /pensum/<fag>/<Forelæsninger|Øvelser>/<fil>. Kun filer, der
 // står i den mappe (navnet sammenlignes med mappens liste, så ../ og andre mapper aldrig kan nås), og kun læsning.
-const PENSUM_TYPER = { ".pdf": "application/pdf", ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation", ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document" };
+// Øvelsessæt kommer også som markdown (.md); de vises som ren tekst, så browseren åbner dem i stedet for at hente dem.
+const PENSUM_TYPER = { ".pdf": "application/pdf", ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation", ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ".md": "text/plain; charset=utf-8" };
 function sendPensum(res, sti) {
   const [fag, mappe, fil] = sti.split("/").slice(2).map(s => decodeURIComponent(s).normalize("NFC"));
   const m = fagMappe(fag), nfc = s => s.normalize("NFC");
@@ -1049,6 +1116,14 @@ function sendPensum(res, sti) {
   res.writeHead(200, { "Content-Type": type, "Content-Length": st.size, "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff",
     "Content-Disposition": `inline; filename*=UTF-8''${encodeURIComponent(navn)}` });
   fs.createReadStream(f).pipe(res);
+}
+
+// En fil-fejl (ENOENT, EACCES …) har den fulde sti i beskeden; den står kun i loggen, ikke i svaret, som også når
+// telefonen og bærbaren. Vores egne fejl (ukendt fag, ugyldigt gæt …) sendes som de er.
+function fejltekst(e) {
+  if (!e.code) return e.message;
+  console.error(`filfejl: ${e.message}`);
+  return "en fil kunne ikke læses eller skrives (se serverloggen)";
 }
 
 function send(res, kode, obj) {
@@ -1069,7 +1144,9 @@ const server = http.createServer(async (req, res) => {
       if (sti === "/repetition") return send(res, 200, await repetitionsKort());
       if (sti === "/laest") return send(res, 200, læst());
       if (sti === "/egne-ord") return send(res, 200, egneOrd());
+      if (sti === "/usb-vurdering") return send(res, 200, usbVurdering());
       if (sti === "/eksamen") return send(res, 200, eksamenListe());
+      if (sti === "/eksamen/niveauer") return send(res, 200, eksamenNiveauer());
       if (sti === "/eksamen/saet") { const f = eksFil(url.searchParams.get("fag"), url.searchParams.get("id")); return send(res, 200, parseEksamen(læs(f))); }
       // Facit kun på opfordring: ét nummer under øvelse, alle efter en afleveret prøveeksamen
       if (sti === "/eksamen/facit") { const fag = url.searchParams.get("fag"), id = url.searchParams.get("id"), nr = url.searchParams.get("nr"); eksFil(fag, id);
@@ -1090,6 +1167,7 @@ const server = http.createServer(async (req, res) => {
     if (sti === "/repetition") return send(res, 200, gemRepetition(d));
     if (sti === "/laest") return send(res, 200, gemLæst(d));
     if (sti === "/egne-ord") return send(res, 200, gemEgneOrd(d));
+    if (sti === "/usb-vurdering") return send(res, 200, gemUsbVurdering(d));
     if (sti === "/eksamen/resultat") return send(res, 200, gemEksamenResultat(d));
     if (sti === "/eksamen/afslut") return send(res, 200, afslutEksamen(d));
     if (sti === "/begreb") return send(res, 200, gemBegreb(d));
@@ -1098,7 +1176,7 @@ const server = http.createServer(async (req, res) => {
     if (sti === "/deadline") return send(res, 200, gemDeadline(d));
     return send(res, 404, { fejl: "ikke fundet" });
   } catch (e) {
-    return send(res, 400, { fejl: e.message });
+    return send(res, 400, { fejl: fejltekst(e) });
   }
 });
 server.listen(PORT, "127.0.0.1", () => console.error(`Studie-API på http://127.0.0.1:${PORT} (Caddy: https://kompas.localhost/studie/api/)`));

@@ -76,6 +76,7 @@ CREATE TABLE IF NOT EXISTS calendar_events (
     fag_art      TEXT,
     fag_form     TEXT,
     kalender     TEXT,
+    plan_blok    INTEGER DEFAULT 0,
     PRIMARY KEY (uid, start_local)
 );
 CREATE INDEX IF NOT EXISTS idx_cal_start ON calendar_events(start_local);
@@ -132,6 +133,7 @@ def connect(db_path: Path | None = None) -> sqlite3.Connection:
     _migrate_calendar_times(conn)
     _migrate_calendar_fag(conn)
     _migrate_calendar_kalender(conn)
+    _migrate_calendar_plan(conn)
     return conn
 
 
@@ -207,6 +209,14 @@ def _migrate_calendar_kalender(conn: sqlite3.Connection) -> None:
     """Kalenderens navn pr. begivenhed. Gemte begivenheder står uden, til kalenderen hentes igen."""
     if "kalender" not in {r[1] for r in conn.execute("PRAGMA table_info(calendar_events)")}:
         conn.execute("ALTER TABLE calendar_events ADD COLUMN kalender TEXT")
+        conn.commit()
+
+
+def _migrate_calendar_plan(conn: sqlite3.Connection) -> None:
+    """Om begivenheden er en blok fra Kompas' studieplan (se PLAN_MAERKE i ingest_calendar). Gemte begivenheder står
+    som 0, til kalenderen hentes igen."""
+    if "plan_blok" not in {r[1] for r in conn.execute("PRAGMA table_info(calendar_events)")}:
+        conn.execute("ALTER TABLE calendar_events ADD COLUMN plan_blok INTEGER DEFAULT 0")
         conn.commit()
 
 

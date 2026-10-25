@@ -1,9 +1,12 @@
-"""Rutinestatus på siden Forbindelser: claude(cfg, rutiner, nu).   python -m unittest discover -s tests
+"""Siden Forbindelser: rutinestatus, claude(cfg, rutiner, nu), Skærmtids enheder, skaermtid_enheder(), kopien til
+bærbaren, kopi_punkt(), og projekter på pause.   python -m unittest discover -s tests
 
 Tidsplanerne er lokal tid, så testene kører i dansk tid uanset maskinen.
 """
+import json
 import os
 import sys
+import tempfile
 import time
 import unittest
 from datetime import datetime, timezone
@@ -71,10 +74,107 @@ class Rutinestatus(unittest.TestCase):
         self.assertEqual(p["tekst"], "nye sprogkort og ugens tekst · slået fra")
         self.assertNotIn("naeste", p)
 
+    def test_slaaet_fra_har_sin_egen_hjaelp(self):
+        p = status(rutine(kl(5, 12, 3), slaaet_til=False), nu=kl(8, 16))
+        self.assertEqual(p["hjaelp"], "Rutinen er slået fra i Claude-appen. Slå den til under Rutiner (Kompas · Sprog), "
+                                      "eller lad den være, hvis det er med vilje.")
+        # Den, der skulle have kørt, beholder teksten om den glemte kørsel
+        p = status(rutine(kl(5, 12, 3)), nu=kl(8, 16))
+        self.assertIn("en glemt kørsel tages", p["hjaelp"])
+
     def test_mangler_i_appen(self):
         p = status({}, nu=kl(8, 16))
         self.assertEqual(p["status"], "fejl")
         self.assertEqual(p["tekst"], "findes ikke i Claude-appen")
+
+
+class Enheder(unittest.TestCase):
+    def enheder(self, enheder, nu):
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+            json.dump({"enheder": enheder}, f)
+        self.addCleanup(os.unlink, f.name)
+        return {p["navn"]: p for p in forbindelser.skaermtid_enheder(f.name, nu=nu.astimezone(timezone.utc))}
+
+    def test_to_hele_dage_uden_data_advarer(self):
+        p = self.enheder([{"navn": "Mac", "kendt": True, "sidst": "2026-10-21T08:00:00+02:00"},
+                          {"navn": "Telefon", "kendt": True, "sidst": "2026-10-20T23:59:00+02:00"},
+                          {"navn": "Stationær", "kendt": True, "sidst": "2026-10-18T20:02:45+02:00"}], kl(21, 14))
+        self.assertEqual(p["Skærmtid · Mac"]["status"], "ok")
+        self.assertEqual(p["Skærmtid · Telefon"]["status"], "ok")
+        self.assertEqual((p["Skærmtid · Stationær"]["status"], p["Skærmtid · Stationær"]["tekst"]), ("advarsel", "ingen data i 3 dage"))
+
+    def test_sjaelden_enhed_er_info_ikke_advarsel(self):
+        p = self.enheder([{"navn": "Stationær", "kendt": True, "sjaelden": True, "sidst": "2026-10-18T20:02:45+02:00"}], kl(21, 14))
+        self.assertEqual((p["Skærmtid · Stationær"]["status"], p["Skærmtid · Stationær"]["tekst"]), ("info", "bruges sjældent · ingen data i 3 dage"))
+        self.assertNotIn("hjaelp", p["Skærmtid · Stationær"])
+
+    def test_aldrig_sendt_og_ukendt(self):
+        p = self.enheder([{"navn": "Bærbar", "kendt": True, "sidst": None},
+                          {"navn": "ny-pc", "kendt": False, "sidst": "2026-10-21T08:00:00+02:00"}], kl(21, 14))
+        self.assertEqual(p["Skærmtid · Bærbar"]["status"], "advarsel")
+        self.assertEqual(p["Skærmtid · ny-pc"]["status"], "info")
+
+    def test_mangler_filen(self):
+        punkter = forbindelser.skaermtid_enheder("/findes/ikke.json", nu=kl(21, 14).astimezone(timezone.utc))
+        self.assertEqual([p["status"] for p in punkter], ["fejl"])
+
+
+
+class Kopi(unittest.TestCase):
+    """kopi.json skrives også, når noget ikke kunne hentes; trinnet `kopi` i opdater-status.json afgør."""
+    def kopi(self, fejl, minutter_gammel, nu=kl(21, 14)):
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+            f.write("{}")
+        self.addCleanup(os.unlink, f.name)
+        t = nu.timestamp() - minutter_gammel * 60
+        os.utime(f.name, (t, t))
+        return forbindelser.kopi_punkt(fejl, f.name, nu=nu.astimezone(timezone.utc))
+
+    def test_frisk_og_trinnet_lykkedes(self):
+        p = self.kopi(set(), 10)
+        self.assertEqual(p["status"], "ok")
+        self.assertNotIn("hjaelp", p)
+
+    def test_frisk_men_trinnet_fejlede_advarer_og_peger_paa_loggen(self):
+        p = self.kopi({"kopi"}, 10)
+        self.assertEqual((p["status"], p["tekst"]), ("advarsel", "bygget, men sidste kørsel fejlede"))
+        self.assertIn("`kopi:`", p["hjaelp"])
+        self.assertIn("~/.kompas/opdater.log", p["hjaelp"])
+
+    def test_andre_trin_der_fejlede_roerer_ikke_kopien(self):
+        self.assertEqual(self.kopi({"skaermtid", "garmin"}, 10)["status"], "ok")
+
+    def test_gammel_kopi_advarer(self):
+        p = self.kopi(set(), 60)
+        self.assertEqual((p["status"], p["tekst"]), ("advarsel", "ikke bygget den sidste halve time"))
+
+    def test_ingen_kopi(self):
+        p = forbindelser.kopi_punkt(set(), "/findes/ikke/kopi.json", nu=kl(21, 14).astimezone(timezone.utc))
+        self.assertEqual(p["status"], "fejl")
+
+
+
+class Pause(unittest.TestCase):
+    """Et projekt under `pause` i projekter.json: dets punkter vises ikke; en gruppe uden punkter forsvinder."""
+
+    def test_projekt_paa_pause_vises_ikke(self):
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as d:
+            fil = Path(d) / "projekter.json"
+            fil.write_text(json.dumps({"manifester": [], "pause": [{"projekt": "Sprog", "siden": "2026-10-25", "hvorfor": "Bruges ikke."}]}))
+            pause = forbindelser.pausede(fil)
+        self.assertEqual(pause["Sprog"]["siden"], "2026-10-25")
+        grupper = [{"titel": "Claude", "punkter": [
+                       forbindelser.punkt("Sprog", "Claude-rutine", "Sprog", "advarsel", "nye sprogkort og ugens tekst · slået fra"),
+                       forbindelser.punkt("Studie", "Claude-rutine", "Studie", "ok", "køreplan")]},
+                   {"titel": "Kun Sprog", "punkter": [forbindelser.punkt("Sprog-server", "LaunchAgent", "Sprog", "ok", "svarer")]}]
+        ud = forbindelser.paa_pause(grupper, pause)
+        self.assertEqual([g["titel"] for g in ud], ["Claude"])
+        self.assertEqual([p["navn"] for p in ud[0]["punkter"]], ["Studie"])
+
+    def test_ingen_fil_ingen_pause(self):
+        from pathlib import Path
+        self.assertEqual(forbindelser.pausede(Path("/findes/ikke.json")), {})
 
 
 if __name__ == "__main__":

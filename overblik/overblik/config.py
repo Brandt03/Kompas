@@ -24,6 +24,12 @@ BELASTNING_JSON = _path("LIV_BELASTNING_JSON", "~/.garmin-coach/site/belastning.
 # Sures eksport, som launchd skriver hvert 5. minut mens Sure kører.
 SURE_JSON = _path("LIV_SURE_JSON", "~/kompas/okonomi/dashboard/public/data.json")
 
+# Skærmtid pr. dag, regnet af ~/kompas/skaermtid (skaermtid.py byg). Læses kun; her bruges sen skærmtid pr. aften.
+SKAERMTID_JSON = _path("LIV_SKAERMTID_JSON", "~/.kompas/skaermtid/skaermtid.json")
+
+# Studiets eksport (Kompas' Studie), hvor svarene pr. dag i Træning og På farten står pr. fag (fag[].status.rytme).
+STUDIE_JSON = _path("LIV_STUDIE_JSON", "~/.kompas/studie/studie.json")
+
 # Selvstudie logges med CalTask som kalenderbegivenheder, fx "Selvstudie · Alfa".
 SELVSTUDIE_PRAEFIKS = os.environ.get("LIV_SELVSTUDIE_PRAEFIKS", "Selvstudie ·")
 # Dagen logningen begyndte. Uger før er ukendte, ikke 0 timer.

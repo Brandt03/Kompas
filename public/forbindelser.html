@@ -16,8 +16,10 @@
   .row:first-child { border-top: 0; padding-top: 2px; }
   .row .badge { justify-self: start; margin-top: 1px; }
   .row .n b { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; }
-  .row .n b a { color: var(--text-subdued); display: inline-flex; }
-  .row .n b a:hover { color: var(--text-primary); }
+  /* Åbn-pilen: en flade på 28 px (44 px på en trykskærm) rundt om det lille ikon, uden at rækken bliver højere */
+  .row .n b a { color: var(--text-subdued); display: inline-grid; place-items: center; width: 28px; height: 28px; margin: -7px -7px -7px -3px; border-radius: 7px; }
+  .row .n b a:hover { color: var(--text-primary); background: var(--surface-hover); }
+  @media (hover: none) and (pointer: coarse) { .row .n b a { width: 44px; height: 44px; margin: -15px -15px -15px -11px; } }
   .row .n small { display: block; color: var(--text-subdued); font-size: 12.5px; margin-top: 2px; }
   .row .t { color: var(--text-secondary); font-size: 13.5px; line-height: 1.5; }
   .row .t time { display: block; color: var(--text-subdued); font-size: 12.5px; }
@@ -81,6 +83,11 @@ function kommende(s) {
   const kl = `kl. ${String(t.getHours()).padStart(2, "0")}.${String(t.getMinutes()).padStart(2, "0")}`;
   return dage === 0 ? `i dag ${kl}` : dage === 1 ? `i morgen ${kl}` : dage < 7 ? `${weekday(t)} ${kl}` : `${dayMonth(t)} ${kl}`;
 }
+// Åbn-pilen: en ekstern adresse i en ny fane; en side i Kompas gennem rammen (/#<sti>), så menuen følger med, også
+// når Forbindelser er åbnet uden ramme
+const aabn = link => link.startsWith("http")
+  ? `<a href="${esc(link)}" target="_blank" rel="noopener" title="Åbn" aria-label="Åbn">${icon("external-link", 13)}</a>`
+  : `<a href="/#${esc(link)}" target="_top" title="Åbn" aria-label="Åbn">${icon("arrow-right", 13)}</a>`;
 // Hjælpeteksten: `kode` i backticks vises som kode
 const hjaelp = s => esc(s).replace(/`([^`]+)`/g, "<code>$1</code>");
 
@@ -89,7 +96,7 @@ function gruppe(g) {
     <div class="panel-head"><h2>${esc(g.titel)}</h2><span class="meta">${esc(g.undertitel || "")}</span></div>
     <div class="rows">${g.punkter.map(p => `<div class="row">
       ${merke(p.status)}
-      <div class="n"><b>${esc(p.navn)}${p.link ? ` <a href="${esc(p.link)}" ${p.link.startsWith("http") ? 'target="_blank" rel="noopener"' : 'target="_top"'} title="Åbn">${icon(p.link.startsWith("http") ? "external-link" : "arrow-right", 13)}</a>` : ""}</b>
+      <div class="n"><b>${esc(p.navn)}${p.link ? ` ${aabn(p.link)}` : ""}</b>
         <small>${esc(p.type)} · ${esc(p.projekt)}</small></div>
       <div class="t">${esc(p.tekst)}${p.sidst || p.naeste ? `<time${p.sidst ? ` datetime="${esc(p.sidst)}" title="${esc(stamp(p.sidst))}"` : ""}>${[
         p.sidst ? (p.naeste ? "kørte " : "") + siden(p.sidst) : "", p.naeste ? `næste ${kommende(p.naeste)}` : ""].filter(Boolean).join(" · ")}</time>` : ""}</div>
@@ -150,6 +157,9 @@ function render(d) {
         <p>${problemer.length ? `${esc(problemer.join(", "))}. Se hvordan under hver enkelt.`
           : `${alle.filter(p => p.status === "ok").length} forbindelser virker, og alle værktøjer er installeret.`}</p></div>
     </section>
+    ${(d.pause || []).length ? `<p class="meta" style="margin:0">På pause med vilje: ${d.pause.map(p => `<b>${esc(p.projekt)}</b>${
+      /^\d{4}-\d{2}-\d{2}$/.test(p.siden || "") ? ` siden ${dayMonth(parseDate(p.siden)).replace(/\.$/, "")}` : ""}`).join(", ")}. Dets forbindelser vises ikke; tag det op igen i
+      <code>~/kompas/public/projekter.json</code>.</p>` : ""}
     ${d.grupper.map(gruppe).join("")}
     ${d.mcp ? guide(d.mcp) : ""}
     ${vaerktoejer(d.vaerktoejer)}

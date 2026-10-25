@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Studie · USB-noter</title>
+<!-- Studieprojektets side i Kompas (https://kompas.localhost/studie/usb.html). Kopieres af Scripts/kompas-eksport.js.
+     Fagnoterne i Word for fag med usb_noter i fag.json, dem du må tage med på USB til eksamen, uge for uge
+     (fagnoter.json fra eksporten). Siden skriver kun én ting, gennem Studie-serveren: din vurdering af en uge
+     (Scripts/usb-vurdering.json), som Studie-rutinen strammer ugen ind efter. -->
+<link rel="stylesheet" href="/kompas/assets/tokens.css">
+<link rel="stylesheet" href="/kompas/assets/page.css">
+<style>
+  .plan-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+  .plan-head h2 { min-width: 0; }
+  select { font: inherit; font-size: 13px; color: var(--text-primary); background: var(--container); border: 0; box-shadow: var(--shadow-border-xs); border-radius: 8px; padding: 5px 8px; max-width: 100%; }
+  .weeknav { display: flex; align-items: center; gap: 6px; }
+  .nav-btn { display: inline-grid; place-items: center; width: 30px; height: 30px; border: 0; border-radius: 8px; background: var(--container); box-shadow: var(--shadow-border-xs); color: var(--text-secondary); cursor: pointer; }
+  .nav-btn:hover:not(:disabled) { color: var(--text-primary); background: var(--container-hover); }
+  .nav-btn:disabled { opacity: .4; cursor: default; }
+  .ind { display: grid; gap: 6px; }
+  .delknap { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; gap: 12px; align-items: center; width: 100%; text-align: left;
+    font: inherit; color: inherit; background: var(--container-inset); border: 0; box-shadow: inset 0 0 0 1px var(--border-subdued); border-radius: 10px; padding: 10px 12px; cursor: pointer; }
+  .delknap:hover { background: var(--surface-hover); }
+  .delknap[aria-current="true"] { box-shadow: inset 0 0 0 1.5px var(--text-primary); }
+  .prik { display: inline-block; flex: none; width: 10px; height: 10px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--text-subdued); }
+  .prik.brugbar { background: var(--success); box-shadow: none; }
+  .prik.for_meget { background: var(--warning); box-shadow: none; }
+  .prik.mangler { background: var(--destructive); box-shadow: none; }
+  .delknap .u { min-width: 0; }
+  .delknap .u b { font-weight: 500; font-size: 13.5px; }
+  .delknap .u small { display: block; color: var(--text-secondary); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .delknap .meta { text-align: right; font-variant-numeric: tabular-nums; }
+  .skel { font-size: 12px; color: var(--text-subdued); margin: 14px 0 6px; }
+  .fn h4.fn-label { margin: 18px 0 6px; }
+  .fn .fn-graa { color: var(--text-subdued); font-size: 12px; }
+  .fn h4 .fn-graa em { font-style: normal; font-weight: 400; margin-left: 6px; }
+  .fn .fn-midt { text-align: center; margin-bottom: 4px; }
+  .fn img { display: block; max-width: 100%; height: auto; margin: 10px auto 4px; border-radius: 8px; box-shadow: var(--shadow-border-xs); background: #fff; }
+  .fn pre { font-size: 12.5px; line-height: 1.5; }
+  .fn table { border-collapse: collapse; font-size: 13px; }
+  .fn td { border: 1px solid var(--divider); padding: 6px 8px; vertical-align: top; }
+  .vurd { border-top: 1px solid var(--divider); margin-top: 18px; padding-top: 14px; }
+  .vurd h3 { font-size: 14px; font-weight: 500; margin: 0 0 4px; }
+  .valg { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .valg button { font: inherit; font-size: 13px; padding: 7px 12px; border-radius: 8px; border: 0; cursor: pointer; color: var(--text-primary);
+    background: var(--container); box-shadow: var(--shadow-border-xs); display: inline-flex; align-items: center; gap: 7px; }
+  .valg button[aria-pressed="true"] { box-shadow: inset 0 0 0 1.5px var(--text-primary); background: var(--container-inset); }
+  .valg button:disabled { opacity: .45; cursor: default; }
+  textarea.kom { display: block; width: 100%; min-height: 80px; resize: vertical; margin-top: 10px; font: inherit; font-size: 14px; line-height: 1.55;
+    color: var(--text-primary); background: var(--container-inset); border: 0; box-shadow: inset 0 0 0 1px var(--divider); border-radius: 10px; padding: 11px 13px; }
+  textarea.kom:focus { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+  .vurd-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+  .btn { font: inherit; font-size: 13px; font-weight: 500; line-height: 1; padding: 9px 13px; border-radius: 8px; border: 0; cursor: pointer; background: var(--nav-indicator); color: var(--container); }
+  .btn:hover { opacity: .88; } .btn:disabled { opacity: .45; cursor: default; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="page">
+    <div>
+      <a class="link" id="tilbage" href="fag.html">‹ Fag</a>
+      <h1>USB-noter</h1>
+      <p class="sub" id="sub">Fagnoterne, du må tage med på USB til eksamen, uge for uge</p>
+    </div>
+    <div class="seg" role="tablist" aria-label="Vælg fag" id="tabs"></div>
+  </header>
+  <div class="stack" id="root"><div class="card empty">Henter …</div></div>
+</div>
+
+<script src="/kompas/assets/icons.js"></script>
+<script src="/kompas/assets/liv.js"></script>
+<script src="studie.js"></script>
+<script>
+// Fagnoterne fra eksporten (fagnoter.json) og dine vurderinger live fra Studie-serveren (null: serveren svarer ikke)
+let S = null, FN = null, V = null;
+let valgt = null, del = null;   // fag-id og uge ("39") eller hovedafsnit ("Eksamen"); står i adressen som #gamma/39
+let udkast = null;              // vurderingen, du er ved at give, før den er gemt: { fag, del, vurdering, kommentar }
+const VALG = [["brugbar", "Brugbar"], ["for_meget", "For meget"], ["mangler", "Mangler noget"]];
+const navn = v => (VALG.find(x => x[0] === v) || [])[1] || "";
+const kort = iso => { if (!iso) return "–"; const d = parseDate(iso); return `${d.getDate()}/${d.getMonth() + 1}`; };
+const tal = n => n.toLocaleString("da-DK");
+
+// Ugerne (kun dem, rutinen har udfyldt) og bagefter dokumentets øvrige hovedafsnit, i dokumentets rækkefølge
+function dele(fn) {
+  const uger = Object.entries(fn.uger).filter(([, u]) => u.udfyldt).sort((a, b) => a[0] - b[0])
+    .map(([n, u]) => ({ ...u, noegle: n, navn: `Uge ${n}`, titel: u.titel.replace(/^Uge\s+\d+\s*[—–-]\s*/i, "") }));
+  return [...uger, ...(fn.dele || []).map(d => ({ ...d, noegle: d.titel, navn: d.titel, titel: "" }))];
+}
+
+function vurdering(f, d) {
+  const fn = FN[f.id], v = V?.[f.id]?.[d.noegle] || null;
+  const u = udkast?.fag === f.id && udkast.del === d.noegle ? udkast : null;
+  const valg = u ? u.vurdering : v?.vurdering || null, kom = u ? u.kommentar : v?.kommentar || "";
+  const rettet = v?.dato && fn.handlet?.[d.noegle] === v.dato;
+  const status = !V ? "Studie-serveren svarer ikke, så der kan ikke gemmes lige nu"
+    : u ? "ikke gemt" : rettet ? `rettet af Studie-rutinen efter din vurdering fra ${kort(v.dato)}`
+    : v ? `gemt ${kort(v.dato)}, venter på Studie-rutinen${v.vurdering === "brugbar" ? " (formen beholdes)" : ""}` : "ingen vurdering endnu";
+  return `<div class="vurd">
+    <h3>Din vurdering af ${esc(d.navn.toLowerCase().startsWith("uge") ? d.navn.toLowerCase() : d.navn)}</h3>
+    <p class="meta" style="margin:0;line-height:1.5">Er det præcist og til at bruge, når du sidder til eksamen? Studie-rutinen læser vurderingen søndag og strammer ugen ind efter den.</p>
+    <div class="valg" role="group" aria-label="Vurdering">${VALG.map(([k, t]) =>
+      `<button type="button" data-v="${k}" aria-pressed="${valg === k}"${V ? "" : " disabled"}><span class="prik ${k}"></span>${t}</button>`).join("")}</div>
+    <textarea class="kom" id="kom" aria-label="Kommentar" placeholder="Hvad skal væk, eller hvad mangler? Fx: kodeblokkene om scope siger det samme to gange …"${V ? "" : " disabled"}>${esc(kom)}</textarea>
+    <div class="vurd-bar"><span class="meta" id="vurd-status">${esc(status)}</span>
+      <button type="button" class="btn" id="gem"${V ? "" : " disabled"}>Gem</button></div>
+  </div>`;
+}
+
+function render() {
+  const fagListe = S.fag.filter(f => f.usb_noter && FN?.[f.id]);
+  if (!fagListe.length) {
+    document.getElementById("root").innerHTML = `<div class="card empty">${FN ? "Intet fag har fagnoter til USB endnu (usb_noter i Scripts/fag.json)." : "Henter fagnoterne …"}</div>`;
+    return;
+  }
+  const f = fagListe.find(x => x.id === valgt) || fagListe[0];
+  // USB-noterne hører til faget under Fag; linket fører tilbage dertil
+  const tilbage = document.getElementById("tilbage");
+  tilbage.href = `fag.html#${encodeURIComponent(f.id)}`; tilbage.textContent = `‹ Fag · ${f.kort}`;
+  valgt = f.id;
+  const tabs = document.getElementById("tabs");
+  tabs.style.display = fagListe.length < 2 ? "none" : "";
+  tabs.innerHTML = fagListe.map(x => `<button type="button" role="tab" data-id="${x.id}" aria-pressed="${x.id === valgt}" aria-selected="${x.id === valgt}">${esc(x.kort)}</button>`).join("");
+  const fn = FN[f.id], ds = dele(fn);
+  if (!ds.length) { document.getElementById("root").innerHTML = `<div class="card empty">Ingen uger er udfyldt i ${esc(fn.fil)} endnu.</div>`; return; }
+  const d = ds.find(x => x.noegle === del) || [...ds].reverse().find(x => /^\d+$/.test(x.noegle)) || ds[0];
+  del = d.noegle;
+  const i = ds.indexOf(d), vf = V?.[f.id] || {};
+  document.getElementById("sub").textContent = `${f.navn} · ${fn.fil}, ændret ${stamp(fn.ændret)}`;
+  const raekke = x => { const v = vf[x.noegle];
+    return `<button type="button" class="delknap" data-del="${esc(x.noegle)}" aria-current="${x === d}">
+      <span class="prik ${v?.vurdering || ""}" title="${esc(navn(v?.vurdering) || "ikke vurderet")}"></span>
+      <span class="u"><b>${esc(x.navn)}</b><small>${esc(x.titel || (v?.kommentar ?? ""))}</small></span>
+      <span class="meta">${tal(x.ord)} ord${x.kodeblokke ? ` · ${x.kodeblokke} kodeblokke` : ""}${v?.vurdering ? `<br>${esc(navn(v.vurdering))}` : ""}</span></button>`; };
+  const uger = ds.filter(x => /^\d+$/.test(x.noegle)), resten = ds.filter(x => !/^\d+$/.test(x.noegle));
+  document.getElementById("root").innerHTML = `
+    <section class="card panel">
+      <div class="panel-head"><h2>Dokumentet</h2><span class="meta">${uger.length} uger · ${tal(fn.ord_i_alt ?? 0)} ord i alt</span></div>
+      <div class="ind">${uger.map(raekke).join("")}</div>
+      ${resten.length ? `<div class="skel">Resten af dokumentet</div><div class="ind">${resten.map(raekke).join("")}</div>` : ""}
+      <p class="meta" style="margin:12px 0 0;line-height:1.5">Det er Word-dokumentet, du eksporterer til PDF og tager med på USB'en. Studie-rutinen udfylder en uge, når den er slut. Læs ugerne igennem, og giv dem en vurdering: brugbar, for meget eller mangler noget.</p>
+    </section>
+    <section class="card panel">
+      <div class="plan-head"><h2>${esc(d.navn)}${d.titel ? ` <span class="meta">${esc(d.titel)}</span>` : ""}</h2>
+        <div class="weeknav">
+          <button type="button" class="nav-btn" data-step="-1" aria-label="Forrige"${i === 0 ? " disabled" : ""}>${icon("arrow-left", 14)}</button>
+          <select id="del" aria-label="Vælg uge eller afsnit">${ds.map(x => `<option value="${esc(x.noegle)}"${x === d ? " selected" : ""}>${esc(x.navn)}</option>`).join("")}</select>
+          <button type="button" class="nav-btn" data-step="1" aria-label="Næste"${i === ds.length - 1 ? " disabled" : ""}>${icon("arrow-right", 14)}</button>
+        </div></div>
+      <p class="meta" style="margin:-4px 0 0">${tal(d.ord)} ord${d.kodeblokke ? ` · ${d.kodeblokke} kodeblokke` : ""}${d.kun_bog ? " · kun ud fra bogen (slides var ikke lagt op)" : ""}</p>
+      <div class="md fn">${d.html}</div>
+      ${vurdering(f, d)}
+    </section>`;
+}
+
+const vælg = (fag, d) => { valgt = fag; del = d; history.replaceState(null, "", `#${fag}/${encodeURIComponent(d)}`); render(); };
+document.getElementById("tabs").addEventListener("click", e => { const b = e.target.closest("button"); if (b) vælg(b.dataset.id, null); });
+document.getElementById("root").addEventListener("change", e => { if (e.target.id === "del") vælg(valgt, e.target.value); });
+document.getElementById("root").addEventListener("input", e => {
+  if (e.target.id !== "kom") return;
+  const v = V?.[valgt]?.[del];
+  udkast = { fag: valgt, del, vurdering: udkast?.del === del ? udkast.vurdering : v?.vurdering || null, kommentar: e.target.value };
+  document.getElementById("vurd-status").textContent = "ikke gemt";
+});
+document.getElementById("root").addEventListener("click", async e => {
+  const r = e.target.closest(".delknap");
+  if (r) return vælg(valgt, r.dataset.del);
+  const n = e.target.closest(".nav-btn");
+  if (n) { const sel = document.getElementById("del"), j = sel.selectedIndex + +n.dataset.step; if (sel.options[j]) vælg(valgt, sel.options[j].value); return; }
+  const k = e.target.closest(".valg button");
+  if (k) {
+    const v = V?.[valgt]?.[del], før = udkast?.del === del ? udkast.vurdering : v?.vurdering || null;
+    udkast = { fag: valgt, del, vurdering: før === k.dataset.v ? null : k.dataset.v, kommentar: document.getElementById("kom").value };
+    return render();
+  }
+  if (e.target.closest("#gem")) return gem();
+});
+document.getElementById("root").addEventListener("keydown", e => {
+  if (e.target.id === "kom" && e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); gem(); }
+});
+async function gem() {
+  const b = document.getElementById("gem");
+  if (!V || b.disabled) return;
+  const v = V[valgt]?.[del], u = udkast?.fag === valgt && udkast.del === del ? udkast : null;
+  const krop = { fag: valgt, del, vurdering: u ? u.vurdering : v?.vurdering || null, kommentar: document.getElementById("kom").value };
+  b.disabled = true;
+  try {
+    const r = await fetch("/studie/api/usb-vurdering", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(krop) });
+    const d = await r.json(); if (!r.ok) throw new Error(d.fejl || r.status);
+    (V[valgt] ||= {}); if (d.dato) V[valgt][del] = { vurdering: d.vurdering, kommentar: d.kommentar, dato: d.dato }; else delete V[valgt][del];
+    udkast = null; render();
+  } catch (x) { b.disabled = false; alert(`Kunne ikke gemme: ${x.message}`); }
+}
+window.addEventListener("hashchange", () => { const [f, d] = location.hash.slice(1).split("/"); valgt = f || null; del = d ? decodeURIComponent(d) : null; if (S) render(); });
+{ const [f, d] = location.hash.slice(1).split("/"); valgt = f || null; del = d ? decodeURIComponent(d) : null; }
+fetch("/studie/api/usb-vurdering").then(r => r.ok ? r.json() : null).then(d => { V = d; if (S && FN) render(); }).catch(() => {});
+Promise.all([loadStudie(), fetch("fagnoter.json", { cache: "no-store" }).then(r => r.ok ? r.json() : {})])
+  .then(([s, fn]) => { S = s; FN = fn; render(); },
+    e => { document.getElementById("root").innerHTML = `<div class="card empty">${esc(e.message)}. Kør <code>node Scripts/kompas-eksport.js</code> i semestermappen.</div>`; });
+</script>
+</body>
+</html>

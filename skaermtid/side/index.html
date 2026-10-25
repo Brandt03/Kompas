@@ -1,0 +1,730 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Skærmtid</title>
+<!-- Vises i Kompas (https://kompas.localhost), som leverer designkittet under /kompas/assets/.
+     Data: skaermtid.json, skrevet af `python3 skaermtid.py byg` i ~/kompas/skaermtid. Siden regner ikke selv:
+     gennemsnit pr. hel dag, fælles dage, andele og telefon samtidig med computer (feltet enhedsside) kommer også
+     færdige fra skaermtid.py. -->
+<link rel="stylesheet" href="/kompas/assets/tokens.css">
+<link rel="stylesheet" href="/kompas/assets/page.css">
+<style>
+  .rows { display: grid; gap: 2px; }
+  .row { display: grid; grid-template-columns: 14px 150px minmax(0, 1fr) 64px; align-items: center; gap: 10px; font-size: 13px;
+         width: 100%; border: 0; background: none; font-family: inherit; color: inherit; text-align: left; cursor: pointer;
+         padding: 5px 8px; margin: 0 -8px; border-radius: 8px; box-sizing: content-box; }
+  .row:hover { background: var(--surface-hover); }
+  .row:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+  .row .pil { width: 6px; height: 6px; border-right: 1.5px solid var(--text-subdued); border-bottom: 1.5px solid var(--text-subdued);
+              transform: rotate(-45deg); justify-self: center; transition: transform .15s; }
+  .row[aria-expanded="true"] .pil { transform: rotate(45deg); }
+  .row .navn { color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .bar { height: 8px; border-radius: 999px; background: var(--surface-inset); overflow: hidden; }
+  .row .bar i { display: block; height: 100%; background: var(--mark); border-radius: 999px; }
+  .row .bar i.dim { background: var(--mark-dim); }
+  .row .tal { text-align: right; font-variant-numeric: tabular-nums; color: var(--text-secondary); }
+  .under { margin: 2px 0 8px 22px; display: grid; gap: 2px; }
+  .under .row { grid-template-columns: 14px 128px minmax(0, 1fr) 64px; }
+  .under .row .navn { color: var(--text-secondary); }
+  .tjek { font-size: 12.5px; color: var(--text-secondary); margin: 2px 0 6px; }
+  .tjek b { color: var(--text-primary); font-weight: 500; font-variant-numeric: tabular-nums; }
+  .items { margin: 4px 0 12px 24px; border-left: 1px solid var(--divider); padding-left: 12px; }
+  .item { display: grid; grid-template-columns: minmax(0, 1fr) auto 64px; grid-template-areas: "navn hvorfor tal" "navn cat cat";
+          gap: 2px 12px; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--divider); font-size: 13px; }
+  .item:last-child { border-bottom: 0; }
+  .item .inavn { grid-area: navn; min-width: 0; color: var(--text-primary); overflow-wrap: anywhere; }
+  .item .inavn small { display: block; color: var(--text-subdued); font-size: 11.5px; }
+  .item .hvorfor { grid-area: hvorfor; justify-self: end; }
+  .item .tal { grid-area: tal; text-align: right; font-variant-numeric: tabular-nums; color: var(--text-secondary); }
+  .item .cat { grid-area: cat; justify-self: end; font-size: 12.5px; color: var(--text-secondary); }
+  .badge.valg { background: var(--success-tint); color: var(--success); }
+  .badge.svag, .badge.forel { background: var(--warning-tint); color: var(--warning); }
+  /* Kategorivalget ligner almindelig tekst, til man peger på det (som på Forbrug) */
+  .cat select { font: inherit; color: var(--text-primary); background: transparent; border: 1px solid transparent; border-radius: 7px;
+                padding: 2px 4px; margin: -3px -5px -3px 0; max-width: 220px; cursor: pointer; }
+  .cat select:hover, .cat select:focus-visible { border-color: var(--divider); background: var(--container); }
+  .cat select:disabled { opacity: .5; cursor: progress; }
+  .cat select.tom { color: var(--link); }
+  .mere { font-size: 12.5px; color: var(--text-subdued); padding-top: 8px; }
+  .enheder { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 13px; color: var(--text-secondary); }
+  .enheder b { color: var(--text-primary); font-weight: 500; }
+  table.t { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.t th { text-align: left; font-weight: 500; color: var(--text-secondary); padding: 6px 8px; border-bottom: 1px solid var(--divider); white-space: nowrap; }
+  table.t td { padding: 6px 8px; border-bottom: 1px solid var(--divider); vertical-align: top; }
+  table.t .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  table.t td.num small { color: var(--text-subdued); }
+  table.t code { font-size: 12px; background: var(--surface-inset); padding: 1px 5px; border-radius: 5px; }
+  .fortryd { font: inherit; font-size: 12.5px; border: 1px solid var(--divider); background: var(--container); color: var(--text-primary);
+             border-radius: 7px; padding: 3px 9px; cursor: pointer; }
+  .fortryd:hover { background: var(--container-hover); }
+  .fortryd:disabled { opacity: .5; cursor: progress; }
+  .scroll { overflow-x: auto; }
+  #status { position: fixed; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
+            max-width: min(560px, calc(100vw - 32px)); background: var(--container); color: var(--text-primary); font-size: 13px;
+            box-shadow: var(--shadow-border-xs), 0 8px 24px rgba(0,0,0,.12); border-radius: 10px; padding: 9px 14px; z-index: 5; }
+  #status.bad { color: var(--destructive); }
+  #status button { margin-left: 10px; }
+  @media (max-width: 760px) {
+    .row { grid-template-columns: 14px 104px minmax(0, 1fr) 56px; }
+    .items { margin-left: 8px; }
+    .under { margin-left: 8px; }
+    .under .row { grid-template-columns: 14px 96px minmax(0, 1fr) 56px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .row .pil { transition: none; } }
+  /* Dag for dag: grafens tip (chart.js lægger det i body) med enheder og grupper i to kolonner */
+  .chart-tip:has(.tt) { max-width: min(340px, calc(100vw - 24px)); }
+  .tt-sum { margin: 1px 0 8px; }
+  .tt { display: grid; grid-template-columns: auto auto; gap: 0 20px; }
+  .tt-h { color: var(--text-subdued); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 2px; }
+  .tt-r { display: flex; justify-content: space-between; gap: 12px; white-space: nowrap; }
+  .tt-r b { font-weight: 500; }
+  .tt-r.dim { color: var(--text-secondary); }
+  .tt-fod { border-top: 1px solid var(--divider); margin-top: 8px; padding-top: 6px; color: var(--text-secondary); }
+  /* Dagens forløb: ét døgn pr. række, kl. 6 til kl. 6, hver blok farvet efter sin gruppe */
+  .fl { display: grid; grid-template-columns: 64px minmax(0, 1fr) 52px; gap: 6px 10px; align-items: center; }
+  .fl-l { font-size: 12.5px; color: var(--text-secondary); white-space: nowrap; }
+  .fl-l b { color: var(--text-primary); font-weight: 500; }
+  .fl-t { font-size: 12.5px; text-align: right; font-variant-numeric: tabular-nums; color: var(--text-secondary); }
+  .fl-spor { position: relative; height: 22px; border-radius: 6px; background: var(--surface-inset); overflow: hidden; }
+  .fl-spor .lin { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--divider); }
+  .fl-spor .sen { position: absolute; top: 0; bottom: 0; right: 0;
+                  background: repeating-linear-gradient(135deg, transparent 0 4px, var(--divider) 4px 5px); }
+  .fl-spor i { position: absolute; top: 3px; bottom: 3px; border-radius: 4px; min-width: 2px; }
+  .fl-spor i:hover { box-shadow: 0 0 0 1.5px var(--text-primary); }
+  .fl-spor.tom::after { content: "intet forløb"; position: absolute; left: 8px; top: 3px; font-size: 11px; color: var(--text-subdued); }
+  .fl-akse { position: relative; height: 14px; font-size: 10.5px; color: var(--text-subdued); }
+  .fl-akse span { position: absolute; transform: translateX(-50%); font-variant-numeric: tabular-nums; }
+  .fl-akse span:first-child { transform: none; } .fl-akse span:last-child { transform: translateX(-100%); }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; color: var(--text-secondary); font-size: 12.5px; margin-top: 12px; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend i { display: inline-block; width: 12px; height: 10px; border-radius: 3px; }
+  @media (max-width: 760px) { .fl { grid-template-columns: 26px minmax(0, 1fr) 40px; gap: 6px 8px; } .fl-l .dt { display: none; } }
+  /* Enhederne: en bjælke pr. enhed delt i grupperne, telefonen ved siden af computeren, døgnrytme og uge for uge */
+  .stak { display: flex; height: 14px; border-radius: 999px; overflow: hidden; background: var(--surface-inset); gap: 2px; }
+  .stak i { display: block; height: 100%; min-width: 3px; }
+  .andele { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12.5px; color: var(--text-secondary); }
+  .andele span { display: inline-flex; align-items: center; gap: 6px; }
+  .andele i { width: 9px; height: 9px; border-radius: 3px; display: inline-block; }
+  .andele b { color: var(--text-primary); font-weight: 500; font-variant-numeric: tabular-nums; }
+  .top { font-size: 12.5px; color: var(--text-subdued); }
+  .top b { color: var(--text-secondary); font-weight: 500; }
+  .graf { display: grid; gap: 10px; }
+  .gr { display: grid; grid-template-columns: 96px minmax(0, 1fr) 70px; align-items: center; gap: 10px; font-size: 13px; }
+  .gr .n { color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .gr .n small { display: block; color: var(--text-subdued); font-size: 11px; }
+  .gr .spor { height: 18px; }
+  .gr .fyld { display: flex; height: 100%; border-radius: 5px; overflow: hidden; gap: 2px; min-width: 3px; }
+  .gr .fyld i { display: block; height: 100%; min-width: 2px; }
+  .gr .v { text-align: right; font-variant-numeric: tabular-nums; color: var(--text-primary); font-weight: 500; }
+  .gr.tom .spor { font-size: 12.5px; color: var(--text-subdued); height: auto; }
+  .gr-info { grid-column: 2 / -1; display: grid; gap: 4px; margin: -4px 0 4px; }
+  .vis { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .seg-i { cursor: pointer; }
+  .seg-i:hover, .seg-i:focus-visible, .seg-i.valgt { outline: 2px solid var(--text-primary); outline-offset: -2px; }
+  .stor { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+  /* Telefonen ved siden af computeren: én række pr. bjælke, navnet til venstre og andelene under bjælken */
+  .delt { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 10px 12px; align-items: start; margin-top: 10px; }
+  .delt h3 { margin: 0; font-size: 13px; font-weight: 500; color: var(--text-secondary); line-height: 10px; }
+  .delt .stak { height: 10px; margin-bottom: 5px; }
+  @media (max-width: 760px) { .delt { grid-template-columns: minmax(0, 1fr); gap: 6px; } .delt h3 { line-height: inherit; margin-top: 4px; } }
+  /* Døgnrytme: én række pr. enhed, én celle pr. time fra døgnskiftet */
+  .hm { display: grid; grid-template-columns: 96px repeat(24, minmax(0, 1fr)); gap: 2px; align-items: center; font-size: 12px; }
+  .hm .lbl { color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 6px; }
+  .hm .lbl small { display: block; color: var(--text-subdued); font-size: 11px; }
+  .hm .c { aspect-ratio: 1 / 1.4; border-radius: 3px; background: var(--surface-inset); position: relative; border: 0; padding: 0; cursor: pointer;
+           font: inherit; font-size: 10px; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+  .hm .c i { position: absolute; inset: 0; border-radius: 3px; background: var(--mark); }
+  .hm .c span { position: relative; display: none; }
+  .hm .c:hover, .hm .c:focus-visible, .hm .c.valgt { outline: 2px solid var(--text-primary); outline-offset: 0; }
+  @media (min-width: 900px) { .hm .c span { display: block; } }
+  .skala { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; color: var(--text-secondary); margin-top: 12px; }
+  .skala .trin { display: flex; gap: 2px; }
+  .skala .trin span { width: 22px; height: 12px; border-radius: 3px; background: var(--surface-inset); position: relative; overflow: hidden; }
+  .skala .trin span i { position: absolute; inset: 0; background: var(--mark); }
+  .hm-valgt { font-size: 13px; color: var(--text-secondary); min-height: 20px; margin-top: 10px; }
+  .hm-valgt b { color: var(--text-primary); font-weight: 500; }
+  .travl { font-size: 12.5px; color: var(--text-secondary); display: grid; gap: 3px; margin-top: 12px; }
+  .travl b { color: var(--text-primary); font-weight: 500; }
+  .hm .ingen { grid-column: 2 / -1; font-size: 12.5px; color: var(--text-subdued); }
+  .hm .t { color: var(--text-subdued); font-size: 10.5px; text-align: center; font-variant-numeric: tabular-nums; }
+  @media (max-width: 760px) {
+    .hm { grid-template-columns: 64px repeat(24, minmax(0, 1fr)); gap: 1px; }
+    .hm .t:nth-child(odd) { visibility: hidden; }
+    .gr { grid-template-columns: 70px minmax(0, 1fr) 56px; gap: 8px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="page">
+    <div>
+      <h1>Skærmtid</h1>
+      <p class="sub">Hvor tiden går hen på Mac, stationær, bærbar og telefon, fra ActivityWatch · <a class="link" href="#enheder">Enhederne ↓</a></p>
+    </div>
+    <div class="meta" id="meta"></div>
+  </header>
+  <div class="stack" id="root"><div class="card empty">Henter …</div></div>
+</div>
+<div id="status" role="status" aria-live="polite" hidden></div>
+
+<script src="/kompas/assets/icons.js"></script>
+<script src="/kompas/assets/liv.js"></script>
+<script src="/kompas/assets/chart.js"></script>
+<script>
+// Data: skaermtid.json (bygget af skaermtid.py). Siden regner ikke selv; den viser tallene og sender kun dine valg
+// (kategori, "tæller ikke" eller fjern) til Skærmtid-serveren (api/valg), som gemmer dem i valg.json og bygger igen.
+const $ = id => document.getElementById(id);
+const timer = t => t == null ? "–" : t === 0 ? "0 min" : t < 1 / 60 ? "< 1 min" : t < 1 ? `${fmt(t * 60, 0)} min` : `${fmt(t, 1)} t`;
+const andel = a => a == null ? "–" : a < 0.005 ? "< 1 %" : `${fmt(a * 100, 0)} %`;
+const og = xs => xs.join(", ").replace(/, ([^,]*)$/, " og $1");
+const PERIODER = [["idag", "I dag"], ["uge", "Denne uge"], ["fire_uger", "4 uger"]];
+const VIS = 25;  // så mange programmer pr. kategori, når den foldes ud
+const UKAT = "Ukategoriseret";
+// DOC er hele skaermtid.json, S dens enhedsside (tallene pr. enhed). valgt er perioden, som alle panelerne med
+// I dag / Denne uge / 4 uger følger, så et klik i ét af dem skifter dem alle
+let DOC, S, valgt = "idag", visning = "timer", aabenGruppe = null, aaben = null, ITEMS = [], statusTimer;
+
+// Farven for hver gruppe, den samme som Planlagt mod faktisk på Ugen i tal (Overblik), så en gruppe har én
+// farve i hele Kompas
+const GRUPPEFARVE = { Produktiv: "var(--c3)", Passiv: "var(--c2)", Gaming: "var(--c4)", Praktisk: "var(--c1)", Ukategoriseret: "var(--gray-400)" };
+// Enhederne har farver, som ingen gruppe har, i rækkefølgen fra regler.json, så en enhed har samme farve hver gang
+const ENHEDSFARVE = ["var(--c7)", "var(--c8)", "var(--c5)", "var(--c6)"];
+
+function sidstSet(iso) {
+  if (!iso) return "ingen data endnu";
+  const d = new Date(iso), dage = daysUntil(iso.slice(0, 10));
+  const kl = `kl. ${String(d.getHours()).padStart(2, "0")}.${String(d.getMinutes()).padStart(2, "0")}`;
+  return dage === 0 ? `i dag ${kl}` : dage === -1 ? `i går ${kl}` : `${-dage} dage siden`;
+}
+
+function enhederBanner(d) {
+  const hele = navn => S.enheder.find(e => e.navn === navn);
+  // Browsertid uden adresse de seneste 14 dage (browser_uden_adresse): den kan ikke få en kategori, så den står ved enheden
+  const uden = d.browser_uden_adresse || {};
+  const udenTekst = navn => uden[navn]?.length ? ` · ${og(uden[navn].map(x => `${timer(x.timer)} i ${x.program}`))} uden adresse` : "";
+  const linjer = d.enheder.map(e => {
+    const h = hele(e.navn);
+    return `<span><b>${esc(e.navn)}</b> · ${esc(sidstSet(e.sidst))}${h ? ` · ${h.hele_dage} ${h.hele_dage === 1 ? "hel dag" : "hele dage"}` : ""}${esc(udenTekst(e.navn))}${e.kendt ? "" : " · ukendt enhed, tilføj den i regler.json"}</span>`;
+  });
+  const udenNote = d.enheder.some(e => uden[e.navn]?.length)
+    ? `<p class="meta" style="margin:8px 0 0">Uden adresse: browsertid de seneste 14 dage, hvor adressen ikke kendes. Den kan ikke få en kategori; kun de enkelte sider kan. På en computer kræver adressen ActivityWatch' browserudvidelse; på telefonen kendes kun værten, når fanen skifter.</p>` : "";
+  // En enhed, du sjældent bruger (sjaelden i regler.json), giver ingen advarsel; den nævnes kun i den rolige tekst
+  const stille = d.enheder.filter(e => e.kendt && (!e.sidst || daysUntil(e.sidst.slice(0, 10)) <= -2));
+  const mangler = stille.filter(e => !e.sjaelden), sjaeldne = stille.filter(e => e.sjaelden);
+  const ukendte = d.enheder.filter(e => !e.kendt);
+  const udenAfk = d.enheder.filter(e => e.afk_mangler);
+  const afkStoppet = d.enheder.filter(e => e.afk_stoppet);
+  const warn = mangler.length || ukendte.length || udenAfk.length || afkStoppet.length;
+  const tekst = afkStoppet.length ? afkStoppet.map(e => `${e.navn}: afk-måleren har ikke målt siden ${weekday(parseDate(e.afk_stoppet)).slice(0, 3)}. ${stamp(e.afk_stoppet)}, men vinduerne logges stadig, så tiden siden tæller ikke.`).join(" ") + " Genstart ActivityWatch på enheden."
+    : mangler.length ? `${mangler.map(e => e.navn).join(" og ")} har ikke sendt data de seneste to dage. Tallene herunder er uden ${mangler.length > 1 ? "dem" : "den"}.`
+    : udenAfk.length ? `${udenAfk.map(e => e.navn).join(" og ")} sender vinduer, men ingen afk-data, så tiden tæller ikke. Tjek, at aw-watcher-afk kører og synkes dér.`
+    : ukendte.length ? "En enhed, der ikke står i regler.json, sender data. Giv den et navn dér." : `Alle enheder har sendt data de seneste to dage${sjaeldne.length ? `, undtagen ${sjaeldne.map(e => e.navn).join(" og ")}, som bruges sjældent` : ""}.`;
+  // Under en uges hele dage er en enheds gennemsnit foreløbigt; det nævnes, men er ingen advarsel
+  const faa = S.enheder.filter(e => e.hele_dage < S.foreloebig_under && !d.enheder.find(x => x.navn === e.navn)?.sjaelden).map(e => e.navn);
+  const forel = faa.length ? ` ${og(faa)} har under ${S.foreloebig_under} hele dage, så ${faa.length > 1 ? "deres" : "dens"} gennemsnit er foreløbige.` : "";
+  return `<div class="card banner ${warn ? "warn" : "good"}"><span class="bi">${icon("clock", 16)}</span><div><div class="bl">Enheder</div><p>${esc(tekst + forel)}</p><div class="enheder" style="margin-top:8px">${linjer.join("")}</div>${udenNote}</div></div>`;
+}
+
+function tiles(d) {
+  const i = d.perioder.idag, u = d.perioder.uge;
+  const ukat = u.ukategoriseret_andel;
+  const tj = u.tjek;
+  return `<section class="tiles" aria-label="Nøgletal">
+    <div class="card tile"><div class="label">I dag</div><div class="value">${timer(i.timer)}</div><div class="foot">produktiv ${timer(i.grupper?.Produktiv || 0)} · sen ${timer(i.sen_timer)}</div></div>
+    <div class="card tile"><div class="label">Produktiv · uge</div><div class="value">${timer(u.grupper?.Produktiv || 0)}</div><div class="foot">af ${timer(u.timer)} i alt · sen ${timer(u.sen_timer)}</div></div>
+    <div class="card tile"><div class="label">Korte tjek · uge</div><div class="value">${tj ? fmt(tj.korte_pr_dag, 1) + "<small> pr. dag</small>" : "–"}</div><div class="foot">${tj ? `${fmt(tj.oplaasninger_pr_dag, 1)} oplåsninger pr. dag` : "ingen telefondata"}</div></div>
+    <a class="card tile" href="#mangler"><div class="label">Ukategoriseret</div><div class="value">${ukat == null ? "–" : fmt(ukat * 100, 0) + "<small> % i ugen</small>"}</div><div class="foot">${(n => n ? `${n} ${n === 1 ? "program eller side" : "programmer og sider"} uden kategori de seneste 14 dage` : "alt har en kategori de seneste 14 dage")(d.ukategoriseret_antal ?? d.ukategoriseret.length)}</div></a>
+  </section>`;
+}
+
+const periodeValg = () => `<div class="seg">${PERIODER.map(([k, l]) => `<button aria-pressed="${k === valgt}" data-p="${k}">${l}</button>`).join("")}</div>`;
+
+// ── ét program eller én side, med hvorfor og kategorivalget ──────────────────
+const KILDE = {
+  valg: ["dit valg", "valg", "Du har valgt kategorien her på siden"],
+  app: ["regel · program", "", "En regel i regler.json, der passer på programmets navn"],
+  domaene: ["regel · side", "", "En regel i regler.json, der passer på hjemmesidens adresse"],
+  titel: ["regel · vinduestitel", "svag", "Kun vinduets titel passede. Det er den svageste slags regel: en fane om noget andet kan have et ord, der passer"],
+};
+
+function itemHtml(x, { tomt = false } = {}) {
+  const i = ITEMS.push(x) - 1;
+  const enh = Object.entries(x.enheder).map(([e, t]) => `${esc(e)} ${timer(t)}`).join(" · ");
+  const hvem = x.type === "domaene" ? `side · ${enh}` : enh;
+  const k = KILDE[x.kilde];
+  const hvorfor = k ? `<span class="badge ${k[1]}" title="${esc(k[2])}">${k[0]}</span>` : "";
+  let cat;
+  if (x.browser) {
+    cat = `<span title="Browsertid, hvor udvidelsen ikke så adressen. Den kan ikke få én kategori; vælg i stedet for de enkelte sider">browser uden adresse</span>`;
+  } else {
+    const kats = DOC.kategorier.filter(n => n !== UKAT);
+    const nu = x.kategori === UKAT ? "" : x.kategori;
+    const opt = (v, t, sel) => `<option value="${esc(v)}"${sel ? " selected" : ""}>${esc(t)}</option>`;
+    cat = `<select data-i="${i}" class="${nu ? "" : "tom"}" aria-label="Kategori for ${esc(x.navn)}">
+      ${nu ? "" : opt("", tomt ? "Vælg kategori …" : "Ukategoriseret", true)}
+      ${kats.map(n => opt("k:" + n, n, n === nu)).join("")}
+      <option disabled>──────────</option>
+      ${opt("ignorer", "Tæller ikke med", false)}
+      ${x.kilde === "valg" ? opt("fjern", "Fjern mit valg (følg reglerne)", false) : ""}
+    </select>`;
+  }
+  return `<div class="item"><div class="inavn">${esc(x.navn)}<small>${hvem}</small></div><div class="hvorfor">${hvorfor}</div><div class="tal">${timer(x.timer)}</div><div class="cat">${cat}</div></div>`;
+}
+
+function bar(t, max, dim, farve) { return `<span class="bar"><i class="${dim ? "dim" : ""}" style="width:${(max ? t / max * 100 : 0).toFixed(1)}%${farve ? `;background:${farve}` : ""}"></i></span>`; }
+
+// Programmerne i én kategori i den valgte periode
+function itemsHtml(p, k) {
+  const xs = (p.programmer || []).filter(x => x.kategori === k);
+  return `<div class="items">${xs.slice(0, VIS).map(x => itemHtml(x)).join("") || `<div class="mere">Intet enkelt program over et halvt minut.</div>`}
+    ${xs.length > VIS ? `<div class="mere">Viser de ${VIS} største af ${xs.length}.</div>` : ""}</div>`;
+}
+
+function tjekLinje(tj) {
+  if (!tj) return `<div class="tjek">Ingen telefondata i perioden, så korte tjek kan ikke tælles.</div>`;
+  const pr = tj.dage > 1;
+  return `<div class="tjek"><b>${fmt(pr ? tj.korte_pr_dag : tj.korte, pr ? 1 : 0)}</b> korte tjek (under ${DOC.korte_tjek_sek} sek.) af <b>${fmt(pr ? tj.aabninger_pr_dag : tj.aabninger, pr ? 1 : 0)}</b> åbninger${pr ? " pr. dag" : ""} på telefonen · <b>${fmt(pr ? tj.oplaasninger_pr_dag : tj.oplaasninger, pr ? 1 : 0)}</b> oplåsninger${pr ? " pr. dag" : ""}</div>`;
+}
+
+function gruppePanel() {
+  const p = DOC.perioder[valgt];
+  const grp = Object.entries(p.grupper || {}).sort((a, b) => (a[0] === UKAT) - (b[0] === UKAT) || b[1] - a[1]);
+  const max = Math.max(0, ...grp.map(g => g[1]));
+  const rows = grp.length ? grp.map(([g, t]) => {
+    const op = g === aabenGruppe;
+    let ud = "";
+    if (op && g === UKAT) ud = itemsHtml(p, UKAT);
+    else if (op) {
+      const kats = (DOC.grupper.find(x => x.navn === g)?.kategorier || []).filter(k => p.kategorier[k]).sort((a, b) => p.kategorier[b] - p.kategorier[a]);
+      const kmax = Math.max(0, ...kats.map(k => p.kategorier[k]));
+      const medTjek = DOC.grupper.find(x => x.navn === g)?.kategorier.includes("Sociale medier");
+      ud = `<div class="under">${medTjek ? tjekLinje(p.tjek) : ""}${kats.map(k => {
+        const ko = k === aaben;
+        return `<button class="row" data-kat="${esc(k)}" aria-expanded="${ko}"><span class="pil"></span><span class="navn">${esc(k)}</span>${bar(p.kategorier[k], kmax)}<span class="tal">${timer(p.kategorier[k])}</span></button>${ko ? itemsHtml(p, k) : ""}`;
+      }).join("")}</div>`;
+    }
+    return `<button class="row" data-gruppe="${esc(g)}" aria-expanded="${op}"><span class="pil"></span><span class="navn">${esc(g)}</span>${bar(t, max, g === UKAT, GRUPPEFARVE[g])}<span class="tal">${timer(t)}</span></button>${ud}`;
+  }).join("") : `<div class="empty">Ingen skærmtid i perioden.</div>`;
+  const enh = Object.entries(p.enheder).sort((a, b) => b[1] - a[1]).map(([e, t]) => `<span><b>${esc(e)}</b> ${timer(t)}</span>`).join("");
+  return `<div class="panel-head"><h2>Hvor tiden går hen</h2>${periodeValg()}</div>
+    <p class="meta" style="margin:-4px 0 10px">Fold en gruppe ud for at se dens kategorier, og en kategori for at se, hvad der tæller i den. Flyt det, der står forkert.</p>
+    <div class="rows">${rows}</div>
+    <div class="enheder" style="margin-top:14px">${enh || ""}${p.timer ? `<span class="meta">i alt ${timer(p.timer)}${p.samtidig_timer ? ` · heraf ${timer(p.samtidig_timer)} på flere enheder på én gang` : ""} · ${p.dage_med_data} ${p.dage_med_data === 1 ? "dag" : "dage"} med data</span>` : ""}</div>`;
+}
+
+// Ugens gennemgang fra rutinen Kompas · Skærmtid (rapporter/<uge>.json); vises kun, når der er en
+function rapportKort(d) {
+  const r = d.rapport;
+  if (!r) return "";
+  const liste = xs => xs?.length ? `<ul class="list">${xs.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : "";
+  return `<section class="card panel"><div class="panel-head"><h2>Ugens gennemgang · uge ${weekNo(r.uge)}${r.mandag ? ` · ${range(r.mandag)}` : ""}</h2><span class="meta">fra rutinen Kompas · Skærmtid${r.genereret ? ` · ${esc(stamp(r.genereret))}` : ""}</span></div>
+    ${r.forbehold?.length ? `<p class="meta" style="color:var(--warning);margin:0 0 8px">${r.forbehold.map(esc).join(" ")}</p>` : ""}
+    <p style="margin:0 0 10px;font-size:14px">${esc(r.saetning || "")}</p>
+    ${liste(r.tal)}
+    ${r.en_ting ? `<p style="margin:10px 0 0;font-size:13.5px"><b style="font-weight:600">Én ting at prøve:</b> ${esc(r.en_ting)}</p>` : ""}
+    ${r.vedligehold?.length ? `<details style="margin-top:10px"><summary>Vedligehold (${r.vedligehold.length})</summary>${liste(r.vedligehold)}</details>` : ""}
+  </section>`;
+}
+
+function manglerPanel(d) {
+  const xs = d.ukategoriseret;
+  const flere = (d.ukategoriseret_antal ?? xs.length) - xs.length;
+  return `<details data-fold="mangler"${aabne.has("mangler") ? " open" : ""}><summary>Mangler en kategori (${d.ukategoriseret_antal ?? xs.length})</summary>
+    <p class="meta" style="margin:0 0 10px">De seneste 14 dage, største først${flere > 0 ? ` · de ${xs.length} største af ${d.ukategoriseret_antal}` : ""}. Browsertid uden adresse står ved enheden øverst, for den kan ikke få en kategori.</p>
+    ${xs.length ? `<div>${xs.map(x => itemHtml(x, { tomt: true })).join("")}</div>
+      <p class="meta" style="margin:10px 0 0">Valget gælder programmet eller siden på alle enheder og bagud. Vælg <i>Tæller ikke med</i> for det, der ikke er skærmtid (fx uret eller opladeren).</p>`
+      : `<div class="empty">Alt har en kategori.</div>`}</details>`;
+}
+
+function valgPanel(d) {
+  if (!d.valg?.length) return "";
+  return `<section class="card panel"><details data-fold="valg"${aabne.has("valg") ? " open" : ""}><summary>Dine valg (${d.valg.length})</summary>
+    <p class="meta" style="margin:0 0 10px">Gemt i ~/kompas/skaermtid/valg.json · går forud for reglerne</p>
+    <div class="scroll"><table class="t"><thead><tr><th>Program eller side</th><th>Tæller som</th><th>Valgt</th><th></th></tr></thead><tbody>
+    ${d.valg.map((v, i) => `<tr><td>${esc(v.navn || v.app || v.domaene)}${v.domaene ? ` <span class="meta">side</span>` : ""}</td>
+      <td>${v.ignorer ? "tæller ikke med" : esc(v.kategori)}</td><td class="meta">${v.valgt ? esc(dayMonth(parseDate(v.valgt))) : ""}</td>
+      <td class="num"><button class="fortryd" data-fjern="${i}">Fortryd</button></td></tr>`).join("")}
+    </tbody></table></div></details></section>`;
+}
+
+// De mapper, du har foldet ud eller sammen. render() tegner hele siden igen efter hvert valg, og så skal de blive,
+// som du efterlod dem
+const aabne = new Set();
+
+function render(d) {
+  DOC = d; S = d.enhedsside;
+  ITEMS = [];
+  $("meta").textContent = `Data til ${dayMonth(parseDate(d.til))} · bygget ${stamp(d.genereret)}`;
+  // skaermtid.py skriver dagene fra den første dag med data; er der færre end 28, står de alle
+  const dage = d.dage.slice(-28);
+  const fra = dage.length && d.dage.length <= 28 ? `fra ${dayMonth(parseDate(dage[0].dato))}, den første dag med data` : "de seneste 28 dage";
+  $("root").innerHTML = `
+    ${enhederBanner(d)}
+    ${tiles(d)}
+    ${rapportKort(d)}
+    <section class="card panel"><div class="panel-head"><h2>Dag for dag</h2><span class="meta">timer ${fra} · stiplet: korte tjek på telefonen</span></div><div id="c-dage"></div></section>
+    ${forloebPanel(d, dage)}
+    <section class="card panel" id="kat">${gruppePanel()}</section>
+    <section class="card panel" id="enheder">${hvadPanel()}</section>
+    <section class="card panel" id="samtidig">${samtidigPanel()}</section>
+    <section class="card panel">${doegnPanel()}</section>
+    <section class="card panel">${ugerPanel()}</section>
+    ${valgPanel(d)}
+    <section class="card panel"><details><summary>Reglerne (${d.regler.length})</summary>
+      <p class="meta">Den første regel, der passer, bestemmer kategorien; dine valg ovenfor går forud. Mønstrene er regulære udtryk. Regler med program, side eller sti prøves først, i rækkefølge; en regel med titel alene prøves sidst og kun, når adressen ikke kendes. Reglerne rettes i <code>~/kompas/skaermtid/regler.json</code>.</p>
+      <div class="scroll"><table class="t"><thead><tr><th>Kategori</th><th>Program</th><th>Side</th><th>Sti</th><th>Titel</th></tr></thead><tbody>
+      ${d.regler.map(r => `<tr><td>${esc(r.kategori)}</td>${["app", "domaene", "sti", "titel"].map(f => `<td>${r[f] ? `<code>${esc(r[f])}</code>` : ""}</td>`).join("")}</tr>`).join("")}</tbody></table>
+    </div></details></section>
+    <section class="card panel" id="mangler">${manglerPanel(d)}</section>
+    <p class="meta">Døgnet skifter kl. ${d.doegn_skifter.replace(":", ".")}, så en nat hører til aftenens dag. På computerne tæller kun tid, hvor du er aktiv; på telefonen tiden med skærmen tændt. Tid på flere enheder på én gang tæller én gang i alt: er telefonens skærm tændt, går tiden til telefonen; to computere deler den ligeligt. Hver enhed viser sin fulde tid, så enhederne tilsammen kan give mere end i alt. En enheds gennemsnit pr. dag bruger kun hele dage: i dag tæller ikke, og heller ikke enhedens første dag, hvis den blev sat op mere end fire timer efter døgnskiftet. Det, der sammenligner enhederne, bruger kun dage, hvor både telefonen og en computer har data. Vinduestitler forlader aldrig ActivityWatch.</p>
+  `;
+  const tjekMax = Math.max(10, ...dage.map(x => x.tjek?.korte || 0));
+  barChart($("c-dage"), {
+    label: "Skærmtid dag for dag i timer", height: 200, fmt: v => fmt(v, 0),
+    line2: { label: "korte tjek", max: Math.ceil(tjekMax / 10) * 10, fmt: v => fmt(v, 0) },
+    points: dage.map(x => {
+      const dt = parseDate(x.dato), enh = Object.entries(x.enheder).map(([e, v]) => [e, v.timer]).sort((a, b) => b[1] - a[1]);
+      const grp = Object.entries(x.grupper || {}).sort((a, b) => b[1] - a[1]);
+      return { label: `${dt.getDate()}/${dt.getMonth() + 1}`, y: x.timer, y2: x.tjek ? x.tjek.korte : null,
+        tip: dagTip(dt, x, enh, grp) };
+    }),
+  });
+}
+
+// Panelerne, der følger den valgte periode
+function visPeriode() {
+  $("kat").innerHTML = gruppePanel();
+  $("enheder").innerHTML = hvadPanel();
+  $("samtidig").innerHTML = samtidigPanel();
+}
+
+// ── Dagens forløb: dage[].forloeb, hvert kvarter med sin største kategori (regnet af skaermtid.py) ──────────
+// Siden lægger kun blokkene på aksen efter klokkeslættet, kl. 6 til kl. 6.
+const FL_DAGE = 7;
+const kl = t => t.slice(11, 16).replace(":", ".");
+// Timer efter døgnskiftet ud fra vægurets klokkeslæt ("23:30" → 17,5), så sommertid ikke flytter blokkene
+function timeTal(hhmm, skift) {
+  const [h, m] = hhmm.split(":").map(Number), [sh, sm] = skift.split(":").map(Number);
+  return ((h + m / 60) - (sh + sm / 60) + 24) % 24;
+}
+const pos = h => (h * 100 / 24).toFixed(2);
+
+function forloebRaekke(x, d) {
+  const dt = parseDate(x.dato), skift = d.doegn_skifter;
+  const label = `<div class="fl-l"><b>${weekday(dt).slice(0, 3)}</b><span class="dt"> ${dt.getDate()}/${dt.getMonth() + 1}</span></div>`;
+  const xs = x.forloeb || [];
+  const blokke = xs.map(b => {
+    const a = timeTal(b.start.slice(11, 16), skift);
+    let z = timeTal(b.slut.slice(11, 16), skift);
+    if (z <= a) z = 24;  // blokken slutter ved døgnskiftet
+    return `<i data-tip="${esc(`${weekday(dt)} ${dayMonth(dt)}|${kl(b.start)}–${kl(b.slut)}|${b.kategori}|${b.gruppe}`)}" style="left:${pos(a)}%;width:${pos(z - a)}%;background:${GRUPPEFARVE[b.gruppe] || GRUPPEFARVE[UKAT]}"></i>`;
+  }).join("");
+  const linjer = [4, 8, 12, 16, 20].map(h => `<span class="lin" style="left:${pos(h)}%"></span>`).join("");
+  const sen = `<span class="sen" style="left:${pos(timeTal(d.sen_fra, skift))}%"></span>`;
+  const oplaest = xs.length ? xs.map(b => `${kl(b.start)} til ${kl(b.slut)} ${b.kategori}`).join(", ") : "intet forløb";
+  return `${label}<div class="fl-spor${xs.length ? "" : " tom"}" role="img" aria-label="${esc(`${weekday(dt)} ${dayMonth(dt)}: ${oplaest}`)}">${linjer}${sen}${blokke}</div><div class="fl-t">${timer(x.timer)}</div>`;
+}
+
+function forloebPanel(d, dage) {
+  const xs = dage.filter(x => x.forloeb).reverse();
+  if (!xs.length) return "";
+  const [sh] = d.doegn_skifter.split(":").map(Number);
+  const akse = [0, 4, 8, 12, 16, 20, 24].map(h => `<span style="left:${pos(h)}%">${String((sh + h) % 24).padStart(2, "0")}</span>`).join("");
+  const blok = ys => `<div class="fl">${ys.map(x => forloebRaekke(x, d)).join("")}<span></span><div class="fl-akse">${akse}</div><span></span></div>`;
+  const legend = `<div class="legend">${Object.entries(GRUPPEFARVE).map(([g, c]) => `<span><i style="background:${c}"></i>${g}</span>`).join("")}<span><i style="background:repeating-linear-gradient(135deg, transparent 0 3px, var(--text-subdued) 3px 4px)"></i>Sen skærmtid</span></div>`;
+  return `<section class="card panel"><div class="panel-head"><h2>Dagens forløb</h2><span class="meta">de seneste ${Math.min(FL_DAGE, xs.length)} døgn</span></div>
+    ${blok(xs.slice(0, FL_DAGE))}
+    ${xs.length > FL_DAGE ? `<details data-fold="forloeb"${aabne.has("forloeb") ? " open" : ""} style="margin-top:14px"><summary class="meta">De ${xs.length - FL_DAGE} døgn før</summary><div style="margin-top:10px">${blok(xs.slice(FL_DAGE))}</div></details>` : ""}
+    ${legend}
+    <p class="meta" style="margin:10px 0 0">Hvert kvarter med mindst 5 minutters skærmtid får sin største kategori; nabokvarterer med samme kategori er lagt sammen. Kortere tjek på telefonen ses derfor ikke her, men i Dag for dag. Peg på en blok for at se kategorien.</p></section>`;
+}
+
+// Tippet for én blok i Dagens forløb, i samme boks som graferne (.chart-tip)
+let flTip;
+function visFlTip(el, ev) {
+  if (!flTip) { flTip = document.createElement("div"); flTip.className = "chart-tip"; document.body.appendChild(flTip); }
+  const [dag, tid, kat, grp] = el.dataset.tip.split("|");
+  flTip.innerHTML = `<div class="th">${esc(dag)} · ${esc(tid)}</div><div><b>${esc(kat)}</b>${kat !== grp ? ` · ${esc(grp)}` : ""}</div>`;
+  flTip.style.opacity = "1";
+  const w = flTip.offsetWidth, h = flTip.offsetHeight;
+  let x = ev.clientX + 14, y = ev.clientY - h - 10;
+  if (x + w > innerWidth - 8) x = ev.clientX - w - 14;
+  if (y < 8) y = ev.clientY + 14;
+  flTip.style.left = x + "px"; flTip.style.top = y + "px";
+}
+
+// Tippet for én dag: dato og i alt øverst, enheder og grupper i hver sin kolonne, største først, og telefonens tjek
+// nederst. Mellemrummet mellem navn og tal er med, så skærmlæseren (chart.js læser tippets tekst op) siger "Mac 4,2 t".
+function dagTip(dt, x, enh, grp) {
+  const kolonne = (titel, xs) => `<div><div class="tt-h">${titel}</div>${xs.map(([n, t]) =>
+    `<div class="tt-r${n === "Ukategoriseret" ? " dim" : ""}"><span>${esc(n)}</span> <b>${timer(t)}</b></div>`).join("")}</div>`;
+  return `<div class="th">${weekday(dt)} ${dayMonth(dt)}</div>` +
+    `<div class="tt-sum"><b>${timer(x.timer)}</b> i alt · sen ${timer(x.sen_timer)}` +
+    (x.samtidig_timer ? `<br><span class="meta">heraf ${timer(x.samtidig_timer)} på flere enheder på én gang; enhederne viser hver deres fulde tid</span>` : "") + `</div>` +
+    (enh.length ? `<div class="tt">${kolonne("Enheder", enh)}${grp.length ? kolonne("Grupper", grp) : ""}</div>` : "<div>ingen data</div>") +
+    (x.tjek ? `<div class="tt-fod">Telefon: ${x.tjek.korte} korte tjek · ${x.tjek.oplaasninger} oplåsninger</div>` : "");
+}
+
+// ── Enhederne: enhedsside i skaermtid.json ────────────────────────────────────────────────────────────────
+// Enhederne har data fra forskellige dage, så hver enhed måles pr. hel dag med data, og det, der sammenligner
+// dem, bruger kun fælles hele dage. Alt er regnet af skaermtid.py.
+const VISNINGER = [["timer", "Timer"], ["andel", "Andel"]];
+const foreloebig = n => n < S.foreloebig_under ? `<span class="badge forel" title="Bygger på ${n} ${n === 1 ? "hel dag" : "hele dage"}; tallene bliver først retvisende efter ${S.foreloebig_under}">foreløbig</span>` : "";
+
+// En stablet bjælke: [{navn, timer, andel, farve}]
+function stak(dele) {
+  return `<div class="stak" role="img" aria-label="${esc(dele.map(x => `${x.navn} ${andel(x.andel)}`).join(", "))}">
+    ${dele.map(x => `<i style="flex:${x.andel};background:${x.farve}" title="${esc(x.navn)}: ${timer(x.timer)} (${andel(x.andel)})"></i>`).join("")}</div>`;
+}
+const gruppedele = (timerMap, andelMap) => S.grupper.filter(g => timerMap[g]).map(g => ({ navn: g, timer: timerMap[g], andel: andelMap[g], farve: GRUPPEFARVE[g] || GRUPPEFARVE[UKAT] }));
+const andeleListe = dele => `<div class="andele">${dele.map(x => `<span><i style="background:${x.farve}"></i>${esc(x.navn)} <b>${andel(x.andel)}</b> · ${timer(x.timer)}</span>`).join("")}</div>`;
+
+// Værdien en enhed måles med: timer i dag, ellers timer pr. hel dag (None uden hele dage)
+const maal = p => valgt === "idag" ? p.timer : p.pr_dag;
+const grpMaal = p => valgt === "idag" ? p.grupper : p.grupper_pr_dag;
+const enhFarve = e => ENHEDSFARVE[Math.max(0, DOC.enheder.findIndex(x => x.navn === e.navn)) % ENHEDSFARVE.length];
+
+function infoLinje(e, p) {
+  const dele = gruppedele(p.grupper, p.andele);
+  return `<div class="gr-info">${andeleListe(dele)}${p.top.length ? `<div class="top">Mest brugt: ${p.top.map(x => `<b>${esc(x.navn)}</b> ${timer(x.timer)}`).join(" · ")}</div>` : ""}</div>`;
+}
+
+function hvadPanel() {
+  const vseg = VISNINGER.map(([k, l]) => `<button aria-pressed="${k === visning}" data-v="${k}">${l}</button>`).join("");
+  const enh = S.enheder.map(e => ({ e, p: e.perioder[valgt] })).filter(x => x.p.timer);
+  const med = enh.filter(x => maal(x.p) != null).sort((a, b) => maal(b.p) - maal(a.p));
+  const uden = enh.filter(x => maal(x.p) == null);
+  const enhed = valgt === "idag" ? "timer i dag indtil nu" : "timer pr. hel dag med data";
+  let krop;
+
+  if (!enh.length) krop = `<div class="empty">Ingen skærmtid i perioden.</div>`;
+  else {
+    const max = Math.max(...med.map(x => maal(x.p)), 1e-9);
+    const rk = med.map(x => {
+      const g = visning === "andel" ? x.p.grupper : grpMaal(x.p);
+      const dele = S.grupper.filter(n => g[n]).map(n => ({ navn: n, timer: g[n], farve: GRUPPEFARVE[n] }));
+      const bredde = visning === "andel" ? 100 : maal(x.p) / max * 100;
+      const dage = valgt === "idag" ? "" : `<small>${x.p.hele_dage} ${x.p.hele_dage === 1 ? "hel dag" : "hele dage"}</small>`;
+      return `<div class="gr"><div class="n">${esc(x.e.navn)}${dage}</div>
+        <div class="spor"><div class="fyld" style="width:${bredde.toFixed(1)}%">${dele.map(d => `<i class="seg-i" tabindex="0" data-e="${esc(x.e.navn)}" data-g="${esc(d.navn)}" style="flex:${d.timer};background:${d.farve}"></i>`).join("")}</div></div>
+        <div class="v">${timer(maal(x.p))}</div></div>`;
+    }).join("");
+    const tom = uden.map(x => `<div class="gr tom"><div class="n">${esc(x.e.navn)}</div><div class="spor">ingen hele dage endnu (${timer(x.p.timer)} i alt i perioden)</div><div class="v"></div></div>`).join("");
+    krop = `<div class="graf">${rk}${tom}</div>
+      <div class="legend">${S.grupper.map(n => `<span><i style="background:${GRUPPEFARVE[n]}"></i>${esc(n)}</span>`).join("")}</div>
+      <details style="margin-top:12px"><summary>Detaljer pr. enhed</summary><div style="display:grid;gap:12px;margin-top:10px">
+        ${enh.map(x => `<div><b style="font-weight:600">${esc(x.e.navn)}</b> <span class="meta">${timer(x.p.timer)} i alt i perioden</span>${infoLinje(x.e, x.p).replace('class="gr-info"', 'class="gr-info" style="margin:4px 0 0"')}</div>`).join("")}
+      </div></details>`;
+  }
+  const faa = med.some(x => valgt !== "idag" && x.p.hele_dage < S.foreloebig_under);
+  return `<div class="panel-head"><h2>Hvad du bruger hver enhed til</h2><div class="vis"><div class="seg">${vseg}</div>${periodeValg()}</div></div>
+    <p class="meta" style="margin:-4px 0 12px">${visning === "andel" ? "Hver bjælke er hele enhedens tid, delt i grupperne." : `Bjælkerne står på samme akse: ${enhed}, delt i grupperne. Den længste er den mest brugte.`} Peg på en farve for at se kategorierne.${faa ? " Enheder med under " + S.foreloebig_under + " hele dage er foreløbige." : ""}</p>
+    ${krop}`;
+}
+
+// Boksen med en gruppes kategorier for én enhed, når man peger på eller trykker på et stykke af en bjælke
+let tipEl;
+const gruppeAf = k => DOC.grupper.find(x => x.kategorier.includes(k))?.navn || UKAT;
+function visGruppe(el, ev) {
+  const e = S.enheder.find(x => x.navn === el.dataset.e), g = el.dataset.g, p = e.perioder[valgt];
+  const pr = visning !== "andel" && valgt !== "idag";
+  const kat = pr ? p.kategorier_pr_dag : p.kategorier;
+  const gruppetid = (pr ? p.grupper_pr_dag : p.grupper)[g];
+  const kats = Object.entries(kat).filter(([k]) => gruppeAf(k) === g);
+  if (!tipEl) { tipEl = document.createElement("div"); tipEl.className = "chart-tip"; tipEl.setAttribute("role", "tooltip"); document.body.appendChild(tipEl); }
+  tipEl.innerHTML = `<div class="th">${esc(e.navn)} · ${esc(g)}${pr ? " · pr. hel dag" : ""}</div><b>${timer(gruppetid)}</b>` +
+    (kats.length && g !== UKAT ? kats.map(([k, t]) => `<br>${esc(k)} <b>${timer(t)}</b>`).join("") : "");
+  tipEl.style.opacity = "1";
+  const r = el.getBoundingClientRect();
+  const x0 = ev?.clientX ?? r.left + r.width / 2, y0 = ev?.clientY ?? r.top;
+  const w = tipEl.offsetWidth, h = tipEl.offsetHeight;
+  let x = x0 + 14, y = y0 - h - 10;
+  if (x + w > innerWidth - 8) x = x0 - w - 14;
+  if (x < 8) x = 8;
+  if (y < 8) y = (ev?.clientY ?? r.bottom) + 14;
+  tipEl.style.left = x + "px"; tipEl.style.top = y + "px";
+  document.querySelectorAll(".seg-i.valgt").forEach(x => x.classList.remove("valgt"));
+  el.classList.add("valgt");
+}
+function skjulGruppe() {
+  if (tipEl) tipEl.style.opacity = "0";
+  document.querySelectorAll(".seg-i.valgt").forEach(x => x.classList.remove("valgt"));
+}
+
+function samtidigPanel() {
+  const f = S.faelles[valgt];
+  const head = `<div class="panel-head"><h2>Telefonen ved siden af computeren</h2><span class="meta">${valgt === "idag" ? "i dag indtil nu" : `${f.dage} fælles ${f.dage === 1 ? "hel dag" : "hele dage"}`}</span></div>`;
+  if (!f.dage) {
+    return head + `<div class="empty">Ingen fælles hele dage endnu i perioden: en dag, hvor både telefonen og en computer har data hele dagen. Den første kommer, når døgnet er slut kl. ${String(S.doegn_skifter_time).padStart(2, "0")}.00. Vælg <i>I dag</i> for at se dagen indtil nu.</div>`;
+  }
+  const s = f.samtidig;
+  const enh = S.enheder.filter(e => f.enheder[e.navn]).map(e => ({ navn: e.navn, timer: f.enheder[e.navn], andel: f.andele[e.navn], farve: enhFarve(e) }));
+  const tel = gruppedele(s.telefonens_grupper, s.telefonens_andele);
+  const comp = gruppedele(s.computerens_grupper, s.computerens_andele);
+  return head + `
+    <div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px"><span class="stor">${timer(s.timer)}</span>
+      <span class="meta">telefon, mens du var aktiv på en computer${s.andel_af_telefon != null ? ` · ${andel(s.andel_af_telefon)} af telefonens tid ${valgt === "idag" ? "i dag" : "de dage"}` : ""}</span>${valgt === "idag" ? "" : foreloebig(f.dage)}</div>
+    <div class="delt">
+      ${tel.length ? `<h3>Telefonen til</h3><div>${stak(tel)}${andeleListe(tel)}</div>` : ""}
+      ${comp.length ? `<h3>Computeren imens</h3><div>${stak(comp)}${andeleListe(comp)}</div>` : ""}
+      <h3>Enhederne de dage</h3><div>${stak(enh)}${andeleListe(enh)}</div>
+    </div>
+    <p class="meta" style="margin:10px 0 0">Samtidig tid står på begge enheder, men tæller én gang i alt. Den sidste bjælke bygger kun på de fælles dage.</p>`;
+}
+
+const to2 = h => String(h).padStart(2, "0");
+const tidsrum = h => `kl. ${to2(h)}–${to2((h + 1) % 24)}`;
+
+function doegnPanel() {
+  const start = S.doegn_skifter_time;
+  const timer24 = Array.from({ length: 24 }, (_, i) => (start + i) % 24);
+  const alle = S.enheder.flatMap(e => e.doegn.min_pr_time.filter(v => v != null));
+  const max = Math.max(1, ...alle);  // kun til farvestyrken og skalaen
+  const styrke = v => v ? (0.12 + 0.88 * v / max).toFixed(2) : 0;
+  const rk = S.enheder.map(e => {
+    const lbl = `<div class="lbl">${esc(e.navn)}<small>${e.doegn.dage} ${e.doegn.dage === 1 ? "dag" : "dage"}</small></div>`;
+    if (!e.doegn.dage) return lbl + `<div class="ingen">ingen hele dage endnu</div>`;
+    return lbl + timer24.map(h => {
+      const v = e.doegn.min_pr_time[h] || 0;
+      const tekst = `${e.navn} ${tidsrum(h)}: ${fmt(v, 0)} min pr. dag`;
+      return `<button class="c" data-tekst="${esc(tekst)}" title="${esc(tekst)}" aria-label="${esc(tekst)}"><i style="opacity:${styrke(v)}"></i><span>${v >= 1 ? fmt(v, 0) : ""}</span></button>`;
+    }).join("");
+  }).join("");
+  const akse = `<div></div>` + timer24.map(h => `<div class="t">${h}</div>`).join("");
+  const trin = [0, 0.25, 0.5, 0.75, 1].map(f => f * max);
+  const skala = `<div class="skala"><span>Farven er minutter pr. dag i den time:</span>
+    <span>0</span><span class="trin">${trin.map(v => `<span><i style="opacity:${styrke(v)}"></i></span>`).join("")}</span><span>${fmt(max, 0)} min</span></div>`;
+  const travl = S.enheder.filter(e => e.doegn.dage && e.doegn.travleste.length).map(e =>
+    `<div><b>${esc(e.navn)}</b> · ${fmt(e.doegn.min_pr_dag, 0)} min pr. dag · mest ${e.doegn.travleste.map(x => `${tidsrum(x.time)} (${fmt(x.min, 0)} min)`).join(", ")}</div>`).join("");
+  const faa = S.enheder.some(e => e.doegn.dage && e.doegn.dage < S.foreloebig_under);
+  return `<div class="panel-head"><h2>Døgnrytme</h2><span class="meta">de seneste 4 uger · fra døgnskiftet kl. ${start}</span></div>
+    <p class="meta" style="margin:-4px 0 12px">Hvornår på døgnet du bruger hver enhed. Hver celle er én klokketime, og tallet er, hvor mange minutter du i gennemsnit brugte enheden i den time på en hel dag. Peg eller tryk på en celle for at se den.</p>
+    <div class="hm" id="hm">${rk}${akse}</div>
+    <div class="hm-valgt" id="hm-valgt" aria-live="polite">&nbsp;</div>
+    ${skala}
+    ${travl ? `<div class="travl">${travl}</div>` : ""}
+    ${faa ? `<p class="meta" style="margin:10px 0 0">Rækker med under ${S.foreloebig_under} dage er foreløbige: en enkelt dag kan farve en hel time.</p>` : ""}`;
+}
+
+function visTime(c) {
+  document.querySelectorAll(".hm .c.valgt").forEach(x => x.classList.remove("valgt"));
+  if (!c) { $("hm-valgt").innerHTML = "&nbsp;"; return; }
+  c.classList.add("valgt");
+  const [navn, rest] = c.dataset.tekst.split(" kl. ");
+  $("hm-valgt").innerHTML = `<b>${esc(navn)}</b> kl. ${esc(rest)}`;
+}
+
+function ugerPanel() {
+  const dato = iso => iso ? dayMonth(parseDate(iso)) : "–";
+  const uger = S.uger.filter(u => Object.values(u.enheder).some(x => x.hele_dage)).reverse();
+  if (!uger.length) return `<div class="panel-head"><h2>Uge for uge</h2></div><div class="empty">Ingen hele dage endnu.</div>`;
+  return `<div class="panel-head"><h2>Uge for uge</h2><span class="meta">timer pr. hel dag med data · (antal hele dage)</span></div>
+    <div class="scroll"><table class="t"><thead><tr><th>Uge</th>${S.enheder.map(e => `<th class="num">${esc(e.navn)}</th>`).join("")}</tr></thead><tbody>
+    ${uger.map(u => `<tr><td>Uge ${weekNo(u.uge)} <span class="meta">${dato(u.mandag)}</span></td>${S.enheder.map(e => {
+      const x = u.enheder[e.navn];
+      return `<td class="num">${x?.pr_dag != null ? `${timer(x.pr_dag)} <small>(${x.hele_dage})</small>` : "–"}</td>`;
+    }).join("")}</tr>`).join("")}</tbody></table></div>`;
+}
+
+// ── valg og hentning ───────────────────────────────────────────────────────────
+function status(tekst, bad = false, fortryd = null) {
+  const el = $("status");
+  clearTimeout(statusTimer);
+  el.className = bad ? "bad" : "";
+  el.innerHTML = esc(tekst) + (fortryd ? ` <button class="fortryd" id="status-fortryd">Fortryd</button>` : "");
+  el.hidden = false;
+  if (fortryd) $("status-fortryd").onclick = () => { el.hidden = true; fortryd(); };
+  if (tekst !== "Gemmer …") statusTimer = setTimeout(() => { el.hidden = true; }, bad ? 12000 : 7000);
+}
+
+async function hent() {
+  const r = await fetch("skaermtid.json", { cache: "no-store" });
+  if (!r.ok) throw new Error(`skaermtid.json svarede ${r.status}`);
+  return r.json();
+}
+
+// Sender ét valg til Skærmtid-serveren, som gemmer det og bygger igen; så hentes de nye tal
+async function gem(x, handling, el) {
+  const body = { type: x.type, noegle: x.noegle, navn: x.navn };
+  if (handling === "ignorer") body.ignorer = true;
+  else if (handling === "fjern") body.fjern = true;
+  else body.kategori = handling.slice(2);
+  if (el) el.disabled = true;
+  status("Gemmer …");
+  let r = null, svar = null;
+  try {
+    r = await fetch("api/valg", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    svar = await r.json().catch(() => null);
+  } catch { r = null; }
+  if (!r || !r.ok) {
+    const why = !r || [502, 503, 504].includes(r.status)
+      ? "Skærmtid-serveren kører ikke. Genstart den med launchctl kickstart -k gui/$(id -u)/local.kompas.skaermtid"
+      : svar?.fejl || `Serveren svarede ${r.status}.`;
+    status(`Ikke gemt: ${x.navn}. ${why}`, true);
+    try { render(await hent()); } catch {}
+    return;
+  }
+  const tekst = body.ignorer ? `${x.navn} tæller ikke længere med.` : body.fjern ? `${x.navn} følger reglerne igen.`
+    : `${x.navn} tæller nu som ${body.kategori}.`;
+  const varValgt = x.kilde === "valg";
+  try { render(await hent()); } catch {}
+  if (!svar.bygget) status(`${tekst} Gemt, men siden kunne ikke bygges, fordi ActivityWatch ikke svarer. Valget slår igennem ved næste byg.`, true);
+  else status(tekst, false, varValgt || body.fjern ? null : () => gem(x, "fjern", null));
+}
+
+// toggle bobler ikke op, så den fanges på vej ned
+$("root").addEventListener("toggle", ev => {
+  const f = ev.target.dataset?.fold;
+  if (f && ev.target.open) aabne.add(f);
+  else if (f) aabne.delete(f);
+}, true);
+$("root").addEventListener("click", ev => {
+  const seg = ev.target.closest(".seg-i");
+  if (seg) { visGruppe(seg, ev); return; }
+  skjulGruppe();
+  const c = ev.target.closest(".hm .c");
+  if (c) { visTime(c); return; }
+  // Flisen "Ukategoriseret" springer ned til listen og folder den ud
+  if (ev.target.closest('a[href="#mangler"]')) { const m = $("mangler").querySelector("details"); if (m) m.open = true; return; }
+  const p = ev.target.closest("button[data-p]");
+  if (p) { valgt = p.dataset.p; visPeriode(); return; }
+  const v = ev.target.closest("button[data-v]");
+  if (v) { visning = v.dataset.v; $("enheder").innerHTML = hvadPanel(); return; }
+  const row = ev.target.closest("button.row");
+  if (row?.dataset.gruppe) { aabenGruppe = aabenGruppe === row.dataset.gruppe ? null : row.dataset.gruppe; aaben = null; $("kat").innerHTML = gruppePanel(); return; }
+  if (row?.dataset.kat) { aaben = aaben === row.dataset.kat ? null : row.dataset.kat; $("kat").innerHTML = gruppePanel(); return; }
+  const f = ev.target.closest("button[data-fjern]");
+  if (f) {
+    const v = DOC.valg[+f.dataset.fjern];
+    gem({ type: v.domaene ? "domaene" : "app", noegle: v.domaene || v.app, navn: v.navn || v.domaene || v.app, kilde: "valg" }, "fjern", f);
+  }
+});
+$("root").addEventListener("mouseover", ev => { const c = ev.target.closest(".hm .c"); if (c) visTime(c); });
+$("root").addEventListener("focusin", ev => {
+  const c = ev.target.closest(".hm .c");
+  if (c) visTime(c);
+  const el = ev.target.closest(".seg-i");
+  if (el) visGruppe(el);
+});
+$("root").addEventListener("focusout", ev => { if (ev.target.closest(".seg-i")) skjulGruppe(); });
+$("root").addEventListener("mousemove", ev => {
+  const b = ev.target.closest(".fl-spor i[data-tip]");
+  if (b) visFlTip(b, ev); else if (flTip) flTip.style.opacity = "0";
+  const el = ev.target.closest(".seg-i");
+  el ? visGruppe(el, ev) : skjulGruppe();
+});
+$("root").addEventListener("mouseleave", () => { if (flTip) flTip.style.opacity = "0"; skjulGruppe(); });
+document.addEventListener("scroll", skjulGruppe, { passive: true });
+$("root").addEventListener("change", ev => {
+  const sel = ev.target.closest("select[data-i]");
+  if (sel && sel.value) gem(ITEMS[+sel.dataset.i], sel.value, sel);
+});
+
+// Siden tegnes, efter at tallene er hentet, så et anker i adressen (fx #enheder) skal findes bagefter
+hent().then(d => { render(d); if (location.hash.length > 1) $(location.hash.slice(1))?.scrollIntoView(); },
+  e => { $("root").innerHTML = `<div class="card empty">${esc(e.message)}. Byg med <code>python3 ~/kompas/skaermtid/skaermtid.py byg</code>.</div>`; });
+</script>
+</body>
+</html>

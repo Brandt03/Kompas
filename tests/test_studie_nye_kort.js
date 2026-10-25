@@ -89,6 +89,7 @@ const hent = async sti => (await fetch(`http://127.0.0.1:${PORT}/studie/api${sti
     "gamma/genkald-uge36-36.md#3", "gamma/genkald-uge36-36.md#4",
   ]), vis(nye) + log);
   tjek("statistikken tæller de klar og de låste", r?.statistik.nye_klar === 10 && r?.statistik.nye_venter_paa_laesning === 1, vis(r?.statistik));
+  tjek("ulæste uger pr. fag: Alfa uge 38 venter med ét spørgsmål", vis(r?.statistik.ulaeste_uger) === vis([{ fag: "alfa", navn: "Alfa", uger: [38], spoergsmaal: 1 }]), vis(r?.statistik.ulaeste_uger));
 
   const drills = (r?.kort || []).filter(k => k.type === "drill").map(k => k.noegle);
   tjek("drills: kun det forkerte og det gættede bliver kort", vis(drills.sort()) === vis(["drill/kap01-test.js#forkert", "drill/kap01-test.js#gættede"]), vis(drills));

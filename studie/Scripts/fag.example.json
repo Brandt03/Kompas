@@ -1,6 +1,16 @@
 {
-  "_forklaring": "Eksempel med demoens tre opdigtede fag. Kopiér til semestermappens Scripts/fag.json og skriv dine egne fag. Koden i Scripts/ og siderne læser fagene herfra; et nyt semester er en ny fag.json. Datoer står i CLAUDE.md under \"Vigtige datoer\", eksamens- og arbejdsform i README.md under \"... trænes forskelligt\" (readme er rækkens navn i Fag-kolonnen). Felter: id (bruges i logs og nøgler; ændres ikke midt i et semester), kort (vises på siderne og står i Fag-kolonnen), alias (tidligere kortnavne, som ældre køreplaner og markeringer stadig bruger), navn, mappe, readme, fagnoter_overskrift (overskriften i køreplanen og fagnoterne starter med den), genkald, begreber (ekstra_kolonne og det tilhørende ekstra_spoergsmaal til begrebet), kode (mappen med drills og øvelser), afleveringer (mappe, præfiks som Opgave i Opgave 3, og navn), leetcode, eksamenstraening (form: skriftlig, kode eller mundtlig; note under sættene), forudsaetning (en frist af typen, der er forudsætning for eksamen), canvas (kurser og standardmappe), oevelse_navn (navnet på øvelsessæt fra Canvas), farve (valgfri; ellers efter rækkefølgen).",
+  "_forklaring": "Eksempel med demoens tre opdigtede fag. Kopiér til semestermappens Scripts/fag.json og skriv dine egne fag. Koden i Scripts/ og siderne læser fagene herfra; et nyt semester er en ny fag.json. Datoer står i CLAUDE.md under \"Vigtige datoer\", eksamens- og arbejdsform i README.md under \"... trænes forskelligt\" (readme er rækkens navn i Fag-kolonnen). Felter: id (bruges i logs og nøgler; ændres ikke midt i et semester), kort (vises på siderne og står i Fag-kolonnen), alias (tidligere kortnavne, som ældre køreplaner og markeringer stadig bruger), navn, mappe, readme, fagnoter_overskrift (overskriften i køreplanen og fagnoterne starter med den), genkald, begreber (ekstra_kolonne og det tilhørende ekstra_spoergsmaal til begrebet), kode (mappen med drills og øvelser), afleveringer (mappe, præfiks som Opgave i Opgave 3, og navn), leetcode, usb_noter (fagnoterne i Word er et tilladt hjælpemiddel til eksamen; de vises uge for uge på siden USB-noter, hvor du kan vurdere dem), eksamenstraening (form: skriftlig, kode eller mundtlig; note under sættene), forudsaetning (en frist af typen, der er forudsætning for eksamen), canvas (kurser og standardmappe), oevelse_navn (navnet på øvelsessæt fra Canvas), farve (valgfri; ellers efter rækkefølgen), kursuskode (kursets kode, som kalenderens undervisning har), studiemaal (øverst: dagsmål og medaljernes grænser i timer, til siden Selvstudie), arbejdsbyrde (kursusbeskrivelsens arbejdstimer: poster med navn, timer og om det er skemalagt undervisning, plus antal semestre kurset løber; til siden Selvstudie).",
   "semester": "Demosemester",
+  "studiemaal": {
+    "dag_timer": 2.5,
+    "gaelder": "alle dage",
+    "medaljer": {
+      "bronze": 2.5,
+      "soelv": 3.5,
+      "guld": 5
+    },
+    "_om": "Dine egne mål til siden Selvstudie: timers logget selvstudie om dagen og grænserne for dagens medalje."
+  },
   "fag": [
     {
       "id": "alfa",
@@ -31,6 +41,38 @@
           "standard": "Øvelser"
         }
       ],
+      "kursuskode": "KURS101",
+      "arbejdsbyrde": {
+        "kilde": "Alfa/Kursusbeskrivelse.pdf (Arbejdstimer)",
+        "semestre": 2,
+        "poster": [
+          {
+            "navn": "Forelæsninger",
+            "timer": 36,
+            "undervisning": true
+          },
+          {
+            "navn": "Øvelser",
+            "timer": 18,
+            "undervisning": true
+          },
+          {
+            "navn": "Læsning",
+            "timer": 70,
+            "undervisning": false
+          },
+          {
+            "navn": "Gruppeprojekt",
+            "timer": 45,
+            "undervisning": false
+          },
+          {
+            "navn": "Eksamen",
+            "timer": 35,
+            "undervisning": false
+          }
+        ]
+      },
       "oevelse_navn": "Exercise"
     },
     {
@@ -55,6 +97,38 @@
           "standard": "Forelæsninger"
         }
       ],
+      "kursuskode": "KURS102",
+      "arbejdsbyrde": {
+        "kilde": "Beta/Kursusbeskrivelse.pdf (Arbejdstimer)",
+        "semestre": 1,
+        "poster": [
+          {
+            "navn": "Forelæsninger",
+            "timer": 28,
+            "undervisning": true
+          },
+          {
+            "navn": "Holdtimer",
+            "timer": 24,
+            "undervisning": true
+          },
+          {
+            "navn": "Læsning",
+            "timer": 80,
+            "undervisning": false
+          },
+          {
+            "navn": "Skriftlige opgaver",
+            "timer": 40,
+            "undervisning": false
+          },
+          {
+            "navn": "Eksamen",
+            "timer": 30,
+            "undervisning": false
+          }
+        ]
+      },
       "oevelse_navn": "Exercise"
     },
     {
@@ -70,6 +144,7 @@
         "praefiks": "Opgave",
         "navn": "Afleveringer"
       },
+      "usb_noter": true,
       "eksamenstraening": {
         "form": "kode",
         "note": "Sættene er i samme format som prøven. Facit er en tjekliste over kravene, ikke en løsning: du retter din egen kode mod den. Bøger og noter er tilladt til prøven, så øv med dem ved hånden."
@@ -80,6 +155,38 @@
           "standard": null
         }
       ],
+      "kursuskode": "KURS103",
+      "arbejdsbyrde": {
+        "kilde": "Gamma/Kursusbeskrivelse.pdf (Arbejdstimer)",
+        "semestre": 1,
+        "poster": [
+          {
+            "navn": "Forelæsninger",
+            "timer": 24,
+            "undervisning": true
+          },
+          {
+            "navn": "Laboratorietimer",
+            "timer": 36,
+            "undervisning": true
+          },
+          {
+            "navn": "Programmering",
+            "timer": 75,
+            "undervisning": false
+          },
+          {
+            "navn": "Læsning",
+            "timer": 40,
+            "undervisning": false
+          },
+          {
+            "navn": "Eksamen",
+            "timer": 25,
+            "undervisning": false
+          }
+        ]
+      },
       "oevelse_navn": "Øvelsessæt"
     }
   ]

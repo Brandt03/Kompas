@@ -627,6 +627,72 @@ def _r(v, d=1):
     return round(float(v), d) if v is not None else None
 
 
+# Løb og svømning pr. periode, så siden Perioder kan stille dem op mod perioden før som styrken
+KONDITION = {
+    "loeb": ("running", "treadmill_running", "trail_running"),
+    "svoemning": ("lap_swimming", "open_water_swimming"),
+}
+
+
+def kondition(conn: sqlite3.Connection, start: str, slut: str) -> dict:
+    """Løb og svømning i perioden (begge datoer inklusive), eller None for en sport uden pas.
+
+    Tempoet er bevægelsestid (Garmins movingDuration, ellers hele varigheden) delt med distancen, så pauser
+    ved bassinkanten ikke tæller. Puls og kadence er vægtet med tiden, SWOLF med banerne. Løbets hurtigste
+    1 og 5 km er Garmins egne splits (fastestSplit_*), den bedste i perioden med datoen."""
+    ud = {}
+    for navn, sports in KONDITION.items():
+        rows = conn.execute(
+            f"SELECT date, duration_s, distance_m, avg_hr, raw FROM activities "
+            f"WHERE date BETWEEN ? AND ? AND sport IN ({','.join('?' * len(sports))}) ORDER BY start_local",
+            (start, slut, *sports),
+        ).fetchall()
+        if not rows:
+            ud[navn] = None
+            continue
+        pas = []
+        for r in rows:
+            try:
+                raw = json.loads(r["raw"] or "{}")
+            except ValueError:
+                raw = {}
+            pas.append((r, raw, raw.get("movingDuration") or r["duration_s"] or 0))
+
+        def vaegtet(felt, vaegt):
+            xs = [(v, w) for v, w in ((felt(r, raw), vaegt(r, raw, t)) for r, raw, t in pas) if v and w]
+            return sum(v * w for v, w in xs) / sum(w for _, w in xs) if xs else None
+
+        def hurtigst(noegle):
+            xs = [(raw[noegle], r["date"]) for r, raw, _ in pas if raw.get(noegle)]
+            return min(xs) if xs else (None, None)
+
+        dist = sum(r["distance_m"] or 0 for r, _, _ in pas)
+        tid = sum(t for r, _, t in pas if r["distance_m"])
+        laengst = max(pas, key=lambda x: x[0]["distance_m"] or 0)[0]
+        puls = vaegtet(lambda r, raw: r["avg_hr"], lambda r, raw, t: r["duration_s"])
+        d = {"pas": len(pas), "puls": _r(puls, 0), "laengste_dato": laengst["date"] if laengst["distance_m"] else None}
+        if navn == "loeb":
+            km1, km1_dato = hurtigst("fastestSplit_1000")
+            km5, km5_dato = hurtigst("fastestSplit_5000")
+            d |= {
+                "km": _r(dist / 1000, 1), "laengste_km": _r((laengst["distance_m"] or 0) / 1000, 1) or None,
+                "tempo_s_pr_km": round(tid / (dist / 1000)) if dist else None,
+                "kadence": _r(vaegtet(lambda r, raw: raw.get("averageRunningCadenceInStepsPerMinute"),
+                                      lambda r, raw, t: t), 0),
+                "hurtigste_1km_s": round(km1) if km1 else None, "hurtigste_1km_dato": km1_dato,
+                "hurtigste_5km_s": round(km5) if km5 else None, "hurtigste_5km_dato": km5_dato,
+            }
+        else:
+            # Garmins fastestSplit_100 kan være langsommere end hele turens tempo i bassin, så den er ikke med
+            d |= {
+                "m": round(dist), "laengste_m": round(laengst["distance_m"] or 0) or None,
+                "tempo_s_pr_100m": round(tid / (dist / 100)) if dist else None,
+                "swolf": _r(vaegtet(lambda r, raw: raw.get("averageSwolf"), lambda r, raw, t: raw.get("activeLengths")), 0),
+            }
+        ud[navn] = d
+    return ud
+
+
 def periode_rapport(conn: sqlite3.Connection, start: str, slut: str) -> dict:
     """Alle tal til én periode på siden Form & Fokus, begge datoer inklusive.
 
@@ -832,8 +898,8 @@ def periode_rapport(conn: sqlite3.Connection, start: str, slut: str) -> dict:
 
     return {
         "start": S, "slut": E, "dage_med_data": dage,
-        "sundhed": sundhed, "traening": traening, "styrke": styrke, "studie": studie,
-        "forbehold": forbehold,
+        "sundhed": sundhed, "traening": traening, "styrke": styrke, "kondition": kondition(conn, S, E),
+        "studie": studie, "forbehold": forbehold,
     }
 
 

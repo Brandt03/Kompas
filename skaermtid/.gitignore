@@ -1,0 +1,7 @@
+.DS_Store
+__pycache__/
+# Personlige: dine enheder, regler og valg. Uden dem bruges regler.example.json og valg.example.json.
+regler.json
+valg.json
+# Rutinens ugentlige gennemgange
+rapporter/

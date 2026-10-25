@@ -44,6 +44,10 @@ def _ssl_context() -> ssl.SSLContext:
 _SSL = _ssl_context()
 
 
+# Står i beskrivelsen på de blokke, Claude lægger i kalenderen efter en studieplan, så de kan findes og
+# erstattes, og så overblik kan skelne dem fra dine andre aftaler.
+PLAN_MAERKE = "#kompas-plan"
+
 _URL = re.compile(r"(?:https?|webcal)://[^\s'\"<>()]+", re.IGNORECASE)
 
 
@@ -186,6 +190,7 @@ def sync_calendar(conn: sqlite3.Connection, days_back: int = 14, days_ahead: int
                 "summary": summary,
                 "all_day": 1 if all_day else 0,
                 "kalender": kalender,
+                "plan_blok": 1 if PLAN_MAERKE in str(event.get("DESCRIPTION", "")) else 0,
             },
             pk=["uid", "start_local"],
         )

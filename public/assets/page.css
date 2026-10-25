@@ -35,8 +35,9 @@ ul.list li { position: relative; padding-left: 16px; color: var(--text-secondary
 ul.list li::before { content: ""; position: absolute; left: 2px; top: .62em; width: 5px; height: 5px; border-radius: 50%; background: var(--text-subdued); }
 ul.list li b { color: var(--text-primary); font-weight: 500; }
 
-.seg { display: inline-flex; background: var(--surface-inset); border-radius: 10px; padding: 3px; gap: 2px; }
-.seg button { border: 0; background: none; font: inherit; font-size: 13px; color: var(--text-secondary); padding: 6px 12px; border-radius: 8px; cursor: pointer; }
+/* Knapperne brækker aldrig; er der ikke plads til dem alle, ruller segmentet vandret inde i sig selv */
+.seg { display: inline-flex; max-width: 100%; overflow-x: auto; background: var(--surface-inset); border-radius: 10px; padding: 3px; gap: 2px; }
+.seg button { flex: none; white-space: nowrap; border: 0; background: none; font: inherit; font-size: 13px; color: var(--text-secondary); padding: 6px 12px; border-radius: 8px; cursor: pointer; }
 .seg button[aria-pressed="true"] { background: var(--container); color: var(--text-primary); font-weight: 500; box-shadow: var(--shadow-border-xs); }
 
 .empty { color: var(--text-secondary); padding: 28px 20px; text-align: center; }
@@ -47,9 +48,20 @@ details[open] summary { margin-bottom: 10px; }
 
 @media (max-width: 760px) {
   .wrap { padding: 20px 16px 48px; }
+  /* Overskriften og det ved siden af (meta, link, segment) deler ikke en smal linje: det til højre går ned under */
+  .panel-head { flex-wrap: wrap; row-gap: 8px; }
   .cols { grid-template-columns: minmax(0, 1fr); }
   .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .tile .value { font-size: 20px; }
+}
+
+/* Trykskærm: alt, der kan trykkes på, er mindst 44 px. Knapper og menupunkter bliver selv så høje; links og badges
+   beholder deres udseende og får en usynlig flade rundt om sig. Med mus og pegeplade ændres intet. */
+@media (hover: none) and (pointer: coarse) {
+  .item, .btn, .seg button { min-height: 44px; }
+  .icon-btn { min-width: 44px; min-height: 44px; }
+  .link, a.badge { position: relative; }
+  .link::after, a.badge::after { content: ""; position: absolute; left: 50%; top: 50%; width: max(100%, 44px); height: max(100%, 44px); transform: translate(-50%, -50%); }
 }
 
 /* charts (chart.js) – one series in Sure's blue, recessive grid */
@@ -69,6 +81,10 @@ svg.chart .line2 { fill: none; stroke: var(--c4); stroke-width: 1.25; stroke-das
 svg.chart .noegle { fill: var(--text-secondary); }
 svg.chart .cross { stroke: var(--text-subdued); }
 svg.chart .hit { fill: transparent; }
+svg.chart .celle:hover { stroke: var(--text-primary); stroke-width: 1; }
+svg.chart .spaen { fill: var(--text-primary); opacity: .07; }
+.chart-key { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0 0 6px; font-size: 12px; color: var(--text-secondary); }
+.chart-key span { display: inline-flex; align-items: center; gap: 6px; }
 svg.chart:focus { outline: none; }
 svg.chart:focus-visible { outline: 2px solid var(--mark); outline-offset: 4px; border-radius: 6px; }
 .chart-tip {

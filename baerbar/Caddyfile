@@ -1,0 +1,63 @@
+# Kompas på bærbaren: http://kompas.localhost:8780
+# Skabelonen ligger i ~/kompas/baerbar på Mac'en; bin/kopi.py sætter Mac'ens adresse ind og lægger den i
+# ~/KompasKopi/baerbar, som Syncthing sender hertil. Ret skabelonen, ikke kopien. Caddy læser filen igen, når den
+# ændrer sig (--watch i kompas-kopi.service).
+#
+# Svarer Mac'en, sendes alt videre til den, og det er det levende Kompas: alt kan gemmes. Svarer den ikke (sover,
+# er slukket eller uden net), viser Caddy kopien i ~/KompasKopi/site, og intet kan gemmes.
+{
+	admin 127.0.0.1:2029
+	auto_https off
+	persist_config off
+}
+
+# Kun dette navn og kun denne maskine. Kopien har økonomital, studienoter og helbredstal, så en fremmed side, der
+# peger sit eget domæne på 127.0.0.1, må ikke kunne læse den.
+http://kompas.localhost:8780 {
+	bind 127.0.0.1 [::1]
+
+	reverse_proxy {{OPSTROEM}} {
+		# Mac'en kender kun sit eget navn: Host og Origin skal være dens, ellers afviser serverne kaldet.
+		# Origin skiftes kun, når den er denne sides, så en fremmed side aldrig får Mac'ens origin.
+		header_up Host {{MAC}}
+		header_up Origin http://kompas.localhost:8780 https://{{MAC}}
+		header_down Location https://{{MAC}} http://kompas.localhost:8780
+		health_uri /kompas/projekter.json
+		health_headers {
+			Host {{MAC}}
+		}
+		health_interval 10s
+		health_timeout 3s
+		fail_duration 15s
+		transport http {
+			dial_timeout 3s
+		}
+	}
+
+	# Mac'en svarer ikke: kopien
+	handle_errors {
+		@skriv not method GET HEAD
+		handle @skriv {
+			header Content-Type "application/json; charset=utf-8"
+			respond `{"fejl": "Mac'en svarer ikke. Kopien på bærbaren kan kun læses; det gemmes ikke. Prøv igen, når Mac'en er tændt."}` 503
+		}
+		handle {
+			root * {$HOME}/KompasKopi/site
+			header Cache-Control "no-store"
+			@api {
+				path /studie/api/* /sprog/api/*
+				not path /studie/api/pensum/*
+			}
+			header @api Content-Type "application/json; charset=utf-8"
+			rewrite / /kompas/shell.html
+			# Sures egne sider kommer fra Sure på Mac'en og er ikke med
+			respond /up 503
+			@sure not path / /up /kompas /kompas/* /studie /studie/* /sprog /sprog/* /form /form/* /forbrug /forbrug/* /skaermtid /skaermtid/*
+			rewrite @sure /kompas/kun-paa-mac.html
+			# Fejlhåndteringen beholder ellers fejlens kode (502/503), og så tror siderne, at kaldet fejlede
+			file_server {
+				status 200
+			}
+		}
+	}
+}

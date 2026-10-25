@@ -653,9 +653,9 @@ except ValueError:
     pass
 out = Path(tempfile.mkdtemp())
 res = site.byg(conn, out)
-assert res["perioder"] == 1 and (out / "index.html").stat().st_size > 10000
+assert res["perioder"] == 1 and "perioder.html" in (out / "index.html").read_text()  # /form/ sender videre
 assert json.loads((out / "perioder.json").read_text())[0]["vurdering"]["resume"] == "God periode."
-assert json.loads((out / "maaneder.json").read_text())[-1].get("igangvaerende")
+assert not (out / "maaneder.json").exists() and (out / "kroppen.json").exists()
 assert "claude.use" not in (out / "index.html").read_text()
 sider = {x["sti"]: x for x in json.loads((out / "kompas.json").read_text())["sider"]}
 assert sider["/form/perioder.html"]["nyt"] == S1 and "nyt" not in sider["/form/uge.html"]  # ingen liv.json her

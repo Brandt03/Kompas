@@ -18,6 +18,7 @@
   .tekst { font-size: 15px; line-height: 1.6; }
   .svar { white-space: pre-wrap; font-size: 14px; line-height: 1.55; color: var(--text-secondary); background: var(--surface-inset); border-radius: 10px; padding: 12px 14px; }
   .lbl { font-size: 12px; font-weight: 600; color: var(--text-secondary); margin: 14px 0 6px; }
+  details.dit { margin-top: 12px; }
 </style>
 </head>
 <body>
@@ -52,7 +53,16 @@ async function hent() {
   document.getElementById("sub").textContent = `${aktivt.navn} er det aktive sprog · rutinen Kompas · Sprog skriver nye kort og ugens tekst søndag aften`;
   const n = P.kort.length, test = P.kort.filter(k => k.type === "test").length, t = P.tekster[0];
   const intet = !Object.values(stat).some(x => x.i_alt || x.test_i_alt);
+  // Feedbacken på ugen før kommer sammen med den nye tekst; serveren siger, hvornår den skal stå forrest (ny_feedback)
+  const f = P.ny_feedback && P.tekster.find(x => x.uge === P.ny_feedback.uge && x.feedback);
+  // Et sprog på pause (eller uden nye kort om dagen) får ingen nye kort, så antallet, der venter, siger ingenting
+  const pause = s => s.rolle === "pause" || !s.nye_pr_dag;
   root.innerHTML = `
+    ${f ? `<section class="card panel">
+      <div class="panel-head"><h2>Feedback på dit svar til uge ${+f.uge.slice(-2)}</h2><span class="meta">${esc(f.titel)} · fra rutinen ${esc(dayMonth(new Date(f.feedback.skrevet)).replace(/\.$/, ""))}</span></div>
+      <div class="md">${md(f.feedback.tekst)}</div>
+      ${f.svar ? `<details class="dit"><summary>Dit svar</summary><div class="svar">${esc(f.svar.tekst)}</div></details>` : ""}
+    </section>` : ""}
     <section class="card idag">
       <div class="big">${n}</div>
       <div class="what">${n ? `kort i dag · ca. ${P.statistik.minutter} min` : intet ? "Ingen kort endnu" : "Ingen kort tilbage i dag"}
@@ -62,7 +72,7 @@ async function hent() {
     <div class="tiles">${orden.map(id => { const s = P.sprog[id], x = stat[id]; return `
       <div class="card tile"><div class="area">${esc(ROLLE[s.rolle] || s.rolle)}</div><div class="label">${esc(s.navn)}${s.niveau ? ` · ${esc(s.niveau)}` : ""}</div>
         <div class="value">${x.laert}<small>af ${x.i_alt} lært</small></div>
-        <div class="foot">${s.niveau ? "" : x.test_tilbage ? `<span class="badge">niveautest i gang</span>` : s.rolle === "studie" ? "" : `<span class="badge">niveau ikke sat</span>`}${x.forfaldne ? `<span>${x.forfaldne} forfaldne</span>` : ""}${x.nye_venter ? `<span>${x.nye_venter} ${x.nye_venter === 1 ? "nyt venter" : "nye venter"}</span>` : ""}</div></div>`; }).join("")}</div>
+        <div class="foot">${s.niveau ? "" : x.test_tilbage ? `<span class="badge">niveautest i gang</span>` : s.rolle === "studie" ? "" : `<span class="badge">niveau ikke sat</span>`}${x.forfaldne ? `<span>${x.forfaldne} forfaldne</span>` : ""}${x.nye_venter ? `<span>${pause(s) ? "nye kort på pause" : `${x.nye_venter} ${x.nye_venter === 1 ? "nyt venter" : "nye venter"}`}</span>` : ""}</div></div>`; }).join("")}</div>
     ${t ? `<section class="card panel">
       <div class="panel-head"><h2>Ugens tekst · uge ${+t.uge.slice(-2)}</h2><span class="meta">${esc(P.sprog[t.sprog]?.navn || t.sprog)}${t.niveau ? ` · ${esc(t.niveau)}` : ""}</span></div>
       <h3 style="margin:0 0 8px;font-size:17px">${esc(t.titel)}</h3>

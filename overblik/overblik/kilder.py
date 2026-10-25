@@ -92,6 +92,10 @@ KATEGORIER = {
     "Dagligvarer": "dagligvarer_kr",
 }
 UDEN_FOR_VARIABELT = {"Deling med venner"}
+# Netto for kategorien, men aldrig under 0: MobilePay tilbage fra en ven for ugens køb trækkes fra, men er
+# tilbagebetalingen større end ugens køb, hører resten til en anden uges udgift (som refusionerne i variabelt_kr)
+# og må ikke gøre ugen negativ.
+IKKE_NEGATIV = {"takeaway_kr", "cafe_bar_kr"}
 
 
 def oekonomi(fra: date) -> tuple[dict, str | None]:
@@ -127,7 +131,7 @@ def oekonomi(fra: date) -> tuple[dict, str | None]:
 
     for uge in ud.values():
         for k, v in uge.items():
-            uge[k] = round(v)
+            uge[k] = round(max(v, 0.0) if k in IKKE_NEGATIV else v)
     return ud, synk
 
 

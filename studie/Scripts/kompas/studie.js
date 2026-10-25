@@ -26,13 +26,25 @@ function visUge(nu = new Date()) {
   return { mandag: `${m.getFullYear()}-${to(m.getMonth() + 1)}-${to(m.getDate())}`,
     uge: Math.ceil(((tor - Date.UTC(tor.getUTCFullYear(), 0, 1)) / 864e5 + 1) / 7), naeste };
 }
+// Køreplanen til en uge (planer fra studie.json). I weekenden åbner siderne på næste uge, men dens køreplan skriver
+// Studie-rutinen først søndag kl. 18; til den findes, viser Ugeoverblik og Fag sidste uges med mærket SIDSTE_UGES.
+// { plan, sidste: true, når planen er sidste uges i stedet for ugens }
+const SIDSTE_UGES = "sidste uges køreplan · ny kommer søndag kl. 18";
+function koereplan(planer = [], uge, v = visUge()) {
+  const plan = planer.find(p => p.uge === uge) || null;
+  if (plan || !v.naeste || uge !== v.uge) return { plan, sidste: false };
+  const [a, m, d] = v.mandag.split("-").map(Number), f = new Date(a, m - 1, d - 7), to = n => String(n).padStart(2, "0");
+  const forrige = planer.find(p => p.fra === `${f.getFullYear()}-${to(f.getMonth() + 1)}-${to(f.getDate())}`) || null;
+  return { plan: forrige, sidste: !!forrige };
+}
 // Calendar titles and the plans name the courses slightly differently; the first word is stable.
 const forsteOrd = s => String(s).split(" ")[0].toLowerCase();
 const fagId = navn => FAG.find(f => forsteOrd(f.navn) === forsteOrd(navn))?.id || "";
 
 // På telefonen (gennem Tailscale, se mobil.html) er siderne en del af På farten: en linje tilbage øverst,
-// og en service worker, så de også kan åbnes uden net. På Mac'en (kompas.localhost) sker ingenting af det.
-const paaTelefon = !/(^|\.)localhost$/.test(location.hostname);
+// og en service worker, så de også kan åbnes uden net. På Mac'en (kompas.localhost) og på bærbaren (Tailscale-adressen
+// med :8443, hele Kompas) sker ingenting af det; telefonens adresse har ingen port.
+const paaTelefon = !/(^|\.)localhost$/.test(location.hostname) && !location.port;
 if (paaTelefon) {
   const tilbage = () => document.body.insertAdjacentHTML("afterbegin", `<a href="/studie/mobil.html#overblik" style="display:block;padding:12px 16px 0;font-size:14px;color:var(--text-secondary);text-decoration:none">‹ På farten</a>`);
   document.body ? tilbage() : document.addEventListener("DOMContentLoaded", tilbage);

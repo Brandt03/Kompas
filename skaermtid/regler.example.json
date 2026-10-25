@@ -1,0 +1,86 @@
+{
+  "_om": "Eksempel. Kopiér til regler.json (som ikke ligger i git) og ret enhederne til dine egne værtsnavne. Kategorier og enheder for Skærmtid. Den første regel, der passer, bestemmer kategorien: først prøves alle regler med `app`, `domaene` eller `sti`, i rækkefølge, så reglerne med `titel` alene. Hver regel er et eller flere mønstre (regulære udtryk, uden forskel på store og små bogstaver), som alle skal passe: `app` mod programmets navn (Mac: 'Microsoft Edge', Windows: 'msedge.exe', Android: pakkenavnet eller appens navn), `domaene` mod hjemmesidens vært (kræver ActivityWatch' browserudvidelse), `sti` mod resten af adressen efter værten, og `titel` mod vinduets titel, men kun når der ikke er en adresse. Titlerne forlader aldrig ActivityWatch; de bruges kun her til at matche. `ignorer` er programmer, der ikke er skærmtid (låseskærm, notifikationer, startmenu); de tælles slet ikke. `grupper` samler kategorierne til det, siden viser øverst (hver kategori i præcis én gruppe). `korte_tjek`: på telefonen tælles åbninger af apps i de kategorier, og hvor mange der var under `under_sek` sekunder. En regel med både `domaene` og `titel` kræver begge, også når adressen kendes (fx YouTube-videoer om CS50 som Studie). `enheder`: `slags` (`computer` eller `telefon`) afgør, om kun aktiv tid tæller (computer: kræver afk-data, ellers tæller den ikke, og siden siger det) eller al tid med skærmen tændt (telefon, hvor også korte tjek tælles); `vaert` er ActivityWatch' værtsnavn, ét eller en liste, for aw-sync giver en synkroniseret enheds vinduer dens værtsnavn (små bogstaver) og dens browserfaner og telefonens app dens enheds-id; en vært, der ikke står her, vises som ukendt enhed; `sjaelden`: true for en enhed, du sjældent bruger, så dage uden data ikke giver en advarsel.",
+  "doegn_skifter": "06:00",
+  "sen_fra": "23:00",
+  "enheder": [
+    {"navn": "Mac", "vaert": "macbook.local", "slags": "computer"},
+    {"navn": "Stationær", "vaert": ["pc-stue", "00000000-0000-4000-8000-0000000000a1"], "slags": "computer", "sjaelden": true},
+    {"navn": "Telefon", "vaert": ["telefon"], "slags": "telefon"},
+    {"navn": "Bærbar", "vaert": ["baerbar", "00000000-0000-4000-8000-0000000000b2"], "slags": "computer"}
+  ],
+  "browsere": "\\b(edge|msedge|chrome|chromium|safari|firefox|arc|brave|opera|vivaldi)\\b|com\\.android\\.chrome|com\\.microsoft\\.emmx|org\\.mozilla",
+  "ignorer": "^(loginwindow|usernotificationcenter|notificationcenter|dock|spotlight|screensaverengine|windowserver|lockapp\\.exe|searchhost\\.exe|startmenuexperiencehost\\.exe|shellexperiencehost\\.exe|com\\.android\\.systemui|com\\.android\\.launcher3?|com\\.google\\.android\\.apps\\.nexuslauncher)$",
+  "grupper": [
+    {"navn": "Produktiv", "kategorier": ["Studie", "Sprog", "Egne projekter", "Form & fokus", "Økonomi"]},
+    {"navn": "Passiv", "kategorier": ["Sociale medier", "Video & streaming", "Nyheder"]},
+    {"navn": "Gaming", "kategorier": ["Spil"]},
+    {"navn": "Praktisk", "kategorier": ["Kommunikation", "Hverdag", "Indkøb"]}
+  ],
+  "korte_tjek": {"under_sek": 60, "kategorier": ["Sociale medier", "Nyheder"]},
+  "kategorier": [
+    {"navn": "Studie", "regler": [
+      {"domaene": "(^|\\.)youtube\\.com$", "titel": "cs50|lecture|forelæsning|opencourseware|crash course|khan academy|3blue1brown|statquest|tutorial"},
+      {"app": "^(goodnotes|zotero|anki|microsoft onenote|onenote|com\\.goodnotes|com\\.instructure|com\\.ichi2\\.anki)"},
+      {"domaene": "(^|\\.)(instructure\\.com|scholar\\.google\\.com|khanacademy\\.org|coursera\\.org|edx\\.org)$|^moodle\\."},
+      {"domaene": "^kompas\\.localhost$", "sti": "/studie"},
+      {"titel": "canvas|moodle"}
+    ]},
+    {"navn": "Sprog", "regler": [
+      {"app": "duolingo"},
+      {"domaene": "duolingo\\.com"},
+      {"domaene": "^kompas\\.localhost$", "sti": "/sprog"},
+      {"titel": "duolingo"}
+    ]},
+    {"navn": "Økonomi", "regler": [
+      {"app": "mobilepay|netbank|mobile ?banking|\\bbank\\b"},
+      {"domaene": "(^|\\.)(mobilepay\\.dk|mitid\\.dk)$|(^|\\.)netbank\\."},
+      {"domaene": "^kompas\\.localhost$", "sti": "/(okonomi|forbrug|transactions|accounts|budgets|reports|#/okonomi|#/forbrug|#/transactions|#/accounts|#/budgets|#/reports)"},
+      {"titel": "mobilepay|netbank|sure"}
+    ]},
+    {"navn": "Form & fokus", "regler": [
+      {"app": "garmin|strava"},
+      {"domaene": "(^|\\.)(garmin\\.com|strava\\.com)$"},
+      {"domaene": "^kompas\\.localhost$", "sti": "/form"},
+      {"titel": "garmin|strava"}
+    ]},
+    {"navn": "Egne projekter", "regler": [
+      {"app": "^(claude|code|visual studio code|terminal|iterm2?|ghostty|com\\.anthropic\\.claude|cursor|windowsterminal|wt\\.exe)"},
+      {"domaene": "(^|\\.)(github\\.com|claude\\.ai|stackoverflow\\.com|developer\\.mozilla\\.org|kompas\\.localhost)$"},
+      {"titel": "github|claude|kompas"}
+    ]},
+    {"navn": "Kommunikation", "regler": [
+      {"app": "^(microsoft outlook|outlook|microsoft teams|teams|ms-teams|zoom|zoom\\.us|messages|beskeder|mail|facetime|messenger|whatsapp|signal|slack|com\\.facebook\\.orca|com\\.whatsapp|org\\.thoughtcrime\\.securesms|com\\.google\\.android\\.gm|com\\.google\\.android\\.apps\\.messaging)"},
+      {"domaene": "(^|\\.)(outlook\\.(com|live\\.com|office\\.com)|mail\\.google\\.com|teams\\.microsoft\\.com|messenger\\.com|web\\.whatsapp\\.com|app\\.slack\\.com)$"},
+      {"titel": "outlook|gmail|teams|messenger|whatsapp|slack"}
+    ]},
+    {"navn": "Sociale medier", "regler": [
+      {"app": "instagram|tiktok|snapchat|facebook|reddit|bereal|threads|mastodon|com\\.twitter\\.android|^x$"},
+      {"domaene": "(^|\\.)(instagram\\.com|facebook\\.com|tiktok\\.com|reddit\\.com|x\\.com|twitter\\.com|threads\\.net|bsky\\.app)$"},
+      {"titel": "instagram|tiktok|snapchat|facebook|reddit|bereal|threads"}
+    ]},
+    {"navn": "Video & streaming", "regler": [
+      {"app": "youtube|netflix|twitch|disney|\\bhbo\\b|^max$|com\\.google\\.android\\.youtube|com\\.netflix|tv\\.twitch\\.android"},
+      {"domaene": "(^|\\.)(youtube\\.com|youtu\\.be|netflix\\.com|twitch\\.tv|disneyplus\\.com|max\\.com)$"},
+      {"domaene": "(^|\\.)dr\\.dk$", "sti": "^/drtv"},
+      {"titel": "youtube|netflix|twitch"}
+    ]},
+    {"navn": "Spil", "regler": [
+      {"app": "steam|discord|minecraft|epic ?games|battle\\.net|com\\.discord|com\\.mojang"},
+      {"domaene": "(^|\\.)(discord\\.com|steampowered\\.com|steamcommunity\\.com)$"},
+      {"titel": "steam|discord|minecraft"}
+    ]},
+    {"navn": "Nyheder", "regler": [
+      {"app": "dr nyheder|tv 2 nyheder|google news|bbc news|dk\\.dr\\.drnyheder|bbc\\.mobile\\.news|com\\.google\\.android\\.apps\\.magazines"},
+      {"domaene": "(^|\\.)(dr\\.dk|tv2\\.dk|bbc\\.(com|co\\.uk)|theguardian\\.com|reuters\\.com|news\\.google\\.com)$"},
+      {"titel": "dr nyheder|tv 2 nyheder|bbc news"}
+    ]},
+    {"navn": "Indkøb", "regler": [
+      {"app": "\\b(dba|vinted|amazon|ikea)\\b|dk\\.dba\\.android|fr\\.vinted|com\\.amazon\\.mshop"},
+      {"domaene": "(^|\\.)(dba\\.dk|vinted\\.dk|amazon\\.(de|com|co\\.uk)|ikea\\.com|pricerunner\\.dk)$"}
+    ]},
+    {"navn": "Hverdag", "regler": [
+      {"app": "\\b(maps|kamera|camera|fotos|photos|gallery|spotify|filer|files|kalender|calendar|vejret|weather)\\b|^indstillinger$|^com\\.android\\.settings$|^system settings$|^systemindstillinger$"},
+      {"domaene": "(^|\\.)(maps\\.google\\.com|open\\.spotify\\.com|wikipedia\\.org|dmi\\.dk|yr\\.no|rejseplanen\\.dk)$"}
+    ]}
+  ]
+}

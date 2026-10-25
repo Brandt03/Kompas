@@ -53,8 +53,10 @@ virker derfor også, når Sure er lukket, med de seneste tal.
 ## Siderne
 - **Forbrug** (`index.html`): forbruget fordelt på grupper, kategorier eller modtagere for en måned, siden
   flytning, år til dato, 12 måneder eller alt, udviklingen pr. måned og posteringerne bag. Indtægter og opsparing
-  tæller ikke som forbrug, og refusioner trækker fra i deres egen kategori. Står en postering i den forkerte
-  kategori, kan den rettes direkte på siden.
+  tæller ikke som forbrug, og refusioner trækker fra i deres egen kategori. Søjlerne i udviklingen er delt som
+  fordelingen ovenfor, med samme farver (resten som Andet). Står en postering i den forkerte kategori, kan den rettes
+  direkte på siden. Panelet **Uge for uge** viser det variable forbrug for de seneste 12 uger, som Overblik har regnet
+  det til ugereviewet (`/form/liv.json`); siden regner ikke selv, og kan filen ikke læses, er panelet skjult.
 - **Scenarier**: 1.000 simulerede forløb af din formue, måned for måned, ud fra budgettet i Sure. Det variable
   forbrug svinger som i din egen historik, og du kan lægge job efter studiet, sabbatår, engangsudgifter, inflation,
   rente og investering ind. Siden finder også den mindste ekstra opsparing, der giver 80 % chance for at nå målet.
@@ -63,7 +65,9 @@ virker derfor også, når Sure er lukket, med de seneste tal.
 
 Scenarier og SU-vagt gemmer dine valg (trækprocent, lønsedler, scenarier) som `dashboard/public/state/<navn>.json`
 gennem `PUT /dashboard-state/<navn>` i Sure (fra `custom/dashboard_tabs.rb`, kræver at du er logget ind i Sure).
-Caddy viser filerne skrivebeskyttet på `/forbrug/state/`, så siderne kan læse dem, også når Sure er lukket. Svarer
+Caddy viser filerne skrivebeskyttet på `/forbrug/state/`, så siderne kan læse dem, også når Sure er lukket.
+Indtil noget er gemt, lægger `export.sh` en tom `{}` dér (siderne læser den som "intet gemt"), så browseren ikke
+logger en 404 ved hvert besøg; en fil, Sure har skrevet, erstattes aldrig. Svarer
 Sure ikke, gemmes ændringen i browseren, og et banner siger hvorfor (ikke logget ind, Sure lukket, intet net). Den
 sendes først til Sure, når du trykker "Prøv igen" eller "Gem på serveren"; lokale tal sendes aldrig af sig selv.
 
@@ -87,7 +91,7 @@ Programmerne **Kompas** og **Luk Kompas** (to små apps i `/Applications`) køre
 `bin/kompas-stop.sh`. De samler hele Kompas, ikke kun Sure:
 
 - **kompas-start.sh** starter Caddy (`brew services`), slår Kompas' baggrundsjob til igen (LaunchAgents
-  `local.kompas.studie`, `.sprog`, `.opdater` og Sures `local.sure.dashboard-export`), starter Colima og Sure,
+  `local.kompas.studie`, `.sprog`, `.skaermtid`, `.opdater` og Sures `local.sure.dashboard-export`), starter Colima og Sure,
   venter på at Sure svarer, beder Sure hente nye posteringer fra banken, laver et nyt udtræk (og igen to minutter
   senere, når banken er hentet, sammen med Excel-regnskaberne) og åbner `https://kompas.localhost/`. Hvert trin logges med tidspunkt i
   `dashboard/kompas-start.log`, så en start, der går i stå, kan ses bagefter.

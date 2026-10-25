@@ -37,6 +37,7 @@ En notes-fil er Python med en ordbog `WEEKS` (ugenummer → felter) og evt. `NEW
 | `uafklaret` | liste: `[EKS] …` for det, gamle sæt spørger om, `[?] …` for åbne spørgsmål |
 | `NEW_WEEKS` | `{12: "Uge 12 — emne"}` laver ugeblokken ud fra skabelonen, hvis den mangler |
 | `EKSAMEN` | `{label: [punkter]}` under Overskrift 1 `Eksamen`; kun i fagets eksempel, ikke i ugens fil |
+| `RESET_WEEKS` | `[12]` tømmer ugen og lægger skabelonens tomme blok ind, før den udfyldes forfra (efter en vurdering i USB-noter); det, der står under `I egne ord`, flyttes med uændret |
 
 `verify_prog.py` kræver `begreber`, `kode`, `fejl` og `uafklaret` i hver uge (tomme lister er nok).
 

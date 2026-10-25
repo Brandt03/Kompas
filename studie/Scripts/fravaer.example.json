@@ -1,0 +1,11 @@
+{
+ "_om": "Eksempel. Kopiér til fravaer.json. Undervisning, du ikke har brugt. Kalenderen kan ikke se fravær, så eksporten tæller ikke denne undervisning som brugt tid på siden Selvstudie. ikke_til_stede: uger, hvor du ikke var til stede (uden fag gælder ugen alle fag). bruges_ikke: slags undervisning, du aldrig går til, efter kalenderens art og form; de tæller ikke i nogen uge. Har du set en optagelse, logger du den som selvstudie.",
+ "ikke_til_stede": [
+  { "uge": 11 },
+  { "uge": 13, "fag": "Beta" }
+ ],
+ "bruges_ikke": [
+  { "fag": "Beta", "art": "Forelæsning", "form": "forudindspillet", "hvorfor": "Forelæsningerne ligger online; de ses hjemme og logges som selvstudie" },
+  { "fag": "Gamma", "art": "Vejledning", "form": "online", "hvorfor": "Frivillig vejledning online" }
+ ]
+}

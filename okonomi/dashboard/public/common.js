@@ -56,7 +56,13 @@
   }
   function metaLine(d) {
     const fmt = (s) => s ? new Date(s).toLocaleString("da-DK", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "–";
-    return [`Bank synkroniseret ${fmt(d.last_sync)} · data hentet ${fmt(d.generated_at)} · `, el("a", { href: "/", target: "_top", text: "Åbn Sure" })];
+    return [`Bank synkroniseret ${fmt(d.last_sync)} · data hentet ${fmt(d.generated_at)} · `, el("a", { href: "/okonomi", target: sureTarget(), text: "Åbn Sure" })];
+  }
+  // "Åbn Sure" goes to Sure's overview (/okonomi). In Kompas' frame (parent is the shell on "/") it stays in the
+  // frame, so the menu follows; inside Sure's own /forbrug-side iframe it replaces the whole page instead.
+  function sureTarget() {
+    if (window.parent === window) return null;
+    try { return parent.location.pathname === "/" ? null : "_top"; } catch { return "_top"; }
   }
 
   // ---------- saved settings ----------
@@ -147,7 +153,8 @@
         let server = null, serverOk = false;
         try {
           const r = await fetch(`../state/${name}.json`, { cache: "no-store" });
-          if (r.ok) { server = await r.json(); serverOk = true; } else if (r.status === 404) serverOk = true; // 404: nothing saved yet
+          // 404 or the empty {} export.sh puts there: nothing saved yet
+          if (r.ok) { const j = await r.json(); server = Object.keys(j || {}).length ? j : null; serverOk = true; } else if (r.status === 404) serverOk = true;
         } catch { /* offline */ }
         const local = lsGet();
         // Local wins only when the server has nothing, or the local copy is an unsent change made after the

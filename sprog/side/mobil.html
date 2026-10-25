@@ -94,6 +94,9 @@
 <script src="/sprog/regel.js"></script>
 <script>
 const API = "/sprog/api";
+// Telefonen er Tailscale-adressen uden port. På Mac'en (kompas.localhost) og på bærbaren (:8443) er serveren lige ved
+// hånden, så siden siger intet om pakke, Hent eller om Mac'en er vågen, medmindre noget venter eller fejler.
+const telefon = !/(^|\.)localhost$/.test(location.hostname) && !location.port;
 const FANENAVN = { idag: "Dagens kort", tekst: "Ugens tekst", regler: "Regler", overblik: "Overblik" };
 const TYPENAVN = { frase: "Frase", ret: "Ret", ord: "Ugens ord", udfyld: "Udfyld", test: "Niveautest" };
 const ROLLE = { aktiv: "aktivt sprog", vedligehold: "holdes ved lige", pause: "på pause", studie: "studiesprog" };
@@ -110,7 +113,7 @@ const lager = {
   gem(k, v) { try { localStorage.setItem("sprog:" + k, JSON.stringify(v)); } catch (e) { toast("Telefonen kunne ikke gemme. Er lageret fuldt?"); } },
 };
 let P = lager.hent("pakke", null), koe = lager.hent("koe", []), gjort = lager.hent("gjort", {});
-let forbundet = false, synker = false, igen = false, aaben = false;
+let forbundet = false, fejlet = false, synker = false, igen = false, aaben = false;
 const gemAlt = () => { lager.gem("koe", koe); lager.gem("gjort", gjort); };
 const kladde = {
   hent: k => { try { return localStorage.getItem("sprog:kladde:" + k) || ""; } catch (e) { return ""; } },
@@ -148,8 +151,10 @@ async function kald(sti, krop) {
 }
 
 // ── synkronisering ──────────────────────────────────────────────────
-// Først sendes køen, så hentes en ny pakke. stille: automatisk (ved åbning, når nettet kommer tilbage).
-// Står et kort åbent med svaret, venter pakken, så kortet ikke skifter under dig.
+// Først sendes køen, så hentes en ny pakke. stille: automatisk (ved åbning, når nettet kommer tilbage, når siden kommer
+// frem igen). Står et kort åbent med svaret, venter pakken, så kortet ikke skifter under dig. Siden tegnes kun forfra,
+// når pakken er ny, så en udfoldet regel eller "Ord i teksten" bliver stående, når du kommer tilbage til siden.
+const pakkeNøgle = p => p ? JSON.stringify({ ...p, genereret: null }) : "";
 const skriver = () => /^(TEXTAREA|INPUT)$/.test(document.activeElement?.tagName || "");
 async function synk(stille) {
   if (synker) { igen = true; return; }
@@ -157,25 +162,31 @@ async function synk(stille) {
   try {
     if (koe.length) {
       const { resultater: rs } = await kald("/sync", { poster: koe.map(({ id, type, tid, data }) => ({ id, type, tid, data })) });
-      let sendt = 0, fejl = 0;
+      let sendt = 0, fejl = 0, tekst = false;
       for (const r of rs) {
         const p = koe.find(x => x.id === r.id); if (!p) continue;
-        if (r.ok) { koe = koe.filter(x => x !== p); sendt++; } else { p.fejl = r.fejl; fejl++; }
+        if (r.ok) { koe = koe.filter(x => x !== p); sendt++; tekst ||= p.type === "tekst-svar"; } else { p.fejl = r.fejl; fejl++; }
       }
       gemAlt();
-      if (!stille || sendt) toast(`${sendt} svar gemt på Mac'en${fejl ? ` · ${fejl} kunne ikke gemmes` : ""}`);
+      // På Mac'en gemmes hvert svar med det samme, så kun ugens tekst og fejl får en besked
+      if (telefon ? !stille || sendt : fejl || tekst) toast(telefon ? `${sendt} svar gemt på Mac'en${fejl ? ` · ${fejl} kunne ikke gemmes` : ""}`
+        : fejl ? `${fejl} svar kunne ikke gemmes` : "Svaret er gemt");
     }
+    let ny = !stille;
     if (!(stille && aaben)) {
+      const før = pakkeNøgle(P);
       P = await kald("/pakke"); lager.gem("pakke", P);
+      ny ||= pakkeNøgle(P) !== før;
       // Det, der stadig ligger i køen (fordi det fejlede), er stadig gjort; resten står nu i pakken
       gjort = Object.fromEntries(koe.map(p => [p.noegle, true])); gemAlt();
       if (!stille && !koe.length) toast("Ny pakke hentet");
     }
-    forbundet = true;
-    if (stille && skriver()) tegnTop(); else vis();
+    const komTilbage = fejlet; forbundet = true; fejlet = false;
+    if ((ny || komTilbage) && !(stille && skriver())) vis(); else tegnTop();
   } catch (e) {
-    forbundet = false;
-    if (!stille) toast(e.name === "AbortError" || e instanceof TypeError ? "Mac'en svarer ikke. Den sover nok; svarene venter på telefonen." : `Fejl: ${e.message}`);
+    const varFejlet = fejlet; forbundet = false; fejlet = true;
+    if (!stille) toast(e.name === "AbortError" || e instanceof TypeError ? (telefon ? "Mac'en svarer ikke. Den sover nok; svarene venter på telefonen." : `Sprog-serveren svarer ikke${koe.length ? "; svarene venter her" : ""}.`) : `Fejl: ${e.message}`);
+    if (!telefon && !P && !varFejlet) vis();   // "Henter …" bliver til en fejl
   } finally {
     synker = false; tegnTop();
     if (igen && forbundet && koe.some(p => !p.fejl)) synk(true);
@@ -192,9 +203,14 @@ function tegnTop() {
   document.getElementById("titel").textContent = øv && fane === "idag" ? "Øv reglen" : FANENAVN[fane];
   const b = document.getElementById("synk");
   b.disabled = synker; b.innerHTML = `${icon("rotate-cw", 15)}${synker ? "Synker …" : koe.length ? `Send ${koe.length}` : "Hent"}`;
+  b.style.display = telefon || koe.length ? "" : "none";
   const gammel = P && new Date(P.genereret).toDateString() !== new Date().toDateString();
-  document.getElementById("status").innerHTML = !P ? `<span class="dot"></span>Ingen pakke endnu`
-    : `<span class="dot${forbundet ? " on" : ""}"></span><span>${forbundet ? "Mac'en er vågen" : "Uden forbindelse"} · pakke ${esc(tidSiden(P.genereret))}${gammel ? " (gammel)" : ""}</span>${koe.length ? `<span>· <b style="color:var(--text-primary)">${koe.length} svar venter</b> på at blive sendt</span>` : ""}`;
+  const venter = koe.length ? `<span><b style="color:var(--text-primary)">${koe.length} svar venter</b> på at blive sendt</span>` : "";
+  const status = document.getElementById("status");
+  status.innerHTML = !telefon ? (fejlet ? `<span class="dot"></span><span>Sprog-serveren svarer ikke</span>${venter ? `<span>·</span>${venter}` : ""}` : venter)
+    : !P ? `<span class="dot"></span>Ingen pakke endnu`
+    : `<span class="dot${forbundet ? " on" : ""}"></span><span>${forbundet ? "Mac'en er vågen" : "Uden forbindelse"} · pakke ${esc(tidSiden(P.genereret))}${gammel ? " (gammel)" : ""}</span>${venter ? `<span>·</span>${venter}` : ""}`;
+  status.style.display = status.innerHTML ? "" : "none";
   const n = { idag: kortTilbage().length, tekst: tekstVenter() ? 1 : 0 };   // Regler og Overblik har intet tal
   document.querySelectorAll("#faner button").forEach(x => {
     x.setAttribute("aria-pressed", String(x.dataset.fane === fane));
@@ -242,7 +258,7 @@ function renderKort() {
     <div class="meter" style="margin-top:-8px"><i style="width:${ialt ? Math.round(100 * klaret / ialt) : 0}%"></i></div>
     ${P.statistik?.eksamensperiode ? `<p class="hint">${esc(eksTekst(P.statistik.eksamensperiode))}</p>` : ""}`;
   if (!k && øv) {
-    root().innerHTML = top + `<div class="card empty">${r ? `Du har taget alle ${(P.regelkort || []).filter(x => x.regel === øv).length} kort til reglen.` : "Reglen er ikke i pakken. Tryk Hent, mens Mac'en er vågen."}<br><br><button type="button" class="btn ghost" data-se-regel="${esc(øv)}">${icon("book-open", 15)}Se reglen igen</button></div>`;
+    root().innerHTML = top + `<div class="card empty">${r ? `Du har taget alle ${(P.regelkort || []).filter(x => x.regel === øv).length} kort til reglen.` : telefon ? "Reglen er ikke i pakken. Tryk Hent, mens Mac'en er vågen." : "Reglen findes ikke længere."}<br><br><button type="button" class="btn ghost" data-se-regel="${esc(øv)}">${icon("book-open", 15)}Se reglen igen</button></div>`;
     return;
   }
   if (!k) {
@@ -296,14 +312,22 @@ function renderTekst() {
   const t = T.find(x => x.uge === tUge), sp = P.sprog?.[t.sprog] || {}, kk = tNoegle(t.uge), venter = svarVenter(t.uge);
   const tekst = kladde.hent(kk) || venter?.data.tekst || t.svar?.tekst || "";
   const status = venter ? (venter.fejl ? "kunne ikke gemmes" : "venter på at blive sendt") : t.svar ? `sendt ${tidSiden(t.svar.tid)}` : "";
+  // Feedbacken på ugen før kommer sammen med den nye tekst; den står øverst, til du har svaret på den nye
+  const fb = tUge === T[0].uge && P.ny_feedback && !svarVenter(T[0].uge) ? T.find(x => x.uge === P.ny_feedback.uge && x.feedback) : null;
   root().innerHTML = `
+    ${fb ? `<section class="card q">
+      <div class="kicker"><span class="mk">Feedback</span><span>uge ${+fb.uge.slice(-2)} · ${esc(fb.titel)} · ${esc(tidSiden(fb.feedback.skrevet))}</span></div>
+      <h2 style="font-size:17px">Feedback på dit svar til uge ${+fb.uge.slice(-2)}</h2>
+      <div class="md">${md(fb.feedback.tekst)}</div>
+      <div class="row"><button type="button" class="btn ghost lille" data-tuge="${esc(fb.uge)}">${icon("file-text", 15)}Se uge ${+fb.uge.slice(-2)} med dit svar</button></div>
+    </section>` : ""}
     ${T.length > 1 ? `<div class="seg" role="group" aria-label="Uge">${T.map(x => `<button type="button" data-tuge="${esc(x.uge)}" aria-pressed="${x.uge === tUge}">Uge ${+x.uge.slice(-2)}</button>`).join("")}</div>` : ""}
     <section class="card q">
       <div class="kicker"><span class="mk">${esc(sp.navn || t.sprog)}</span>${t.niveau ? `<span>niveau ${esc(t.niveau)}</span>` : ""}<span>uge ${+t.uge.slice(-2)}</span></div>
       <h2 style="font-size:19px">${esc(t.titel)}</h2>
       <div class="tekst md" lang="${esc(sp.stemme || "")}">${md(t.tekst)}</div>
       ${kanLæse ? `<div class="row"><button type="button" class="btn ghost lille" data-laes-tekst>${icon("volume-2", 15)}Læs teksten op</button></div>` : ""}
-      ${t.ord?.length ? `<details><summary>Ord i teksten (${t.ord.length})</summary><div class="ordliste" lang="${esc(sp.stemme || "")}">${t.ord.map(o => `<b>${esc(o.ord)}</b><span lang="da">${esc(o.betydning)}</span>`).join("")}</div></details>` : ""}
+      ${t.ord?.length ? `<details id="ord-${esc(t.uge)}"><summary>Ord i teksten (${t.ord.length})</summary><div class="ordliste" lang="${esc(sp.stemme || "")}">${t.ord.map(o => `<b>${esc(o.ord)}</b><span lang="da">${esc(o.betydning)}</span>`).join("")}</div></details>` : ""}
     </section>
     <section class="card q">
       <ol class="spm" lang="${esc(sp.stemme || "")}">${t.spoergsmaal.map(q => `<li>${esc(q)}</li>`).join("")}</ol>
@@ -320,7 +344,7 @@ function tGem() {
   const t = (P.tekster || []).find(x => x.uge === tUge), tekst = document.getElementById("t-svar")?.value.trim();
   if (!t) return; if (!tekst) return toast("Skriv et svar først");
   iKoe("tekst-svar", tNoegle(t.uge), { uge: t.uge, tekst }, { titel: `Ugens tekst, uge ${+t.uge.slice(-2)}` });
-  kladde.gem(tNoegle(t.uge), ""); renderTekst(); toast(navigator.onLine ? "Sender …" : "Gemt på telefonen; sendes, når Mac'en er vågen");
+  kladde.gem(tNoegle(t.uge), ""); renderTekst(); toast(navigator.onLine ? "Sender …" : telefon ? "Gemt på telefonen; sendes, når Mac'en er vågen" : "Gemt her; sendes, når der er net igen");
 }
 
 // ── Regler ──────────────────────────────────────────────────────────
@@ -341,12 +365,12 @@ function renderRegler() {
 
 // ── Overblik ────────────────────────────────────────────────────────
 function renderOverblik() {
-  if (!P) { root().innerHTML = `<div class="card empty">Ingen pakke endnu. Tryk <b>Hent</b>, mens Mac'en er vågen.</div>`; return; }
+  if (!P) { root().innerHTML = ingenPakke(); return; }
   const stat = P.statistik?.sprog || {};
   root().innerHTML = `<div class="card">${Object.entries(P.sprog).sort(([a], [b]) => Object.keys(stat).indexOf(a) - Object.keys(stat).indexOf(b)).map(([id, s]) => {
     const x = stat[id] || {};
     return `<div class="sprog"><div><div class="n">${esc(s.navn)}</div><div class="r">${esc(ROLLE[s.rolle] || s.rolle)}${s.niveau ? ` · niveau ${esc(s.niveau)}` : x.test_tilbage ? " · niveautest i gang" : ""}</div></div>
-      <div class="tal"><b>${x.laert || 0}</b> <span class="meta">af ${x.i_alt || 0} lært</span><div class="meta">${x.forfaldne ? `${x.forfaldne} forfaldne` : ""}${x.forfaldne && x.nye_venter ? " · " : ""}${x.nye_venter ? `${x.nye_venter} ${x.nye_venter === 1 ? "nyt venter" : "nye venter"}` : ""}</div></div></div>`;
+      <div class="tal"><b>${x.laert || 0}</b> <span class="meta">af ${x.i_alt || 0} lært</span><div class="meta">${x.forfaldne ? `${x.forfaldne} forfaldne` : ""}${x.forfaldne && x.nye_venter ? " · " : ""}${x.nye_venter ? (s.rolle === "pause" || !s.nye_pr_dag ? "nye kort på pause" : `${x.nye_venter} ${x.nye_venter === 1 ? "nyt venter" : "nye venter"}`) : ""}</div></div></div>`;
   }).join("")}</div>
   <p class="hint">Lært: kort, du med 90 % sandsynlighed stadig kan om tre uger. Det aktive sprog får tre nye kort om dagen, de andre ét, når der er nogle; et sprog på pause får ingen. ${esc(eksTekst(P.statistik?.eksamensperiode))}</p>`;
 }
@@ -358,17 +382,26 @@ function fejlPanel(typer) {
   return `<section class="card panel"><div class="panel-head"><h2>Kunne ikke gemmes</h2></div><div class="liste">${fs.map(p => `
     <div class="li"><div class="d">${esc(p.vis.titel)}</div><div class="res">${esc(p.fejl)}</div>
       ${p.data.svar || p.data.tekst ? `<div style="font-size:14px;white-space:pre-wrap">${esc(p.data.svar || p.data.tekst)}</div>` : ""}
-      <div><button type="button" class="btn quiet" data-slet="${esc(p.id)}">Slet fra telefonen</button></div></div>`).join("")}</div></section>`;
+      <div><button type="button" class="btn quiet" data-slet="${esc(p.id)}">${telefon ? "Slet fra telefonen" : "Slet svaret"}</button></div></div>`).join("")}</div></section>`;
 }
 
 // ── fælles ──────────────────────────────────────────────────────────
+const ingenPakke = () => telefon
+  ? `<div class="card empty">Der er ingen pakke på telefonen endnu.<br><br>Tryk <b>Hent</b>, mens Mac'en er vågen (låget åbent og på net). Så kan du bagefter svare uden forbindelse, og svarene sendes, næste gang Mac'en kan nås.</div>`
+  : fejlet ? `<div class="card empty">Sprog-serveren svarer ikke.<br><br>Genstart den: <code>launchctl kickstart -k gui/$(id -u)/local.kompas.sprog</code></div>`
+  : `<div class="card empty">Henter …</div>`;
 function vis() {
+  // Et kort står kun åbent under Dagens kort; renderKort sætter det igen, når du kommer tilbage
+  if (fane !== "idag") aaben = false;
+  // Det, du har foldet ud (en regel, "Ord i teksten"), bliver foldet ud, når siden tegnes forfra
+  const åbne = [...root().querySelectorAll("details[open][id]")].map(d => d.id);
+  tegnFane();
+  for (const id of åbne) { const d = document.getElementById(id); if (d) d.open = true; }
+}
+function tegnFane() {
   tegnTop();
   if (fane === "overblik") return renderOverblik();
-  if (!P) {
-    root().innerHTML = `<div class="card empty">Der er ingen pakke på telefonen endnu.<br><br>Tryk <b>Hent</b>, mens Mac'en er vågen (låget åbent og på net). Så kan du bagefter svare uden forbindelse, og svarene sendes, næste gang Mac'en kan nås.</div>`;
-    return;
-  }
+  if (!P) { root().innerHTML = ingenPakke(); return; }
   if (fane === "regler") return renderRegler();
   if (fane === "idag") renderKort(); else renderTekst();
   root().insertAdjacentHTML("beforeend", fejlPanel(fane === "idag" ? ["svar"] : ["tekst-svar"]));
@@ -398,9 +431,9 @@ window.addEventListener("hashchange", () => { læsAdresse(); vis(); });
 // Nettet kommer tilbage, eller siden åbnes igen fra baggrunden: prøv at sende og hente
 window.addEventListener("online", () => synk(true));
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") synk(true); });
-// Service workeren bruges kun på telefonen (gennem Tailscale). På Mac'en skal siderne altid hentes friske.
+// Service workeren bruges kun på telefonen (Tailscale-adressen uden port). På Mac'en og på bærbaren (samme adresse
+// med :8443) skal siderne altid hentes friske.
 if ("serviceWorker" in navigator) {
-  const telefon = !/(^|\.)localhost$/.test(location.hostname);
   if (!telefon) navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => { if (r.scope.endsWith("/sprog/")) r.unregister(); })).catch(() => {});
   else navigator.serviceWorker.register("/sprog/sw.js", { scope: "/sprog/" }).catch(() => {});
 }

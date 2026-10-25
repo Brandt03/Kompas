@@ -158,3 +158,25 @@ def test_rapport_opdater_giver_rapporten_med_fejlen_i_kilder(miljoe, capsys):
     assert "kilden sure fejlede" in ud.err
     r = json.loads(ud.out)
     assert {k["kilde"]: bool(k["fejl"]) for k in r["kilder"]} == {"garmin": False, "kalender": False, "sure": True}
+
+
+def test_tilbagebetaling_trækkes_kun_fra_op_til_ugens_køb(tmp_path, monkeypatch):
+    """Take-away og café/bar er netto, men en refusion større end ugens køb gør ikke ugen negativ."""
+    from conftest import lav_sure
+    monkeypatch.setattr(config, "SURE_JSON", tmp_path / "data.json")
+    m = date(2026, 10, 19)
+    t = lambda dag, kr, kat: {"date": (m + timedelta(days=dag)).isoformat(), "amount": kr,
+                              "group": "Variable udgifter", "category": kat}
+    lav_sure(config.SURE_JSON, [
+        t(0, 40, "Take-away og mad ude"), t(4, -300, "Take-away og mad ude"),   # mere tilbage end ugens køb
+        t(1, -40, "Café, bar og byture"),                                        # kun tilbagebetaling
+        t(7, 300, "Take-away og mad ude"), t(8, -150, "Take-away og mad ude"),   # en ven betaler sin del: netto
+        t(2, 400, "Dagligvarer"), t(3, -500, "Dagligvarer"),                     # dagligvarer er netto uden grænse
+    ], "2026-11-01")
+    ud, _ = kilder.oekonomi(m)
+    u1, u2 = ud["2026-10-19"], ud["2026-10-26"]
+    assert (u1["takeaway_kr"], u1["cafe_bar_kr"], u1["takeaway_koeb"]) == (0, 0, 1)
+    assert u2["takeaway_kr"] == 150 and u2["takeaway_koeb"] == 1
+    assert u1["dagligvarer_kr"] == -100
+    assert u1["variabelt_kr"] == 440  # kun køb, uændret
+

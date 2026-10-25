@@ -1,6 +1,6 @@
 ---
 name: "garmin-coach-data"
-description: "Brug ved alle spørgsmål om brugerens træning, søvn, restitution, pulszoner eller styrkeprogression fra garmin-coach-værktøjerne. Sikrer friske data og undgår kendte faldgruber i datasættet."
+description: "Brug ved alle spørgsmål om træning, søvn, restitution, pulszoner eller styrkeprogression fra garmin-coach-værktøjerne. Sikrer friske data og undgår kendte faldgruber i datasættet."
 ---
 
 # Garmin-coach: data og faldgruber

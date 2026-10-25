@@ -3,6 +3,10 @@
 // Every name here is a global the pages call directly, so renaming one means changing the pages too.
 // Nothing is calculated here beyond formatting.
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+// Plain text from a field written as HTML (a deadline's `hvad`): tags removed and entities decoded, so esc() escapes once.
+// A missing field throws, like s.replace would, so the page's section reports it instead of showing an empty title.
+const udenHtml = s => s.replace(/<[^>]+>/g, "")
+  .replace(/&(amp|lt|gt|quot|#39);/g, (_, e) => ({ amp: "&", lt: "<", gt: ">", quot: '"', "#39": "'" })[e]);
 const nf = d => new Intl.NumberFormat("da-DK", { minimumFractionDigits: d, maximumFractionDigits: d });
 const fmt = (x, d = 0) => (x == null ? "–" : nf(d).format(x));
 

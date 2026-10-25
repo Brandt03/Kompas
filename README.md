@@ -2,9 +2,9 @@
 
 [![CI](https://github.com/Brandt03/Kompas/actions/workflows/ci.yml/badge.svg)](https://github.com/Brandt03/Kompas/actions/workflows/ci.yml)
 
-**A personal dashboard that brings my finances, studies, languages and training together on one local page.**
+**A personal dashboard that brings my finances, studies, languages, training and screen time together on one local page.**
 
-Kompas runs entirely on my own Mac at `https://kompas.localhost`. Five small projects, written in Python and
+Kompas runs entirely on my own Mac at `https://kompas.localhost`. Six small projects, written in Python and
 JavaScript, each own one part of my life and publish their own pages. Kompas is the frame around them: one menu,
 one design system, and a front page that pulls the day together across all of them.
 
@@ -20,23 +20,27 @@ yourself with `python3 demo/serve.py` (see below).*
 
 | Area | What I see | Built from |
 |---|---|---|
-| **I dag** (Today) | My day across everything: calendar with free gaps, deadlines, readiness from my watch, this week's focus, flashcards and language cards due | `public/` |
+| **I dag** (Today) | My day across everything: calendar with free gaps and what I actually did in each block, deadlines, readiness from my watch, sleep, training, self-study and screen time at a glance, habits that have stalled, this week's focus, flashcards and language cards due | `public/` |
 | **Økonomi** (Money) | Spending by month or year (with a fix for a wrong category right on the page), "what if" scenarios, and a guard that warns before I earn too much to keep my student grant (SU) | `okonomi/` + [Sure](https://github.com/we-promise/sure) |
-| **Studie** (Study) | Week plan, courses, deadlines, spaced-repetition flashcards, exam practice, and an offline phone app | `studie/` |
+| **Studie** (Study) | Week plan, courses, deadlines, spaced-repetition flashcards, exam practice, self-study time against the course workload, exam notes week by week, and an offline phone app | `studie/` |
 | **Sprog** (Languages) | A few minutes of spaced-repetition language cards a day, one active language at a time, a short weekly text to answer, and grammar rules picked from my own mistakes | `sprog/` |
-| **Form & fokus** (Health) | 14-day training periods, sleep and recovery, a daily recommendation, and a weekly review | `coach/` + `overblik/` |
-| **Forbindelser** (Connections) | Whether every data source, Claude routine and background job works, with how to fix it when one doesn't | `bin/forbindelser.py` |
+| **Form & fokus** (Health) | 14-day training periods, every day and night measure from my watch, a daily recommendation, and a weekly review with planned against actual | `coach/` + `overblik/` |
+| **Skærmtid** (Screen time) | Where the time goes on my Mac, desktop, laptop and phone, by category and hour of the day, with a weekly review | `skaermtid/` |
+| **Forbindelser** (Connections) | Whether every data source, device, Claude routine and background job works, with how to fix it when one doesn't | `bin/forbindelser.py` |
 
 | | |
 |---|---|
 | ![Study week overview](docs/skaermbilleder/studie.png) **Studie:** the week from my calendar, the plan for the week, and deadlines | ![Flashcards](docs/skaermbilleder/genkald.png) **Genkald:** today's flashcards, with how often "sure" was actually right |
-| ![14-day training periods](docs/skaermbilleder/perioder.png) **Form & fokus:** the 14-day report, its goals and the trend over periods | ![Sleep and recovery](docs/skaermbilleder/soevn.png) **Søvn & restitution:** 60 nights against my own baseline |
+| ![Self-study](docs/skaermbilleder/selvstudie.png) **Selvstudie:** study time against the course workload, with a daily goal, streak, medals and balance | ![Exam notes](docs/skaermbilleder/usb-noter.png) **USB-noter:** the notes I may bring to the exam, week by week, with my own rating of each week |
+| ![14-day training periods](docs/skaermbilleder/perioder.png) **Form & fokus:** the 14-day report, its goals and the trend over periods | ![Body in numbers](docs/skaermbilleder/kroppen.png) **Kroppen i tal:** every day and night measure from the watch, with the night's sleep phases and curves |
+| ![Planned against actual](docs/skaermbilleder/ugereview.png) **Ugereview:** planned against actual, calendar blocks against screen time per quarter hour and logged study | ![Screen time](docs/skaermbilleder/skaermtid.png) **Skærmtid:** all devices together, time on two devices at once counted once |
 | ![Language overview](docs/skaermbilleder/sprog.png) **Sprog:** today's cards, progress per language and the week's text | ![Spending](docs/skaermbilleder/forbrug.png) **Forbrug:** where the money went over 12 months |
 | ![Savings scenarios](docs/skaermbilleder/scenarier.png) **Scenarier:** 1,000 simulated futures for my savings | ![Student grant guard](docs/skaermbilleder/su.png) **SU-vagt:** income against the student grant limit |
 
-<p align="center"><img src="docs/skaermbilleder/mobil.png" width="260" alt="Study flashcards on the phone, offline">
-<img src="docs/skaermbilleder/sprog-mobil.png" width="260" alt="Language cards on the phone, offline"><br>
-<em>On the phone: today's study and language cards work offline and sync later.</em></p>
+<p align="center"><img src="docs/skaermbilleder/mobil.png" width="240" alt="Study flashcards on the phone, offline">
+<img src="docs/skaermbilleder/sprog-mobil.png" width="240" alt="Language cards on the phone, offline">
+<img src="docs/skaermbilleder/selvstudie-mobil.png" width="240" alt="Self-study on the phone"><br>
+<em>On the phone: today's study and language cards work offline and sync later; self-study at a glance.</em></p>
 
 Everything follows the system's light or dark mode ([light version of I dag](docs/skaermbilleder/i-dag-lys.png)).
 [Forbindelser](docs/skaermbilleder/forbindelser.png) shows whether everything Kompas depends on works: it tests the
@@ -59,7 +63,9 @@ flowchart LR
     okonomi[okonomi<br/>shell + JS]
     studie[studie<br/>Node.js]
     sprog[sprog<br/>Node.js]
+    skaerm[skaermtid<br/>Python]
   end
+  AW[ActivityWatch<br/>on every device] --> skaerm --> liv
   G --> coach
   C --> coach
   coach --> liv
@@ -67,7 +73,7 @@ flowchart LR
   N --> studie
   liv -.->|week calendar| studie
   studie -.->|exam dates, own texts| sprog
-  coach & liv & okonomi & studie & sprog -->|pages + kompas.json| caddy[Caddy<br/>kompas.localhost]
+  coach & liv & okonomi & studie & sprog & skaerm -->|pages + kompas.json| caddy[Caddy<br/>kompas.localhost]
   caddy --> shell[Kompas frame<br/>menu, I dag, design kit]
 ```
 
@@ -78,17 +84,22 @@ flowchart LR
   JSON. The pages only display them, so the same figure never disagrees between two pages.
 - **Local first.** Everything is served by Caddy on `localhost`, kept fresh by macOS LaunchAgents every 30
   minutes, and backed up daily. Nothing is hosted anywhere.
-- **Read-only by default.** The pages only write what I type or click, and only through three servers:
+- **Read-only by default.** The pages only write what I type or click, and only through four servers:
   Studie's (flashcard answers and marks, definitions, drill guesses, weeks marked as read, "in my own words"
-  notes, practice exams, deadlines marked done), Sprog's (grades and answers on language cards, answers to the
-  week's text) and Sure's (the inputs on Scenarier and SU-vagt and a transaction's category on Forbrug, behind
-  Sure's login). Studie's and Sprog's servers bind to `127.0.0.1`, answer only to Kompas' own host names (against
-  DNS rebinding), and accept writes only from Kompas' own origin.
+  notes, practice exams, my rating of the exam notes, deadlines marked done), Sprog's (grades and answers on
+  language cards, answers to the week's text), Skærmtid's (my category for one app or site) and Sure's (the
+  inputs on Scenarier and SU-vagt and a transaction's category on Forbrug, behind Sure's login). Studie's, Sprog's
+  and Skærmtid's servers bind to `127.0.0.1`, answer only to Kompas' own host names (against DNS rebinding), accept
+  writes only from Kompas' own origin, and validate every field before anything is saved.
 - **Phone without a server.** The study and language pages work offline on my phone as small PWAs. They download
   today's cards while my Mac is reachable over Tailscale, and sync the answers back later without duplicates.
+- **Laptop with or without the Mac.** My laptop gets all of Kompas over Tailscale on its own port. When the Mac is
+  off, the laptop shows a read-only copy instead: `bin/kopi.py` writes the pages and their data to a folder every
+  half hour, Syncthing carries it over, and a small Caddy on the laptop (`baerbar/`) serves it, marked
+  "Kopi fra …" in the frame. Nothing can be saved in the copy.
 - **AI where judgement is needed.** Scheduled Claude routines do the parts that need judgement: the weekly
-  study plan, the 14-day training review, the weekly life review, and new language cards with feedback on the
-  week's text. They only write files that the projects then show; they never send or submit anything.
+  study plan, the 14-day training review, the weekly life review, new language cards with feedback on the
+  week's text, and a weekly screen-time review. They only write files that the projects then show; they never send or submit anything.
 
 The full architecture is in [docs/arkitektur.md](docs/arkitektur.md) (Danish). On my Mac each project is its own git
 repository; this public repository gathers them as folders, cleaned of personal data, so its history starts at
@@ -119,6 +130,8 @@ Sure itself is not part of the demo (its menu items show a short explanation ins
 - A local **MCP server** with 12 tools lets Claude answer questions about my training from finished aggregates
   instead of doing arithmetic on raw series. Its SQL lookup is read-only, enforced by SQLite itself.
 - `site byg` writes the pages' JSON atomically, plus the daily recommendation shown on the front page.
+- **Kroppen i tal** shows every day and night measure Garmin has (sleep phases, heart rate, HRV, SpO2, breathing,
+  stress, body battery, steps) day by day, in the style of garmin-grafana, without Grafana.
 
 ### [overblik/](overblik/): the weekly review (Python)
 
@@ -135,6 +148,9 @@ Sure itself is not part of the demo (its menu items show a short explanation ins
   to under 1 % for drifting series, and from 100 % to 0 % for a shared seasonal pattern, while still finding a
   real week-to-week link 90 % of the time.
 - Training load comes from coach (TRIMP), the same number everywhere.
+- **Planned against actual:** each calendar block of the last 14 days next to what the screen showed per quarter
+  hour (from Skærmtid), the self-study I logged and my workouts, so a planned study block that turned into social
+  media is visible. A habit that stalls (no study blocks for days) shows up on the front page.
 
 ### [studie/](studie/): study planner and flashcards (Node.js)
 
@@ -159,6 +175,11 @@ Sure itself is not part of the demo (its menu items show a short explanation ins
 - **In my own words.** Each week on a course page has a field for explaining the material without the book, saved
   in the course folder and also editable offline on the phone, and the lecture slides and exercises for the week
   sit right next to it.
+- **Self-study against the workload.** Each course description states its hours; Selvstudie compares the time I log
+  with them, with a daily goal, a streak, medals, a running balance and a month calendar. Weeks I'm away and
+  teaching I don't use don't count.
+- **Exam notes.** For courses that allow notes at the exam, a routine fills the notes document week by week; I
+  rate each week (useful, too much, missing something) and the routine tightens it accordingly.
 - **Answer first, then the key.** The pages only ask for the answer key after an attempt. That is a habit the
   interface keeps, not a lock: `GET /facit` and `/eksamen/facit` return the key whenever they are asked.
 
@@ -178,6 +199,18 @@ Sure itself is not part of the demo (its menu items show a short explanation ins
 - **Offline on the phone** like Studie: a package of today's cards, the texts and the rules, answers queued without
   a connection and synced later with an id each. The phone's own text-to-speech reads the answer aloud.
 
+### [skaermtid/](skaermtid/): screen time across devices (Python)
+
+- [ActivityWatch](https://activitywatch.net) runs on every device; aw-sync and Syncthing bring the other devices'
+  data to the Mac, so the project reads one local server only.
+- Apps, sites and window titles are sorted into categories and groups by regular expressions in `regler.json`; the
+  rest I can categorise on the page with one click, through a small server that only writes my choices.
+- **Time on two devices at once counts once.** If the phone's screen is on, the time goes to the phone; otherwise
+  it is split between the computers in use. Each device still shows its own full time.
+- **Only sums leave ActivityWatch:** hours per day, device, category and app, and a quarter-hour timeline. Window
+  titles are only used to match a rule and are never written.
+- The demo runs the real calculation on made-up ActivityWatch events for four devices.
+
 ### [okonomi/](okonomi/): money, on top of Sure (shell, SQL, JavaScript, a little Ruby)
 
 - [Sure](https://github.com/we-promise/sure) runs untouched in Docker. My additions are mounted as Rails
@@ -187,7 +220,8 @@ Sure itself is not part of the demo (its menu items show a short explanation ins
   working when Sure and Docker are closed.
 - **Forbrug** shows spending by month, year or any period, and a wrong category can be fixed right in the list of
   transactions. The change goes through Sure and does what Sure's own form does (locks the category so rules and
-  bank syncs leave it alone); the page shows it at once and the next extract has it.
+  bank syncs leave it alone); the page shows it at once and the next extract has it. "Uge for uge" shows variable
+  spending for the last 12 weeks, from the weekly review.
 - **Scenarier** is a Monte Carlo simulation (1,000 runs) that samples my own variable spending from history,
   models returns as log-normal, shows everything in today's money, and uses binary search to find the smallest
   extra monthly saving that reaches a goal with 80 % probability.
@@ -220,7 +254,10 @@ smoke test and its pytest suite run against its real dependencies, overblik has 
   before they reach a log, a failed Hevy sync is visible, and a 14-day period must run Saturday to Friday.
 - **Overblik:** one broken source no longer stops the others, a calendar's freshness is when it was fetched, and
   the week to plan follows the report's Monday, not the day the routine happens to run.
-- **I dag** shows everything else when one section's data is broken.
+- **Skærmtid:** time on two devices at once is counted once, a late night belongs to the evening before, and the server refuses
+  foreign hosts and origins, unknown categories and oversized or malformed choices.
+- **The laptop copy** never writes outside its folder, even if a course or file name in the data contains `..`.
+- **I dag** shows everything else when one section's data is broken, and a paused project disappears everywhere.
 
 ```bash
 python3 -m unittest discover -s tests
@@ -235,7 +272,8 @@ PYTHONPATH=overblik python3 -m pytest -q overblik/tests
 demo is the easy way to see all of it. Running it with your own data takes some adapting:
 
 - It is macOS only (LaunchAgents, zsh, Docker via Colima for Sure).
-- Each part is set up on its own: Caddy, Sure, Garmin and calendar feeds, Hevy, and Tailscale for the phone.
+- Each part is set up on its own: Caddy, Sure, Garmin and calendar feeds, Hevy, ActivityWatch, and Tailscale and
+  Syncthing for the phone and laptop.
   There is no single installer.
 - The LaunchAgents, the small app that starts and stops everything, and most of the scheduled Claude routines
   are not in the repository.
@@ -244,7 +282,7 @@ demo is the easy way to see all of it. Running it with your own data takes some 
 
 Each project has its own README with setup and environment variables. The short version: clone into `~/kompas`,
 import the `Caddyfile` into Caddy, set up each project you want, and point the LaunchAgents at `bin/opdater.sh`
-and the Studie and Sprog servers. See [docs/arkitektur.md](docs/arkitektur.md).
+and the Studie, Sprog and Skærmtid servers. See [docs/arkitektur.md](docs/arkitektur.md).
 
 ## How I built it
 

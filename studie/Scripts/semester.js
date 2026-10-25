@@ -26,7 +26,7 @@ function indhold() {
 }
 // Alle fag i fag.json's rækkefølge. Farven er --c1, --c2 … efter rækkefølgen, medmindre faget har sin egen.
 function fag() {
-  return indhold().fag.map((f, i) => ({ genkald: false, begreber: null, kode: null, afleveringer: null, leetcode: null,
+  return indhold().fag.map((f, i) => ({ genkald: false, begreber: null, kode: null, afleveringer: null, leetcode: null, usb_noter: false,
     eksamenstraening: null, forudsaetning: null, canvas: [], oevelse_navn: null, ...f, farve: f.farve || `var(--c${i + 1})` }));
 }
 const fagMed = egenskab => fag().filter(f => f[egenskab]);
@@ -44,6 +44,8 @@ function noegleVarianter(noegle) {
   return f && rest != null ? [noegle, ...[f.kort, ...(f.alias || [])].filter(n => n !== kort).map(n => `${n}|${rest}`)] : [noegle];
 }
 const semester = () => indhold().semester || path.basename(ROD);
+// Dine egne mål til siden Selvstudie (dagsmål og medaljer), eller null
+const studiemaal = () => indhold().studiemaal || null;
 
 // ── markdown-tabeller og afsnit ──────────────────────────────────────
 
@@ -147,5 +149,5 @@ function eksamensdatoer(nu = new Date()) {
   return ud;
 }
 
-module.exports = { ROD, DATA, fag, fagMed, find, fraKort, noegleVarianter, semester, tabel, afsnit, isoDato, lokalTid, isoUge, mandagIUge, plusDage,
+module.exports = { ROD, DATA, fag, fagMed, find, fraKort, noegleVarianter, semester, studiemaal, tabel, afsnit, isoDato, lokalTid, isoUge, mandagIUge, plusDage,
   deadline, afleveringsMoenster, afleveringsNr, vigtigeDatoer, egenPlan, eksamensformer, eksamensdatoer };

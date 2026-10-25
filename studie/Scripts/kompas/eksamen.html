@@ -55,6 +55,12 @@
   .chip { font-size: 11.5px; padding: 3px 8px; border-radius: 999px; background: var(--surface-inset); color: var(--text-secondary); }
   .score { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
   .mini-t { font-variant-numeric: tabular-nums; font-size: 13px; color: var(--text-secondary); }
+  /* opgaver efter niveau (lærerens oversigt) */
+  .niv-liste summary { cursor: pointer; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; padding: 6px 0; }
+  .niv { display: grid; grid-template-columns: 1fr auto; gap: 6px 14px; align-items: center; padding: 11px 0; border-top: 1px solid var(--divider); }
+  .niv .t { font-weight: 500; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .niv .f { color: var(--text-secondary); font-size: 13px; line-height: 1.45; margin-top: 2px; }
+  .niv .f b { font-weight: 500; color: var(--text-primary); }
   #toast { position: fixed; left: 50%; bottom: 20px; transform: translate(-50%, 20px); opacity: 0; transition: .15s; z-index: 50; background: var(--nav-indicator); color: var(--container); border-radius: 10px; padding: 10px 14px; font-size: 13.5px; pointer-events: none; }
   #toast.vis { opacity: 1; transform: translate(-50%, 0); }
   @media (max-width: 640px) { .q { padding: 16px; } .timer { font-size: 18px; } }
@@ -85,7 +91,7 @@ const SIK = [["sikker", "Sikker"], ["usikker", "Usikker"], ["gaet", "Gætter / k
 // Karakter efter en øvelsesopgave, som i FSRS: 4 let, 3 sad, 2 halvt, 1 blankt. Rettelsen efter en prøveeksamen bruger kun ✓/~/✗.
 const KAR = [[4, "sad", "✓ Let", "Sad med det samme, uden at tænke dig om"], [3, "sad", "✓ Sad", "Sad, men du skulle tænke dig om"],
   [2, "halvt", "~ Halvt", "Noget af det, eller kun med besvær"], [1, "blankt", "✗ Blankt", "Kunne det ikke"]];
-let L = null, S = null, fag = location.hash.slice(1), tilstand = "liste";
+let L = null, S = null, N = [], fag = location.hash.slice(1), tilstand = "liste";
 let E = null, set = null, svar = {}, marks = {}, start = null, facit = null, tick = null;
 let oCur = 0, oVist = false, oSik = null, oFacit = null;
 
@@ -123,9 +129,10 @@ function renderListe() {
   const eks = (S?.deadlines || []).find(d => d.type === "eksamen" && fagFraKort(d.fag)?.id === fag);
   const n = eks ? daysUntil(eks.dato || eks.fra) : null;
   root().innerHTML = `
-    ${eks ? `<section class="card count"><div class="big">${n} dage</div><div class="t"><b>${esc(eks.hvad.replace(/<[^>]+>/g, "").split(" — ")[0])}</b>
+    ${eks ? `<section class="card count"><div class="big">${n} dage</div><div class="t"><b>${esc(udenHtml(eks.hvad).split(" — ")[0])}</b>
       <span>${eks.dato ? `${weekday(parseDate(eks.dato))} ${dayMonth(parseDate(eks.dato))}` : `uge ${eks.uger}`}${eks.tid ? ` kl. ${eks.tid}` : ""}</span></div></section>` : ""}
     ${proeveplan(saet)}
+    ${niveauer()}
     ${saet.length ? `<section class="saet">${saet.map(x => {
       const r = x.resultat, t = r.sad + r.halvt + r.blankt;
       return `<div class="card sc">
@@ -149,13 +156,33 @@ function proeveplan(saet) {
   const taget = [...new Set(saet.flatMap(x => x.proever.map(p => p.slice(0, 10))))].sort();
   return `<section class="card panel"><div class="panel-head"><h2>Prøveeksamener</h2><span class="meta">din egen plan</span></div>
     <div class="stack" style="gap:10px">${plan.map((p, i) => {
-      const [, titel, detalje] = p.hvad.replace(/<[^>]+>/g, "").match(/^(.*?)\s*(?:\((.*)\))?$/), t = taget[i];
+      const [, titel, detalje] = udenHtml(p.hvad).match(/^(.*?)\s*(?:\((.*)\))?$/), t = taget[i];
       return `<div class="row" style="flex-wrap:nowrap;align-items:flex-start">
         <span style="color:${t ? "var(--success)" : "var(--text-subdued)"};margin-top:2px">${icon(t ? "check" : "clock", 14)}</span>
         <div style="flex:1"><div style="font-weight:500">${esc(titel)}</div>
           <div class="meta">uge ${esc(p.uger)} · ${range(p.fra)}${detalje ? ` · ${esc(detalje.replace(/,?\s*(gammelt sæt )?på Kompas → Studie → Eksamen/, "").trim())}` : ""}</div></div>
         <span class="badge${t ? " good" : ""}">${t ? `taget ${dayMonth(parseDate(t))}` : nedtaelling(p.fra, true)}</span></div>`; }).join("")}</div>
   </section>`;
+}
+
+// Lærerens oversigter over gamle opgaver (<Fag>/Eksamenstræning/niveauer.json): niveau og fokus pr. opgave, og
+// forelæsningen, listen gælder fra. "Øv" åbner sættet ved opgavens første delopgave.
+function niveauer() {
+  const lister = N.filter(l => l.fag === fag);
+  if (!lister.length) return "";
+  const idag = new Date().toLocaleDateString("sv-SE");
+  return `<section class="card panel"><div class="panel-head"><h2>Opgaver efter niveau</h2><span class="meta">lærerens oversigt over gamle opgaver</span></div>
+    <div class="stack" style="gap:6px">${lister.map(l => {
+      const klar = !l.fra || l.fra <= idag, proevet = l.opgaver.filter(o => o.resultat && o.resultat.sad + o.resultat.halvt + o.resultat.blankt).length;
+      return `<details class="niv-liste"${klar ? " open" : ""}><summary><b style="font-weight:600">Efter F${esc(l.efter)}</b>
+        <span class="meta">${l.fra ? `${klar ? "fra" : "åbner"} ${dayMonth(parseDate(l.fra))} · ` : ""}${l.opgaver.length} opgaver · ${proevet} prøvet</span></summary>
+        ${l.note ? `<p class="meta" style="line-height:1.5;margin:2px 0 8px">${esc(l.note)}</p>` : ""}
+        <div>${l.opgaver.map(o => { const r = o.resultat, t = r ? r.sad + r.halvt + r.blankt : 0;
+          return `<div class="niv"><div><div class="t">${esc(o.opgave)}${o.instruktor ? `<span class="chip">instruktorstyret</span>` : ""}</div>
+              <div class="f">${esc(o.saet_navn)} · <b>${esc(o.niveau)}</b> · ${esc(o.fokus)}</div></div>
+            <div class="row" style="flex-wrap:nowrap">${t ? `<span class="badge${r.sad === o.antal ? " good" : ""}" title="${r.sad} sad, ${r.halvt} halvt, ${r.blankt} blankt af ${o.antal}">${r.sad}/${o.antal} sad</span>` : ""}
+              ${o.sektion ? `<button type="button" class="btn ghost" data-oev="${esc(o.saet)}" data-fra="${o.foerste}" title="${esc(o.sektion)}">Øv</button>` : `<span class="meta">sættet mangler</span>`}</div></div>`; }).join("")}</div>
+      </details>`; }).join("")}</div></section>`;
 }
 
 // ── prøveeksamen ───────────────────────────────────────────────────
@@ -243,12 +270,12 @@ async function gemResultat() {
 }
 
 // ── øv enkeltopgaver ───────────────────────────────────────────────
-async function startOevelse(id) {
+async function startOevelse(id, fra) {
   set = L.find(x => x.fag === fag && x.id === id);
   E = await hent(`/eksamen/saet?fag=${fag}&id=${encodeURIComponent(id)}`);
   svar = {}; marks = {}; tilstand = "oevelse";
-  // start ved den første opgave, du ikke har haft helt rigtigt
-  oCur = 0; oVist = false; oSik = null; oFacit = null;
+  // start ved opgave nr. fra (fra Opgaver efter niveau), ellers ved den første
+  oCur = Math.max(0, alleQ().findIndex(q => q.nr === fra)); oVist = false; oSik = null; oFacit = null;
   renderOevelse();
 }
 function renderOevelse() {
@@ -290,12 +317,12 @@ document.addEventListener("click", async e => {
   try {
     if (b.dataset.fag) { fag = b.dataset.fag; history.replaceState(null, "", "#" + fag); renderListe(); }
     else if (b.dataset.start) await startProeve(b.dataset.start);
-    else if (b.dataset.oev) await startOevelse(b.dataset.oev);
+    else if (b.dataset.oev) await startOevelse(b.dataset.oev, +b.dataset.fra || null);
     else if (b.id === "aflever" || b.id === "aflever2") await aflever();
     else if (b.id === "afbryd") { if (confirm("Afbryd prøveeksamen? Dine svar huskes, så du kan fortsætte senere.")) { clearInterval(tick); renderListe(); } }
     else if (b.dataset.mk) { marks[b.dataset.mk] = { mark: b.dataset.v }; const y = window.scrollY; renderRetning(); window.scrollTo(0, y); }
     else if (b.id === "gem-res") await gemResultat();
-    else if (b.id === "tilbage") { clearInterval(ur); L = await hent("/eksamen"); renderListe(); }
+    else if (b.id === "tilbage") { clearInterval(ur); [L, N] = await Promise.all([hent("/eksamen"), hent("/eksamen/niveauer").catch(() => N)]); renderListe(); }
     else if (b.dataset.osik) { const q = alleQ()[oCur]; oFacit = (await hent(`/eksamen/facit?fag=${fag}&id=${encodeURIComponent(set.id)}&nr=${q.nr}`)).facit; oSik = b.dataset.osik; oVist = true; renderOevelse(); }
     else if (b.dataset.okar) { const q = alleQ()[oCur]; await post("/eksamen/resultat", { fag, id: set.id, nr: q.nr, karakter: +b.dataset.okar, sikkerhed: oSik });
       toast(+b.dataset.okar >= 3 ? "✓ gemt" : "Gemt – den kommer igen i Dagens kort"); if (oCur < alleQ().length - 1) oCur++; oVist = false; oSik = null; oFacit = null; renderOevelse(); window.scrollTo(0, 0); }
@@ -309,7 +336,7 @@ document.addEventListener("change", e => {
 });
 // Svarene gemmes løbende i browseren, så en påbegyndt prøveeksamen kan fortsættes; ingen advarsel ved navigation
 
-Promise.all([hent("/eksamen"), loadStudie().catch(() => null)]).then(([l, s]) => { L = l; S = s; renderListe(); },
+Promise.all([hent("/eksamen"), loadStudie().catch(() => null), hent("/eksamen/niveauer").catch(() => [])]).then(([l, s, n]) => { L = l; S = s; N = n; renderListe(); },
   e => { root().innerHTML = `<div class="card empty">Eksamensserveren svarer ikke (${esc(e.message)}). Se <code>~/.kompas/studie-server.log</code>.</div>`; });
 </script>
 </body>

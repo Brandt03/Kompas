@@ -19,7 +19,8 @@ aldrig selv (se trin 7). Rollerne: `aktiv`, `vedligehold` (holdes ved lige, få 
 `studie` (dansk og engelsk).
 
 **Eksamensperiode.** Fra 14 dage før en eksamen i Studie til og med eksamensdagen kommer der ingen nye sprogkort i
-Dagens kort, kun gentagelse; serveren sørger selv for det. Er `eksamener_inden_for_14_dage` ikke tom, så skriver du
+Dagens kort, kun gentagelse; serveren sørger selv for det. Er `eksamener_inden_for_14_dage` ikke tom (eksamener fra i dag
+til 14 dage efter søndag i den uge, du skriver til, så perioden også fanges, når den begynder midt i ugen), så skriver du
 heller ingen ny regel, ingen nye kort og ingen ny tekst (spring trin 4, 5 og 6 over). Feedback på et svar, der
 allerede er givet (trin 3), skriver du stadig. Er `eksamener_kendt` `false`, kunne Studies eksport ikke læses; fortsæt normalt og sig det i
 opsummeringen.

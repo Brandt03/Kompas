@@ -1,0 +1,12 @@
+# Kompas på bærbaren (http://kompas.localhost:8780). Lægges i ~/.config/systemd/user/ af opsaet.sh.
+[Unit]
+Description=Kompas på bærbaren (Caddy: Mac'en, når den svarer, ellers kopien)
+After=network-online.target
+
+[Service]
+ExecStart=/usr/bin/caddy run --config %h/KompasKopi/baerbar/Caddyfile --adapter caddyfile --watch
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

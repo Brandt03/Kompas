@@ -98,9 +98,11 @@ const sikKnapper = (kræverTekst) => `<div class="row"><span class="meta">Hvor s
   `<button type="button" class="btn${i ? " ghost" : ""}" data-sik="${k}"${kræverTekst && k !== "gaet" ? " data-krav" : ""}>${t}</button>`).join("")}<span class="spacer"></span><span class="meta">så vises svaret</span></div>`;
 let gFag = null, gFil = "alle", gCur = null, gVist = false, gFacit = null;
 let bFag = null, bTilstand = "udfyld", bCur = null, bVist = false, bRet = null;  // bRet: et udfyldt begreb, du retter
-let dKap = 0, dKunTomme = false;
-try { const x = JSON.parse(localStorage.getItem("genkald-valg") || "{}"); ({ gFag = gFag, bFag = bFag, dKap = dKap } = x); } catch (e) {}
-const huskValg = () => { try { localStorage.setItem("genkald-valg", JSON.stringify({ gFag, bFag, dKap })); } catch (e) {} };
+// Drills åbner på første kapitel med ugættede (som På farten); et kapitel, du vælger, gælder kun i denne visning
+let dKap = null, dKunTomme = false;
+const startKap = D => Math.max(0, D.findIndex(k => k.tjek.some(t => t.status === "tom")));
+try { const x = JSON.parse(localStorage.getItem("genkald-valg") || "{}"); ({ gFag = gFag, bFag = bFag } = x); } catch (e) {}
+const huskValg = () => { try { localStorage.setItem("genkald-valg", JSON.stringify({ gFag, bFag })); } catch (e) {} };
 const kladde = { hent: k => { try { return localStorage.getItem("kladde:" + k) || ""; } catch (e) { return ""; } },
   gem: (k, v) => { try { v ? localStorage.setItem("kladde:" + k, v) : localStorage.removeItem("kladde:" + k); } catch (e) {} } };
 
@@ -143,8 +145,8 @@ function renderIdag() {
   if (k && rCur !== k.id) { rCur = k.id; rNulstil(); }
   const typeChip = t => `<span class="mk" style="min-width:auto;padding:0 8px">${TYPENAVN[t]}</span>`;
   root().innerHTML = `
-    <div class="bar"><span class="meta">${fortsat ? `<b style="color:var(--success)">✓ Dagens ${st.dagsmaal} kort klaret</b> · fortsætter med ${R.kort.length} ekstra · ca. ${Math.max(1, Math.round(R.kort.length * 0.75))} min`
-      : R.kort.length ? `<b style="color:var(--text-primary)">${R.kort.length} kort tilbage</b> i dag · ca. ${Math.max(1, Math.round(R.kort.length * 0.75))} min` : "Færdig for i dag"} · ${st.klaret_i_dag} klaret</span>
+    <div class="bar"><span class="meta">${fortsat ? `<b style="color:var(--success)">✓ Dagens ${st.dagsmaal} kort klaret</b> · fortsætter med ${R.kort.length} ekstra · ca. ${Math.max(1, Math.round(R.kort.length * st.min_pr_kort))} min`
+      : R.kort.length ? `<b style="color:var(--text-primary)">${R.kort.length} kort tilbage</b> i dag · ca. ${Math.max(1, Math.round(R.kort.length * st.min_pr_kort))} min` : "Færdig for i dag"} · ${st.klaret_i_dag} klaret</span>
       <span class="spacer"></span><span class="meta">${st.laert} af ${st.i_alt} kort sidder (90 % om tre uger)</span></div>
     <div class="meter" style="height:6px;border-radius:3px;background:var(--surface-inset);overflow:hidden;margin:-4px 0 4px"><i style="display:block;height:100%;width:${pct(st.klaret_i_dag, ialt)}%;background:var(${fortsat ? "--success" : "--mark"})"></i></div>
     ${k ? `<section class="card q">
@@ -298,7 +300,7 @@ async function bGem() {
 // ── Drills ─────────────────────────────────────────────────────────
 function renderDrills() {
   if (!D.length) { root().innerHTML = `<div class="card empty">Ingen drills fundet.</div>`; return; }
-  dKap = Math.min(dKap, D.length - 1);
+  dKap = Math.min(dKap ?? startKap(D), D.length - 1);
   const k = D[dKap], vs = t => `vscode://file${encodeURI(k.sti)}:${t}`;
   const rækker = k.tjek.filter(t => !dKunTomme || t.status === "tom" || t.status === "forkert");
   let sidst = null, sidstKontekst = null;
@@ -371,7 +373,7 @@ root().addEventListener("click", e => {
   else if (t.id === "spring-b" || t.id === "naeste-b") bSpring();
   else if (t.id === "vis-b") { bVist = true; renderBegreber(); }
   else if (t.id === "ret-b") { const x = B[bFag].begreber.find(y => y.begreb === bCur); kladde.gem(`begreb:${bFag}:${bCur}:def`, x.definition); if (x.se) kladde.gem(`begreb:${bFag}:${bCur}:se`, x.se); bRet = bCur; bTilstand = "udfyld"; renderBegreber(); }
-  else if (t.dataset.kap != null) { dKap = +t.dataset.kap; huskValg(); renderDrills(); }
+  else if (t.dataset.kap != null) { dKap = +t.dataset.kap; renderDrills(); }
 });
 root().addEventListener("change", e => {
   if (e.target.id === "gfil") { gFil = e.target.value; gCur = null; renderGenkald(); }

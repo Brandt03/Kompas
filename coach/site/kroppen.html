@@ -1,0 +1,646 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kroppen i tal</title>
+<!-- Vises i Kompas (https://kompas.localhost), som leverer designkittet under /kompas/assets/.
+     Data fra `python -m garmin_coach.site byg` (garmin_coach/kroppen.py): kroppen.json (de seneste 60 dage og
+     historikken for vægt og VO2max), kroppen/index.json (døgn og måneder), kroppen/dag/<dato>.json (døgnets
+     kurver og natten) og kroppen/maaned/<ÅÅÅÅ-MM>.json; desuden liv.json (`naetter` og `nat_sammenhaeng`: sengetid
+     og sen skærmtid pr. aften), skrevet af overbliks `liv eksport`. Idéen er garmin-grafana. Siden regner ikke selv; snit,
+     min og maks, ugens snit og månedens niveauer kommer færdige fra filerne. -->
+<link rel="stylesheet" href="/kompas/assets/tokens.css">
+<link rel="stylesheet" href="/kompas/assets/page.css">
+<style>
+  .cols3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+  @media (max-width: 1100px) { .cols3 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 760px) { .cols3 { grid-template-columns: minmax(0, 1fr); } }
+  h2.afsnit { font-size: 15px; font-weight: 600; margin: 0; }
+  .afsnit-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 12px 0 -4px; }
+  .nav { display: inline-flex; align-items: center; gap: 6px; }
+  .nav button, .nav select, .nav input { font: inherit; font-size: 13px; color: var(--text-primary); background: var(--container);
+    border: 0; box-shadow: var(--shadow-border-xs); border-radius: 8px; padding: 5px 10px; cursor: pointer; }
+  .nav button:disabled { opacity: .4; cursor: default; }
+  .nav button.pil { padding: 5px 8px; display: inline-flex; }
+  table.uge { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.uge th { text-align: left; font-weight: 500; color: var(--text-secondary); padding: 6px 8px; border-bottom: 1px solid var(--divider); white-space: nowrap; }
+  table.uge td { padding: 6px 8px; border-bottom: 1px solid var(--divider); white-space: nowrap; }
+  table.uge tfoot td { font-weight: 600; border-bottom: 0; }
+  table.uge tfoot tr.foer td { font-weight: 400; color: var(--text-secondary); padding-top: 0; }
+  table.uge tfoot tr.foer .meta { font-size: 12px; }
+  table.uge .num { text-align: right; }
+  table.uge tbody tr.vaelg { cursor: pointer; }
+  table.uge tbody tr.vaelg:hover td { background: var(--container-hover); }
+  table.uge tbody tr[aria-current="date"] td { background: var(--surface-inset); }
+  .inline { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
+  .inline .spor { width: 64px; height: 8px; border-radius: 4px; background: var(--surface-inset); overflow: hidden; flex: none; }
+  .inline .spor i { display: block; height: 100%; border-radius: 4px; }
+  /* Et niveau (hvilepuls, SpO2 …) er en prik på en tynd linje fra periodens laveste til højeste, ikke en mængde */
+  .inline .spor.niveau { position: relative; overflow: visible; background: none; }
+  .inline .spor.niveau::before { content: ""; position: absolute; left: 0; right: 0; top: 3px; height: 2px; border-radius: 1px; background: var(--surface-inset); }
+  .inline .spor.niveau i { position: absolute; top: -1px; width: 10px; height: 10px; border-radius: 50%; margin-left: -5px; box-shadow: 0 0 0 2px var(--container); }
+  .scroll { overflow-x: auto; }
+  /* Dagens aktivitet */
+  .pas-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .pas-head h2 { display: flex; align-items: center; gap: 8px; }
+  .pas-tal { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px 16px; margin: 14px 0 4px; }
+  .pas-tal div { min-width: 0; }
+  .pas-tal .n { font-size: 12px; color: var(--text-secondary); }
+  .pas-tal .v { font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .pas-tal .v small { font-size: 12px; font-weight: 400; color: var(--text-secondary); margin-left: 3px; }
+  .zonebar { display: flex; gap: 2px; height: 12px; margin: 14px 0 6px; }
+  .zonebar i { display: block; border-radius: 3px; min-width: 2px; }
+  .zonebar i.rest, .chart-key .dot.rest { background: var(--surface-inset); box-shadow: inset 0 0 0 1px var(--border-subdued); }
+  .pas-sub { font-size: 13px; font-weight: 600; margin: 16px 0 6px; }
+  /* Kalenderen med markører */
+  .afsnit-head .nav { position: relative; }
+  .kal { position: absolute; left: 0; top: calc(100% + 6px); z-index: 20; width: 272px; max-width: calc(100vw - 32px); padding: 12px; background: var(--container);
+    border-radius: 12px; box-shadow: var(--shadow-border-xs), 0 8px 24px rgba(0, 0, 0, .18); }
+  .kal[hidden] { display: none; }
+  .kal-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-weight: 600; font-size: 13px; }
+  .kal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align: center; }
+  .kal-grid .ug { font-size: 11px; color: var(--text-subdued); padding: 2px 0 4px; }
+  .kal-grid button { font: inherit; font-size: 12.5px; font-variant-numeric: tabular-nums; position: relative; height: 34px; border: 0; border-radius: 8px;
+    background: none; color: var(--text-primary); cursor: pointer; padding: 0 0 6px; }
+  .kal-grid button:hover:not(:disabled) { background: var(--surface-hover); }
+  .kal-grid button:disabled { color: var(--text-subdued); opacity: .45; cursor: default; }
+  .kal-grid button[aria-pressed="true"] { background: var(--nav-indicator); color: var(--container); }
+  .kal-grid button.idag { font-weight: 700; }
+  .kal-grid .prikker { position: absolute; left: 0; right: 0; bottom: 4px; display: flex; justify-content: center; gap: 2px; }
+  .kal-grid .prikker i { width: 5px; height: 5px; border-radius: 50%; }
+  .kal-noegle { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 8px; font-size: 12px; color: var(--text-secondary); }
+  .kal-noegle span { display: inline-flex; align-items: center; gap: 5px; }
+  .kal-noegle i { width: 6px; height: 6px; border-radius: 50%; }
+  .dag-prikker { display: inline-flex; gap: 3px; margin-left: 6px; vertical-align: middle; }
+  .dag-prikker i { width: 6px; height: 6px; border-radius: 50%; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="page">
+    <div>
+      <h1>Kroppen i tal</h1>
+      <p class="sub">Alle Garmins døgn- og nattemålinger, i stil med garmin-grafana</p>
+    </div>
+    <div class="meta" id="meta"></div>
+  </header>
+  <div class="stack" id="root"><div class="card empty">Henter …</div></div>
+</div>
+
+<script src="/kompas/assets/icons.js"></script>
+<script src="/kompas/assets/liv.js"></script>
+<script src="/kompas/assets/chart.js"></script>
+<script>
+// Hvert mål har sin egen farve overalt på siden, så man kan følge det fra døgnet over ugen til måneden:
+// puls rød, stress orange, aktivitet grøn, body battery teal, søvn indigo, SpO2 og åndedræt blå, HRV lilla,
+// vægt og VO2max pink. Søvnfaserne er tjekket for farveblindhed som nabopar; trinene i stress og pulszoner er
+// én farve fra lys til stærk, fordi de er en rækkefølge.
+const trin = (c, p) => `color-mix(in oklab, var(${c}) ${p}%, var(--container))`;
+const MAAL = { puls: "var(--c8)", stress: "var(--c4)", aktivitet: "var(--c3)", bb: "var(--c7)", soevn: "var(--c6)",
+  spo2: "var(--c1)", aanding: "var(--c1)", hrv: "var(--c2)", krop: "var(--c5)" };
+const FARVE = {
+  dyb: "var(--c6)", let: "var(--c7)", rem: "var(--c2)", vaagen: "var(--c4)",
+  hvile: "var(--c1)", lav: trin("--c4", 50), middel: trin("--c4", 76), hoej: "var(--c4)", aktivitet: "var(--c2)", ukendt: "var(--gray-400)",
+  soevn: "var(--c6)", stille: "var(--gray-400)", aktiv: trin("--c3", 55), meget: "var(--c3)",
+  kcal_hvile: trin("--c4", 45), kcal_aktiv: "var(--c4)", moderat: trin("--c4", 50),
+  opladet: "var(--c7)", draenet: "var(--c4)",
+  // Pulszonerne i Garmins egne farver: grå, blå, grøn, orange, rød
+  zone: ["var(--gray-400)", "var(--c1)", "var(--c3)", "var(--c4)", "var(--c8)"],
+};
+// Garmins egne grænser for stress (0–25 hvile, 26–50 lav, 51–75 middel, 76–100 høj)
+const STRESSZONER = [{ lo: 0, hi: 25, label: "hvile", color: FARVE.hvile }, { lo: 25, hi: 50, label: "lav", color: FARVE.lav },
+  { lo: 50, hi: 75, label: "middel", color: FARVE.middel }, { lo: 75, hi: 100, label: "høj", color: FARVE.hoej }];
+// Dine egne pulszoner fra Garmin, som baggrund til pulsen hen over døgnet
+// Under zone 1 er kurven pulsens røde farve uden baggrund og står ikke i forklaringen
+const pulszoner = g => !g ? [] : [{ hi: g[0], color: MAAL.puls, bg: false },
+  ...g.map((lo, i) => ({ lo, hi: g[i + 1], label: `zone ${i + 1}`, color: FARVE.zone[i] }))];
+
+const pad = n => String(n).padStart(2, "0");
+const tm = t => { if (t == null) return "–"; const m = Math.round(t * 60); return `${Math.floor(m / 60)}:${pad(m % 60)}`; };
+// Søvnvinduet og natten står som tid efter kl. 18 aftenen før; døgnets kurver som minutter efter midnat
+const kl18 = v => `${pad(Math.floor((18 + v) % 24))}.${pad(Math.round((v % 1) * 60) % 60)}`;
+const klMin = m => kl18(m / 60);
+const klDoegn = m => `${pad(Math.floor(m / 60) % 24)}.${pad(Math.round(m % 60) % 60)}`;
+const lbl = dato => { const x = parseDate(dato); return `${x.getDate()}/${x.getMonth() + 1}`; };
+const datoTekst = dato => `${weekday(parseDate(dato))} ${dayMonth(parseDate(dato))} ${parseDate(dato).getFullYear()}`;
+const el = id => document.getElementById(id);
+const hent = sti => fetch(sti, { cache: "no-store" }).then(r => { if (!r.ok) throw new Error(`${sti} svarede ${r.status}`); return r.json(); });
+const ingen = "ingen måling";
+const panel = (id, titel, meta, note = "") => `<section class="card panel"><div class="panel-head"><h2>${titel}</h2><span class="meta">${meta}</span></div><div id="${id}"></div>${note ? `<p class="meta" style="margin:10px 0 0">${note}</p>` : ""}</section>`;
+// En dag uden måling viser kun tankestregen, ikke "–ms"
+const tile = (label, v, unit, foot) => `<div class="card tile"><div class="label">${label}</div><div class="value">${v}${unit && v !== "–" ? `<small>${unit}</small>` : ""}</div><div class="foot">${foot}</div></div>`;
+const pil = (id, retning, label) => `<button class="pil" id="${id}" aria-label="${label}">${icon(retning, 14)}</button>`;
+
+let INDEX, SENESTE, LIV, dagValgt, periodeValgt;
+// Livsoverbliks vurdering af sammenhængen, som den står i liv.json
+const natTekst = s => !s ? "" : s.rho == null ? s.status : `${s.status} · rho ${fmt(s.rho, 2)} · ${s.n_naetter} nætter`;
+const params = new URLSearchParams(location.search);
+
+// Adressen husker døgn og periode, så en genindlæsning står samme sted
+function husk() {
+  const q = new URLSearchParams();
+  if (dagValgt) q.set("dag", dagValgt);
+  if (periodeValgt && periodeValgt !== "seneste") q.set("periode", periodeValgt);
+  history.replaceState(null, "", `${location.pathname}${q.toString() ? `?${q}` : ""}${location.hash}`);
+}
+
+// Et anker i adressen (fx #natten eller #aktiviteter fra I dag) findes først, når døgnet og perioden er tegnet.
+// Der rulles én gang, når begge er det, så det ene ikke skubber det andet væk bagefter.
+let anker = location.hash.slice(1);
+const tegnet = new Set();
+function rulTilAnker(del) {
+  tegnet.add(del);
+  if (!anker || tegnet.size < 2) return;
+  document.getElementById(anker)?.scrollIntoView({ block: "start" });
+  anker = "";
+}
+
+// ---------- Døgnet ----------
+
+async function visDag(dato, rul = false) {
+  const dage = INDEX.dage;
+  dagValgt = dage.includes(dato) ? dato : dage[dage.length - 1];
+  husk();
+  const i = dage.indexOf(dagValgt);
+  el("dag-forrige").disabled = i <= 0;
+  el("dag-naeste").disabled = i >= dage.length - 1;
+  el("dag-dato").innerHTML = `${icon("calendar", 14)} ${esc(datoTekst(dagValgt))}${prikker(INDEX.aktiviteter?.[dagValgt])}`;
+  lukKalender();
+  markerDag();
+  const ud = el("doegn");
+  if (rul) el("doegn-head").scrollIntoView({ behavior: "smooth", block: "start" });
+  let d;
+  try { d = await hent(`kroppen/dag/${dagValgt}.json`); } catch (e) { ud.innerHTML = `<div class="card empty">${esc(e.message)}</div>`; return; }
+  if (d.dato !== dagValgt) return;  // et nyere valg er på vej
+  renderDag(d);
+  rulTilAnker("dag");
+}
+
+function renderDag(d) {
+  const x = d.doegn || {}, nat = d.nat, iDag = d.dato === INDEX.i_dag;
+  const nk = k => nat?.kurver[k];
+  // Natten først, med kurverne lige under Søvn (I dag hopper til #natten); så døgnets tal med dagens aktiviteter og kurver
+  el("doegn").innerHTML = `
+    <section class="tiles" aria-label="Natten" id="natten">
+      ${tile("Søvn", tm(x.soevn_t), "", x.soevnscore == null ? "ingen søvnscore" : `score ${fmt(x.soevnscore)}`)}
+      ${tile("HRV", fmt(x.hrv), "ms", x.hrv_status ? esc(x.hrv_status) : "–")}
+      ${tile("SpO2 om natten", fmt(nk("spo2")?.snit, 1), "%", nk("spo2")?.n ? `laveste ${fmt(nk("spo2").min)} %` : "ingen måling")}
+      ${tile("Readiness", fmt(x.readiness), "", x.seng_kl ? `sov ${x.seng_kl.replace(":", ".")}–${x.op_kl.replace(":", ".")}` : "–")}
+    </section>
+    ${nat ? `
+      ${panel("n-faser", `Natten til ${weekday(parseDate(d.dato))}`, `dyb ${tm(nat.min_i_fase.dyb / 60)} · let ${tm(nat.min_i_fase.let / 60)} · REM ${tm(nat.min_i_fase.rem / 60)} · vågen ${tm(nat.min_i_fase.vaagen / 60)}`)}
+      <div class="cols3">
+        ${[["n-puls", "puls", "Puls", "bpm", 0], ["n-hrv", "hrv", "HRV", "ms", 0], ["n-spo2", "spo2", "SpO2", "%", 1],
+           ["n-aanding", "aanding", "Åndedræt", "pr. min", 1], ["n-stress", "stress", "Stress", "", 0], ["n-bb", "bb", "Body battery", "", 0]]
+          .map(([id, k, t, enh, dec]) => panel(id, t, nk(k).n ? `${enh ? `${enh} · ` : ""}snit ${fmt(nk(k).snit, dec)} · ${fmt(nk(k).min)}–${fmt(nk(k).maks)}` : ingen)).join("")}
+      </div>` : `<div class="card empty">Ingen søvnfaser fra Garmin for natten til denne dag.</div>`}
+    <section class="tiles" aria-label="Døgnets tal">
+      ${tile(`Skridt${iDag ? " · indtil nu" : ""}`, fmt(x.skridt), "", `${fmt(x.distance_km, 1)} km · mål ${fmt(x.skridtmaal)}`)}
+      ${tile("Puls", fmt(x.hvilepuls), "hvile", `${fmt(x.puls_min)}–${fmt(x.puls_maks)} bpm`)}
+      ${tile("Stress", fmt(x.stress_snit), "snit", `høj stress ${tm(x.stress_hoej_t)}`)}
+      ${tile("Body battery", fmt(x.bb_top), "top", `bund ${fmt(x.bb_bund)} · +${fmt(x.bb_opladet)} / ${fmt(x.bb_draenet)}`)}
+    </section>
+    ${(d.aktiviteter || []).map(pasKort).join("")}
+    ${d.har_kurver ? `
+      ${panel("d-puls", "Puls hen over døgnet", d.puls.n ? `bpm · snit ${fmt(d.puls.snit)} · min ${fmt(d.puls.min)} · maks ${fmt(d.puls.maks)}` : ingen)}
+      ${panel("d-stress", "Stress hen over døgnet", d.stress.n ? `snit ${fmt(d.stress.snit)} · maks ${fmt(d.stress.maks)}` : ingen)}
+      <div class="cols">
+        ${panel("d-bb", "Body battery hen over døgnet", d.bb.n ? `${fmt(d.bb.min)}–${fmt(d.bb.maks)}` : ingen)}
+        ${panel("d-skridt", "Skridt pr. kvarter", `i alt ${fmt(x.skridt)}`)}
+      </div>`
+    : `<div class="card empty">Puls, stress og body battery hen over døgnet er ikke hentet for denne dag endnu.</div>`}
+  `;
+
+  (d.aktiviteter || []).forEach((p, i) => {
+    const h = el(`pas-puls-${i}`);
+    if (!h || !d.har_kurver) return;
+    const zoner = pulszoner(d.pulszoner), fra = p.fra_min - 10, til = p.til_min + 10;
+    // Står tid i pulszoner over kurven, har zonerne deres forklaring dér; kurven får dem uden nøgle
+    const iNoegle = p.min_i_zoner > 0 ? zoner.map(z => ({ ...z, label: undefined })) : zoner;
+    timeChart(h, { label: `Puls under ${p.sport_navn}`, height: 170, fra, til, xfmt: klDoegn, gap: 10, fmt: v => fmt(v), zones: iNoegle,
+      spans: [{ fra: p.fra_min, til: p.til_min }],
+      points: d.puls.punkter.filter(([t]) => t >= fra && t <= til).map(([t, v]) => ({ x: t, y: v, tip: `<div class="th">kl. ${klDoegn(t)}</div><b>${fmt(v)}</b> bpm${zoneNavn(zoner, v)}` })) });
+  });
+
+  if (d.har_kurver) {
+    // Pulskurven har farven af det, Garmin siger, du lavede i det kvarter; pulszonerne ligger i baggrunden
+    const zoner = pulszoner(d.pulszoner), kvarter = new Map(d.skridt.map(([t, , n]) => [t, n]));
+    const niveau = t => kvarter.get(Math.floor(t / 15) * 15);
+    timeChart(el("d-puls"), { label: "Puls hen over døgnet", height: 260, fra: 0, til: 1440, xfmt: klDoegn, gap: 10, fmt: v => fmt(v), zones: zoner,
+      noegle: NIVEAUER.filter(([k]) => d.skridt.some(s => s[2] === k)).map(([k, label, color]) => ({ label, color })),
+      ref: x.hvilepuls != null ? { y: x.hvilepuls, label: `hvilepuls ${fmt(x.hvilepuls)}` } : null,
+      spans: (d.aktiviteter || []).map(p => ({ fra: p.fra_min, til: p.til_min, label: p.sport_navn })),
+      points: d.puls.punkter.map(([t, v]) => ({ x: t, y: v, color: NIVEAU_FARVE[niveau(t)],
+        tip: `<div class="th">kl. ${klDoegn(t)}${niveau(t) ? ` · ${esc(AKTIVITET[niveau(t)] || niveau(t))}` : ""}</div><b>${fmt(v)}</b> bpm${zoneNavn(zoner, v)}` })) });
+    timeChart(el("d-stress"), { label: "Stress hen over døgnet", height: 200, fra: 0, til: 1440, xfmt: klDoegn, gap: 10, fmt: v => fmt(v), zones: STRESSZONER,
+      points: d.stress.punkter.map(([t, v]) => ({ x: t, y: v, tip: `<div class="th">kl. ${klDoegn(t)}</div>stress <b>${fmt(v)}</b>${zoneNavn(STRESSZONER, v)}` })) });
+    timeChart(el("d-bb"), { label: "Body battery hen over døgnet", height: 190, fra: 0, til: 1440, xfmt: klDoegn, gap: 10, fmt: v => fmt(v), color: MAAL.bb, min: 0,
+      points: d.bb.punkter.map(([t, v]) => ({ x: t, y: v, tip: `<div class="th">kl. ${klDoegn(t)}</div>body battery <b>${fmt(v)}</b>` })) });
+    barChart(el("d-skridt"), { label: "Skridt pr. kvarter", height: 190, fmt: v => fmt(v), color: MAAL.aktivitet,
+      points: d.skridt.map(([t, v, niveau]) => ({ label: klDoegn(t), y: v, tip: `<div class="th">kl. ${klDoegn(t)}–${klDoegn(t + 15)}</div><b>${fmt(v)}</b> skridt${niveau ? ` · ${esc(AKTIVITET[niveau] || niveau)}` : ""}` })) });
+  }
+  if (nat) {
+    const rows = [{ key: "vaagen", label: "Vågen" }, { key: "rem", label: "REM" }, { key: "let", label: "Let" }, { key: "dyb", label: "Dyb" }]
+      .map(r => ({ ...r, color: FARVE[r.key] }));
+    const navn = { dyb: "dyb søvn", let: "let søvn", rem: "REM", vaagen: "vågen" };
+    timelineChart(el("n-faser"), {
+      label: "Søvnfaser i nattens løb", fra: nat.fra, til: nat.til, xfmt: klMin, rows,
+      segs: nat.faser.filter(s => s.fase in navn).map(s => ({ row: rows.findIndex(r => r.key === s.fase), fra: s.fra, til: s.til,
+        tip: `<b>${navn[s.fase]}</b><br>${s.fra_kl.replace(":", ".")}–${s.til_kl.replace(":", ".")} · ${s.min} min` })),
+    });
+    const natLinje = (id, k, label, enhed, farve, dec = 0) => timeChart(el(id), {
+      label, height: 150, fra: nat.fra, til: nat.til, xfmt: klMin, gap: 15, fmt: v => fmt(v, 0), color: farve,
+      points: nk(k).punkter.map(([t, v]) => ({ x: t, y: v, tip: `<div class="th">kl. ${klMin(t)}</div><b>${fmt(v, dec)}</b> ${enhed}` })),
+    });
+    natLinje("n-puls", "puls", "Puls om natten", "bpm", MAAL.puls);
+    natLinje("n-hrv", "hrv", "HRV om natten", "ms", MAAL.hrv);
+    natLinje("n-spo2", "spo2", "SpO2 om natten", "%", MAAL.spo2);
+    natLinje("n-aanding", "aanding", "Åndedræt om natten", "pr. min", MAAL.aanding, 1);
+    natLinje("n-stress", "stress", "Stress om natten", "", MAAL.stress);
+    natLinje("n-bb", "bb", "Body battery om natten", "", MAAL.bb);
+  }
+}
+// Den valgte dag står markeret i ugetabellen
+const markerDag = () => document.querySelectorAll("tr[data-dato]").forEach(tr => {
+  if (tr.dataset.dato === dagValgt) tr.setAttribute("aria-current", "date"); else tr.removeAttribute("aria-current");
+});
+const AKTIVITET = { sleeping: "søvn", sedentary: "stillesiddende", active: "aktiv", highlyActive: "meget aktiv", generic: "aktivitet", none: "ingen" };
+// Garmins aktivitetsniveau pr. kvarter, i samme farver som Døgnets fordeling
+const NIVEAUER = [["sleeping", "søvn", FARVE.soevn], ["sedentary", "stillesiddende", "var(--gray-400)"], ["active", "aktiv", "var(--c3)"],
+  ["highlyActive", "meget aktiv", "var(--c4)"], ["generic", "aktivitet", "var(--c4)"]];
+const NIVEAU_FARVE = Object.fromEntries(NIVEAUER.map(([k, , c]) => [k, c]));
+const zoneNavn = (zs, v) => { const z = zs.find(z => (z.lo == null || v >= z.lo) && (z.hi == null || v < z.hi)); return z ? ` · ${esc(z.label)}` : ""; };
+
+// Intensiteten i tre bånd, i pulszonernes farver: let (zone 1–2), moderat (zone 3), hård (zone 4–5)
+const BAAND = [["let", "let", "var(--c1)"], ["moderat", "moderat", "var(--c3)"], ["hård", "hård", "var(--c8)"]];
+// Dagens råd fra garmin-coach og flagene om HRV, hvilepuls og søvn; rådet gælder kun den dag, det er skrevet
+const flagTekst = f => f.split(" — ")[0].replace(/^./, c => c.toUpperCase()) + ".";
+function raadKort(t) {
+  if (!t) return "";
+  const r = t.dagens_raad?.dato === INDEX.i_dag ? t.dagens_raad : null;
+  const raad = r?.niveau ? `<div class="card banner ${{ rolig: "warn", klar: "good" }[r.niveau] || ""}"><span class="bi">${icon("activity", 16)}</span>
+    <div><div class="bl">Dagens råd</div><p><b>${esc(r.titel)}.</b> ${esc(r.tekst)}</p><p class="meta" style="margin-top:4px">Fordi: ${esc(r.grunde.join(", "))}.</p></div></div>` : "";
+  return raad + (t.flag || []).map(f => `<div class="card banner warn"><span class="bi">${icon("activity", 16)}</span><div><div class="bl">Værd at bemærke</div><p>${esc(flagTekst(f))}</p></div></div>`).join("");
+}
+
+// Ét kort pr. aktivitet på dagen: Garmins tal for passet, tid i pulszoner, pulsen under passet og Hevy-øvelserne
+function pasKort(p, i) {
+  const t = (navn, v, enhed = "", dec = 0) => v == null ? "" : `<div><div class="n">${navn}</div><div class="v">${typeof v === "string" ? esc(v) : fmt(v, dec)}${enhed ? `<small>${enhed}</small>` : ""}</div></div>`;
+  const zoner = p.zoner_min, iAlt = p.min_i_zoner || 0, rest = p.uden_zone_min || 0;
+  const saetTekst = s => s.kg != null && s.reps ? `${fmt(s.kg, s.kg % 1 ? 1 : 0)} kg × ${fmt(s.reps)}${s.rpe ? ` @${fmt(s.rpe, s.rpe % 1 ? 1 : 0)}` : ""}`
+    : s.reps ? `${fmt(s.reps)} gentagelser` : [s.m ? `${fmt(s.m / 1000, 1)} km` : "", s.sek ? `${fmt(s.sek / 60)} min` : ""].filter(Boolean).join(" · ") || "–";
+  return `<section class="card panel">
+    <div class="pas-head"><h2><span style="color:${GRUPPE_FARVE[p.gruppe] || GRUPPE_FARVE.andet};display:inline-flex">${icon("activity", 16)}</span> ${esc(p.sport_navn)}${p.navn && p.navn !== p.sport_navn ? ` <span class="meta">${esc(p.navn)}</span>` : ""}</h2>
+      <span class="meta">kl. ${p.start.replace(":", ".")}–${p.slut.replace(":", ".")}${p.sted ? ` · ${esc(p.sted)}` : ""}</span></div>
+    <div class="pas-tal">
+      ${t("Varighed", p.varighed_min, "min")}${t("Distance", p.distance_km, "km", 2)}${t("Snitpuls", p.snitpuls, "bpm")}${t("Makspuls", p.makspuls, "bpm")}
+      ${t("Kalorier", p.kcal, "kcal")}${p.belastning ? t("Belastning", p.belastning, p.belastning_kilde === "hevy" ? "TRIMP fra Hevy" : "TRIMP") : ""}
+      ${p.noegletal.map(n => t(n.navn, n.tekst ?? n.v, n.enhed, n.dec)).join("")}
+    </div>
+    ${zoner && iAlt > 0 ? `<div class="pas-sub">Tid i pulszoner <span class="meta">puls i zone 1–5: ${fmt(iAlt)}${p.varighed_min != null ? ` af ${fmt(p.varighed_min)}` : ""} min</span></div>
+      <div class="zonebar" role="img" aria-label="${zoner.map((m, z) => `zone ${z + 1}: ${fmt(m)} min`).join(", ")}${rest ? `, under zone 1 eller uden puls: ${fmt(rest)} min` : ""}">${zoner.map((m, z) => m > 0 ? `<i style="flex:${m};background:${FARVE.zone[z]}" title="zone ${z + 1}: ${fmt(m)} min"></i>` : "").join("")}${rest ? `<i class="rest" style="flex:${rest}" title="under zone 1 eller uden puls: ${fmt(rest)} min"></i>` : ""}</div>
+      <div class="chart-key">${zoner.map((m, z) => m >= 0.5 ? `<span><i class="dot" style="background:${FARVE.zone[z]}"></i>zone ${z + 1} · ${fmt(m)} min</span>` : "").join("")}${rest ? `<span><i class="dot rest"></i>under zone 1 eller uden puls · ${fmt(rest)} min</span>` : ""}</div>` : ""}
+    <div id="pas-puls-${i}"></div>
+    ${p.ovelser.length ? `<div class="pas-sub">Øvelser fra Hevy</div><div class="scroll"><table class="uge">
+      <thead><tr><th>Øvelse</th><th class="num">Sæt</th><th>Tungeste sæt</th><th class="num">Volumen</th><th>Alle arbejdssæt</th></tr></thead>
+      <tbody>${p.ovelser.map(o => `<tr><td>${esc(o.navn)}</td><td class="num">${o.saet.length}${o.opvarmning ? ` <span class="meta">+${o.opvarmning} opv.</span>` : ""}</td>
+        <td>${o.tungeste ? saetTekst(o.tungeste) : (o.saet[0] ? saetTekst(o.saet[0]) : "–")}</td><td class="num">${o.volumen_kg == null ? "–" : `${fmt(o.volumen_kg)} kg`}</td>
+        <td class="meta">${o.saet.map(saetTekst).join(", ")}</td></tr>`).join("")}</tbody></table></div>` : ""}
+  </section>`;
+}
+
+// Kalenderen: én måned ad gangen; dage med data kan vælges, og en prik pr. aktivitet viser træningsdagene
+let kalMaaned;
+function aabnKalender() {
+  kalMaaned = dagValgt.slice(0, 7);
+  tegnKalender();
+  el("kal").hidden = false;
+  el("dag-dato").setAttribute("aria-expanded", "true");
+  el("kal").querySelector('button[aria-pressed="true"]')?.focus();
+}
+function lukKalender() {
+  if (!el("kal") || el("kal").hidden) return;
+  el("kal").hidden = true;
+  el("dag-dato").setAttribute("aria-expanded", "false");
+}
+function tegnKalender() {
+  const [aar, md] = kalMaaned.split("-").map(Number), første = new Date(aar, md - 1, 1);
+  const dageIMd = new Date(aar, md, 0).getDate(), forskyd = (første.getDay() + 6) % 7, har = new Set(INDEX.dage);
+  const kanTilbage = INDEX.dage[0].slice(0, 7) < kalMaaned, kanFrem = INDEX.dage[INDEX.dage.length - 1].slice(0, 7) > kalMaaned;
+  // Forklaringen viser kun de grupper, der er trænet i måneden
+  const maanedsGrupper = [...new Set(Object.entries(INDEX.aktiviteter || {}).filter(([d]) => d.startsWith(kalMaaned)).flatMap(([, ps]) => ps.map(a => a.gruppe)))];
+  let celler = "";
+  for (let i = 0; i < forskyd; i++) celler += "<span></span>";
+  for (let dag = 1; dag <= dageIMd; dag++) {
+    const dato = `${kalMaaned}-${pad(dag)}`, pas = INDEX.aktiviteter?.[dato] || [];
+    const navn = `${datoTekst(dato)}${pas.length ? `, ${pas.map(p => p.sport_navn).join(", ")}` : ""}`;
+    celler += `<button data-dato="${dato}" ${har.has(dato) ? "" : "disabled"} aria-pressed="${dato === dagValgt}" class="${dato === INDEX.i_dag ? "idag" : ""}"
+      aria-label="${esc(navn)}" title="${esc(pas.map(p => p.navn || p.sport_navn).join(" · "))}">${dag}${pas.length ? `<span class="prikker">${pas.slice(0, 3).map(a => `<i style="background:${GRUPPE_FARVE[a.gruppe] || GRUPPE_FARVE.andet}"></i>`).join("")}</span>` : ""}</button>`;
+  }
+  el("kal").innerHTML = `<div class="kal-top"><span class="nav">${pil("kal-tilbage", "arrow-left", "Måneden før")}</span>
+      <span>${esc(MAANEDER[md - 1])} ${aar}</span><span class="nav">${pil("kal-frem", "arrow-right", "Måneden efter")}</span></div>
+    <div class="kal-grid">${["ma", "ti", "on", "to", "fr", "lø", "sø"].map(u => `<span class="ug">${u}</span>`).join("")}${celler}</div>
+    <div class="kal-noegle">${maanedsGrupper.length ? GRUPPER.filter(([g]) => maanedsGrupper.includes(g)).map(([, navn, farve]) => `<span><i style="background:${farve}"></i>${navn}</span>`).join("") : "<span>ingen aktiviteter</span>"}</div>`;
+  el("kal-tilbage").disabled = !kanTilbage;
+  el("kal-frem").disabled = !kanFrem;
+  const skiftMd = n => { const d = new Date(aar, md - 1 + n, 1); kalMaaned = `${d.getFullYear()}-${pad(d.getMonth() + 1)}`; tegnKalender(); };
+  el("kal-tilbage").addEventListener("click", ev => { ev.stopPropagation(); skiftMd(-1); });
+  el("kal-frem").addEventListener("click", ev => { ev.stopPropagation(); skiftMd(1); });
+  el("kal").querySelectorAll("button[data-dato]").forEach(b => b.addEventListener("click", () => { visDag(b.dataset.dato); el("dag-dato").focus(); }));
+}
+// Sportsgrenene i fem grupper plus andet (grupperne kommer fra kroppen.py). De fem farver er de eneste i
+// designkittet, der kan skelnes parvis også med farveblindhed; navnet står i forklaringen og ved musen.
+const GRUPPER = [["styrke", "Styrke", "var(--c8)"], ["loeb", "Løb og gang", "var(--c3)"], ["kondition", "Kondition", "var(--c4)"],
+  ["svoemning", "Svømning", "var(--c1)"], ["klatring", "Klatring", "var(--c5)"], ["andet", "Andet", "var(--gray-400)"]];
+const GRUPPE_FARVE = Object.fromEntries(GRUPPER.map(([g, , f]) => [g, f]));
+const prikker = pas => !pas?.length ? "" : `<span class="dag-prikker" title="${esc(pas.map(a => a.navn || a.sport_navn).join(" · "))}" aria-label="${esc(pas.map(a => a.sport_navn).join(", "))}">${pas.map(a => `<i style="background:${GRUPPE_FARVE[a.gruppe] || GRUPPE_FARVE.andet}"></i>`).join("")}</span>`;
+const MAANEDER = ["januar", "februar", "marts", "april", "maj", "juni", "juli", "august", "september", "oktober", "november", "december"];
+
+// ---------- Perioden ----------
+
+const perioder = () => [{ id: "seneste", navn: "Seneste 60 dage" }, ...INDEX.maaneder];
+
+async function visPeriode(id) {
+  const ps = perioder();
+  periodeValgt = ps.some(p => p.id === id) ? id : "seneste";
+  husk();
+  const i = ps.findIndex(p => p.id === periodeValgt);
+  // Listen står nyeste først: pil til venstre går tilbage i tid
+  el("per-aeldre").disabled = i >= ps.length - 1;
+  el("per-nyere").disabled = i <= 0;
+  el("per-valg").value = periodeValgt;
+  let d;
+  try { d = periodeValgt === "seneste" ? SENESTE : await hent(`kroppen/maaned/${periodeValgt}.json`); }
+  catch (e) { el("periode").innerHTML = `<div class="card empty">${esc(e.message)}</div>`; return; }
+  if (d.periode.id !== periodeValgt) return;
+  renderPeriode(d);
+  markerDag();
+  rulTilAnker("periode");
+}
+
+function renderPeriode(d) {
+  const D = d.dage, R = d.resume, idag = d.i_dag;
+  const head = dato => `<div class="th">${weekday(parseDate(dato))} ${dayMonth(parseDate(dato))}${dato === idag ? " · i dag indtil nu" : ""}</div>`;
+  // Snit, min og maks fra filen, som Grafanas forklaring under hver graf
+  const res = (k, dec = 0, f = v => fmt(v, dec)) => { const r = R[k]; return !r || !r.n ? "ingen målinger" : `snit ${f(r.snit)} · min ${f(r.min)} · maks ${f(r.maks)}`; };
+  const G = d.grundniveau, T = d.traening, TB = T?.belastning || {}, TI = T?.intensitet || {};
+  // Livsoverbliks aftener i perioden (de seneste 28); uden liv.json står siden uden dem
+  const aftner = (LIV?.naetter || []).filter(n => n.dato >= d.fra && n.dato <= d.til && (n.sengetid != null || n.sen_skaermtid_t != null));
+  const U = d.uge.dage, US = d.uge.snit, UF = d.uge.foer, M = d.maaned, A = d.aktiviteter, pas = A.pas, H = SENESTE.historik || {};
+  // Hver kolonne er skaleret for sig mod periodens egne tal (min og maks fra filen), i sit måls farve. En mængde
+  // (distance, skridt, søvn, tid) er en søjle fra 0 til periodens største. Et niveau (hvilepuls, SpO2, body battery)
+  // ligger tæt hele tiden, så det er en prik mellem periodens laveste og højeste: hvor dagen ligger i dit eget spænd.
+  const kolonner = [
+    ["distance_km", "Distance", v => `${fmt(v, 2)} km`, MAAL.aktivitet, "maengde"], ["skridt", "Skridt", v => fmt(v), MAAL.aktivitet, "maengde"],
+    ["soevn_t", "Søvn", tm, MAAL.soevn, "maengde"], ["stress_hoej_t", "Høj stress", tm, MAAL.stress, "maengde"],
+    ["akt_meget_t", "Meget aktiv", tm, MAAL.aktivitet, "maengde"], ["hvilepuls", "Hvilepuls", v => `${fmt(v)} bpm`, MAAL.puls, "niveau"],
+    ["spo2_snit", "SpO2", v => `${fmt(v)} %`, MAAL.spo2, "niveau"], ["bb_opladet", "Body battery opladet", v => fmt(v), MAAL.bb, "niveau"],
+  ];
+  const celle = (k, f, farve, art, v) => {
+    if (v == null) return `<td class="num">–</td>`;
+    const r = R[k] || {}, tal = `<span class="num">${f(v)}</span>`;
+    if (art === "niveau") {
+      const spaend = r.maks - r.min, pos = spaend > 0 ? Math.min(100, Math.max(0, 100 * (v - r.min) / spaend)) : 50;
+      return `<td class="num"><span class="inline">${tal}<span class="spor niveau" title="periodens spænd ${f(r.min)}–${f(r.maks)}"><i style="left:${pos}%;background:${farve}"></i></span></span></td>`;
+    }
+    const m = Math.max(r.maks ?? 0, v) || 1;
+    return `<td class="num"><span class="inline">${tal}<span class="spor"><i style="width:${Math.max(2, 100 * v / m)}%;background:${farve}"></i></span></span></td>`;
+  };
+  const fraTil = `${dayMonth(parseDate(d.fra))} – ${dayMonth(parseDate(d.til))} ${parseDate(d.til).getFullYear()}`;
+
+  el("periode").innerHTML = `
+    <section class="card panel"><div class="panel-head"><h2>Ugen i overblik</h2><span class="meta">periodens sidste syv hele døgn · søjle: mod periodens største · prik: mellem periodens laveste og højeste · klik på en dag for at se den</span></div>
+      <div class="scroll"><table class="uge"><thead><tr><th>Dag</th>${kolonner.map(([, n]) => `<th class="num">${n}</th>`).join("")}</tr></thead>
+      <tbody>${U.map(x => `<tr class="vaelg" data-dato="${x.dato}" tabindex="0"><td>${weekday(parseDate(x.dato)).slice(0, 3)} ${dayMonth(parseDate(x.dato))}${x.dato === idag ? " · i dag" : ""}${prikker(INDEX.aktiviteter?.[x.dato])}</td>${kolonner.map(([k, , f, c, art]) => celle(k, f, c, art, x[k])).join("")}</tr>`).join("")}</tbody>
+      <tfoot><tr><td>Snit</td>${kolonner.map(([k, , f]) => `<td class="num">${US[k] == null ? "–" : f(US[k])}</td>`).join("")}</tr>
+      ${UF ? `<tr class="foer"><td>Ugen før <span class="meta">${dayMonth(parseDate(UF.fra))} – ${dayMonth(parseDate(UF.til))}</span></td>${kolonner.map(([k, , f]) => `<td class="num">${UF.snit[k] == null ? "–" : f(UF.snit[k])}</td>`).join("")}</tr>` : ""}</tfoot></table></div></section>
+
+    <section class="card panel"><div class="panel-head"><h2>Måneden i overblik</h2><span class="meta">${M.datoer.length} hele døgn · stærkere farve = højere i målets eget spænd · klik for at se dagen</span></div><div id="c-maaned"></div></section>
+
+    <h2 class="afsnit">Træningsbelastning</h2>
+    ${T ? `<div class="cols">
+      <section class="card panel"><div class="panel-head"><h2>Belastning nu</h2><span class="meta">TRIMP · til og med ${TB.beregnet_til_og_med ? dayMonth(parseDate(TB.beregnet_til_og_med)) : "–"}</span></div>
+        <div class="pas-tal">${[["Seneste 7 dage", TB.akut_7d, 0], ["Snit pr. uge, 28 dage", TB.kronisk_uge_snit_28d, 0], ["Forhold (ACWR)", TB.acwr, 2]]
+          .map(([n, v, dec]) => `<div><div class="n">${n}</div><div class="v">${fmt(v, dec)}</div></div>`).join("")}</div>
+        ${TB.acwr_fortolkning ? `<p class="meta" style="margin:8px 0 0">${esc(TB.acwr_fortolkning.replace(/^./, c => c.toUpperCase()))}.</p>` : ""}</section>
+      <section class="card panel"><div class="panel-head"><h2>Intensitet, 28 dage</h2><span class="meta">${TI.samlet_timer != null ? `${fmt(TI.samlet_timer, 1)} t i pulszonerne` : ""}</span></div>
+        ${TI.tre_baand_procent ? `<div class="zonebar" role="img" aria-label="${BAAND.map(([k, n]) => `${n} ${TI.tre_baand_procent[k]} %`).join(", ")}">${BAAND.map(([k, , c]) => TI.tre_baand_procent[k] > 0 ? `<i style="flex:${TI.tre_baand_procent[k]};background:${c}"></i>` : "").join("")}</div>
+          <div class="chart-key">${BAAND.map(([k, n, c]) => `<span><i class="dot" style="background:${c}"></i>${n} ${fmt(TI.tre_baand_procent[k])} %</span>`).join("")}</div>`
+          : `<p class="meta">Ingen pulsdata de seneste 28 dage.</p>`}
+        ${TI.note ? `<p class="meta" style="margin:10px 0 0;line-height:1.5">${esc(TI.note)}</p>` : ""}</section>
+    </div>` : ""}
+    <div class="cols">
+      ${panel("c-belastning", "Belastning dag for dag", `TRIMP · ${res("belastning")}`)}
+      ${panel("c-ugebelastning", "Belastning uge for uge", "TRIMP pr. uge · lyse søjler er uger, perioden kun dækker en del af")}
+    </div>
+
+    <h2 class="afsnit">Aktivitet dag for dag</h2>
+    <div class="cols">
+      ${panel("c-skridt", "Skridt", res("skridt"))}
+      ${panel("c-distance", "Distance", `km · ${res("distance_km", 1)}`)}
+      ${panel("c-kcal", "Kalorier", `hvile ${res("kcal_hvile")} · aktiv snit ${fmt(R.kcal_aktiv.snit)}`)}
+      ${panel("c-akt", "Døgnets fordeling", `timer · stillesiddende snit ${tm(R.akt_stille_t.snit)} · meget aktiv snit ${tm(R.akt_meget_t.snit)}`)}
+      ${panel("c-int", "Intensitetsminutter", `min · moderat snit ${fmt(R.int_moderat_min.snit)} · høj snit ${fmt(R.int_hoej_min.snit)}`)}
+      ${panel("c-etager", "Etager op", res("etager", 1))}
+    </div>
+
+    <h2 class="afsnit">Stress og energi</h2>
+    <div class="cols">
+      ${panel("c-stress", "Stress pr. døgn", `timer · høj stress snit ${tm(R.stress_hoej_t.snit)} · hvile snit ${tm(R.stress_hvile_t.snit)}`)}
+      ${panel("c-stresssnit", "Stress, snit", res("stress_snit"))}
+      ${panel("c-bb", "Body battery opladet og drænet", `opladet snit ${fmt(R.bb_opladet.snit)} · drænet snit ${fmt(R.bb_draenet.snit)}`)}
+      ${panel("c-bbspaend", "Body battery, bund til top", `top snit ${fmt(R.bb_top.snit)} · bund snit ${fmt(R.bb_bund.snit)}`)}
+    </div>
+
+    <h2 class="afsnit">Puls og helbred</h2>
+    <div class="cols">
+      ${panel("c-puls", "Puls, laveste til højeste", `bpm · laveste snit ${fmt(R.puls_min.snit)} · højeste snit ${fmt(R.puls_maks.snit)}`)}
+      ${panel("c-rhr", "Hvilepuls", `bpm · ${res("hvilepuls")}${G?.hvilepuls?.baseline != null ? ` · stiplet er grundniveau` : ""}`)}
+      ${panel("c-hrv", "HRV om natten", `ms · ${res("hrv")}${G?.hrv?.baseline != null ? ` · stiplet er grundniveau` : ""}`)}
+      ${panel("c-spo2", "SpO2, snit pr. døgn", `% · ${res("spo2_snit", 1)}`)}
+      ${panel("c-aanding", "Åndedræt, vågen", `pr. min · ${res("aanding_vaagen", 1)}`)}
+      ${panel("c-aandingsoevn", "Åndedræt, søvn", `pr. min · ${res("aanding_soevn", 1)}`)}
+    </div>
+
+    <h2 class="afsnit">Søvn</h2>
+    <div class="cols">
+      ${panel("c-faser", "Søvnfaser", `timer · søvn snit ${tm(R.soevn_t.snit)} · ${d.naetter_under_7t.under} af ${d.naetter_under_7t.maalte} nætter under 7 t`)}
+      ${panel("c-score", "Søvnscore", res("soevnscore"))}
+      ${panel("c-vindue", "Søvnens regelmæssighed", R.seng_t.n ? `i seng snit ${kl18(R.seng_t.snit)} · op snit ${kl18(R.op_t.snit)}` : "ingen målinger", "Søjlen går fra du faldt i søvn til du vågnede, som Garmin har registreret det.")}
+      ${panel("c-soevnstress", "Stress under søvn", res("soevn_stress"))}
+    </div>
+    ${aftner.length ? `<div class="cols">
+      ${panel("c-seng", "Sengetid", "pr. aften · højere er senere · stiplet: skærmtid efter kl. 23, timer til højre",
+        "Garmins sengetid og Skærmtids sene skærmtid samme aften, samlet af overblik. En aften uden data fra Skærmtid har intet stykke stiplet linje, ikke 0.")}
+      ${aftner.some(n => n.sen_skaermtid_t != null && n.soevnscore != null) ? panel("c-nat", "Sen skærmtid mod søvnscore", esc(natTekst(LIV.nat_sammenhaeng)),
+        "Ét punkt pr. nat: sen skærmtid om aftenen mod søvnscoren samme nat. Sammenhængen er testet af overblik på alle de nætter, Skærmtid dækker, med permutation i blokke af 3 nætter.") : ""}
+    </div>` : ""}
+
+    <h2 class="afsnit">Over længere tid</h2>
+    <div class="cols">
+      ${panel("c-vo2", "VO2max", H.vo2max?.n ? `alle målinger · ${fmt(H.vo2max.min, 1)}–${fmt(H.vo2max.maks, 1)}` : "ingen målinger")}
+      ${panel("c-vaegt", "Vægt", H.vaegt?.n ? `kg · alle vejninger · ${fmt(H.vaegt.min, 1)}–${fmt(H.vaegt.maks, 1)}` : "ingen målinger")}
+    </div>
+
+    <h2 class="afsnit" id="aktiviteter">Aktiviteter · ${fraTil}</h2>
+    ${pas.length ? `
+    ${panel("c-zoner", "Tid i pulszoner pr. aktivitet", `min · i alt ${A.zoner_min_i_alt.map((m, i) => `Z${i + 1} ${fmt(A.zoner_procent[i])} %`).join(" · ")}`)}
+    <div class="cols3">
+      ${panel("c-varighed", "Varighed", "min")}
+      ${panel("c-pasdist", "Distance", "km · kun pas med distance")}
+      ${panel("c-pulsforskel", "Makspuls minus snitpuls", "bpm")}
+    </div>
+    <section class="card panel"><details><summary>Aktiviteterne som tabel (${pas.length})</summary><div class="scroll">
+      <table class="uge"><thead><tr><th>Dag</th><th>Aktivitet</th><th class="num">Varighed</th><th class="num">Distance</th><th class="num">Snitpuls</th><th class="num">Makspuls</th><th class="num">kcal</th></tr></thead>
+      <tbody>${[...pas].reverse().map(p => `<tr><td>${weekday(parseDate(p.dato)).slice(0, 3)} ${dayMonth(parseDate(p.dato))} ${p.start}</td><td>${esc(p.navn)}</td>
+        <td class="num">${fmt(p.varighed_min)} min</td><td class="num">${p.distance_km == null ? "–" : `${fmt(p.distance_km, 2)} km`}</td>
+        <td class="num">${fmt(p.snitpuls)}</td><td class="num">${fmt(p.makspuls)}</td><td class="num">${fmt(p.kcal)}</td></tr>`).join("")}</tbody></table>
+    </div></details></section>` : `<div class="card empty">Ingen aktiviteter i perioden.</div>`}
+  `;
+
+  el("periode").querySelectorAll("tr.vaelg").forEach(tr => {
+    tr.addEventListener("click", () => visDag(tr.dataset.dato, true));
+    tr.addEventListener("keydown", ev => { if (ev.key === "Enter") visDag(tr.dataset.dato, true); });
+  });
+
+  const dagP = (f, tip) => D.map(x => ({ label: lbl(x.dato), dim: x.dato === idag, ...f(x), tip: `${head(x.dato)}${tip(x)}` }));
+  const sidsteMaal = [...D].reverse().find(x => x.skridtmaal)?.skridtmaal;
+
+  // Måneden: hver række i sit måls farve
+  const rækkeFarve = { traening_min: MAAL.aktivitet, hvilepuls: MAAL.puls, stress_hoej_t: MAAL.stress, akt_aktiv_t: MAAL.aktivitet, bb_top: MAAL.bb, skridt: MAAL.aktivitet,
+    spo2_snit: MAAL.spo2, soevnscore: MAAL.soevn, soevn_t: MAAL.soevn, hrv: MAAL.hrv };
+  const vis = (r, v) => v == null ? "–" : r.enhed === "t" ? tm(v) : `${fmt(v, r.decimaler)}${r.enhed === "min" ? " min" : ""}`;
+  heatGrid(el("c-maaned"), { label: "Måneden, mål for mål", cols: M.datoer.map(lbl), vaelg: i => visDag(M.datoer[i], true),
+    rows: M.raekker.map(r => ({ label: r.navn, color: rækkeFarve[r.felt], cells: r.celler.map((c, i) => ({ niveau: c.niveau,
+      tip: `${head(M.datoer[i])}${esc(r.navn)} <b>${vis(r, c.v)}</b>${c.v != null && r.enhed && r.enhed !== "t" ? ` ${r.enhed}` : ""}<br>perioden: ${vis(r, r.min)}–${vis(r, r.maks)}` })) })) });
+
+  // Træningsbelastning
+  barChart(el("c-belastning"), { label: "Belastning pr. døgn", height: 190, fmt: v => fmt(v), color: MAAL.aktivitet,
+    points: dagP(x => ({ y: x.belastning }), x => `belastning <b>${fmt(x.belastning)}</b>${x.pas ? ` · ${x.pas} pas, ${x.traening_min} min` : " · hviledag"}`) });
+  barChart(el("c-ugebelastning"), { label: "Belastning pr. uge", height: 190, fmt: v => fmt(v), color: MAAL.aktivitet,
+    points: d.uge_belastning.map(u => ({ label: `uge ${u.uge}`, y: u.belastning, dim: !u.hel,
+      tip: `<div class="th">uge ${u.uge} · fra ${dayMonth(parseDate(u.mandag))}${u.hel ? "" : " · ikke hel"}</div>belastning <b>${fmt(u.belastning)}</b> · ${u.traeningsdage} træningsdage` })) });
+
+  // Aktivitet
+  barChart(el("c-skridt"), { label: "Skridt pr. døgn", height: 190, fmt: v => fmt(v), color: MAAL.aktivitet, ref: sidsteMaal ? { y: sidsteMaal, label: `mål ${fmt(sidsteMaal)}` } : null,
+    points: dagP(x => ({ y: x.skridt }), x => x.skridt == null ? ingen : `<b>${fmt(x.skridt)}</b> skridt · mål ${fmt(x.skridtmaal)}`) });
+  barChart(el("c-distance"), { label: "Distance pr. døgn", height: 190, fmt: v => fmt(v, 0), color: MAAL.aktivitet,
+    points: dagP(x => ({ y: x.distance_km }), x => x.distance_km == null ? ingen : `<b>${fmt(x.distance_km, 2)} km</b>`) });
+  stackChart(el("c-kcal"), { label: "Kalorier pr. døgn", height: 190, fmt: v => fmt(v),
+    series: [{ label: "hvile (BMR)", color: FARVE.kcal_hvile }, { label: "aktiv", color: FARVE.kcal_aktiv }],
+    points: dagP(x => ({ ys: [x.kcal_hvile, x.kcal_aktiv] }), x => x.kcal_hvile == null ? ingen : `hvile <b>${fmt(x.kcal_hvile)}</b> · aktiv <b>${fmt(x.kcal_aktiv)}</b> kcal`) });
+  stackChart(el("c-akt"), { label: "Døgnets fordeling i timer", height: 190, fmt: v => fmt(v),
+    series: [{ label: "søvn", color: FARVE.soevn }, { label: "stillesiddende", color: FARVE.stille }, { label: "aktiv", color: FARVE.aktiv }, { label: "meget aktiv", color: FARVE.meget }],
+    points: dagP(x => ({ ys: [x.akt_soevn_t, x.akt_stille_t, x.akt_aktiv_t, x.akt_meget_t] }),
+      x => x.akt_stille_t == null ? ingen : `søvn <b>${tm(x.akt_soevn_t)}</b> · stillesiddende <b>${tm(x.akt_stille_t)}</b><br>aktiv <b>${tm(x.akt_aktiv_t)}</b> · meget aktiv <b>${tm(x.akt_meget_t)}</b>`) });
+  stackChart(el("c-int"), { label: "Intensitetsminutter pr. døgn", height: 190, fmt: v => fmt(v),
+    series: [{ label: "moderat", color: FARVE.moderat }, { label: "høj", color: FARVE.hoej }],
+    points: dagP(x => ({ ys: [x.int_moderat_min, x.int_hoej_min] }), x => x.int_moderat_min == null ? ingen : `moderat <b>${fmt(x.int_moderat_min)}</b> · høj <b>${fmt(x.int_hoej_min)}</b> min`) });
+  barChart(el("c-etager"), { label: "Etager op pr. døgn", height: 190, fmt: v => fmt(v), color: MAAL.aktivitet,
+    points: dagP(x => ({ y: x.etager }), x => x.etager == null ? ingen : `<b>${fmt(x.etager, 1)}</b> etager op`) });
+
+  // Stress og energi
+  stackChart(el("c-stress"), { label: "Stress pr. døgn i timer", height: 200, fmt: v => fmt(v),
+    series: [["hvile", "hvile"], ["lav", "lav"], ["middel", "middel"], ["hoej", "høj"], ["aktivitet", "aktivitet"], ["ukendt", "ukendt"]].map(([k, l]) => ({ label: l, color: FARVE[k] })),
+    points: dagP(x => ({ ys: [x.stress_hvile_t, x.stress_lav_t, x.stress_middel_t, x.stress_hoej_t, x.stress_aktivitet_t, x.stress_ukendt_t] }),
+      x => x.stress_hvile_t == null ? ingen : `hvile <b>${tm(x.stress_hvile_t)}</b> · lav <b>${tm(x.stress_lav_t)}</b> · middel <b>${tm(x.stress_middel_t)}</b><br>høj <b>${tm(x.stress_hoej_t)}</b> · aktivitet <b>${tm(x.stress_aktivitet_t)}</b> · ukendt <b>${tm(x.stress_ukendt_t)}</b>`) });
+  lineChart(el("c-stresssnit"), { label: "Stress, snit pr. døgn", height: 200, fmt: v => fmt(v), color: MAAL.stress,
+    points: dagP(x => ({ y: x.stress_snit }), x => x.stress_snit == null ? ingen : `snit <b>${fmt(x.stress_snit)}</b>`) });
+  stackChart(el("c-bb"), { label: "Body battery opladet og drænet pr. døgn", height: 200, fmt: v => fmt(v),
+    series: [{ label: "opladet", color: FARVE.opladet }, { label: "drænet", color: FARVE.draenet }],
+    points: dagP(x => ({ ys: [x.bb_opladet, x.bb_draenet] }), x => x.bb_opladet == null ? ingen : `opladet <b>+${fmt(x.bb_opladet)}</b> · drænet <b>${fmt(x.bb_draenet)}</b>`) });
+  rangeChart(el("c-bbspaend"), { label: "Body battery fra bund til top pr. døgn", height: 200, fmt: v => fmt(v), color: MAAL.bb,
+    points: dagP(x => ({ lo: x.bb_bund, hi: x.bb_top }), x => x.bb_top == null ? ingen : `bund <b>${fmt(x.bb_bund)}</b> · top <b>${fmt(x.bb_top)}</b>`) });
+
+  // Puls og helbred
+  rangeChart(el("c-puls"), { label: "Puls fra laveste til højeste pr. døgn", height: 190, fmt: v => fmt(v), color: MAAL.puls,
+    points: dagP(x => ({ lo: x.puls_min, hi: x.puls_maks }), x => x.puls_min == null ? ingen : `laveste <b>${fmt(x.puls_min)}</b> · højeste <b>${fmt(x.puls_maks)}</b> bpm`) });
+  const linje = (id, k, label, enhed, farve, dec = 0, ref = null) => lineChart(el(id), { label, height: 190, fmt: v => fmt(v, 0), color: farve, ref,
+    points: dagP(x => ({ y: x[k] }), x => x[k] == null ? ingen : `<b>${fmt(x[k], dec)}</b> ${enhed}`) });
+  // Grundniveauet (de 53 dage før de seneste 7, som i garmin-coach) findes kun for de seneste 60 dage
+  const grund = k => G?.[k]?.baseline != null ? { y: G[k].baseline, label: `grundniveau ${fmt(G[k].baseline)}` } : null;
+  linje("c-rhr", "hvilepuls", "Hvilepuls", "bpm", MAAL.puls, 0, grund("hvilepuls"));
+  linje("c-hrv", "hrv", "HRV om natten", "ms", MAAL.hrv, 0, grund("hrv"));
+  linje("c-spo2", "spo2_snit", "SpO2, snit pr. døgn", "%", MAAL.spo2);
+  linje("c-aanding", "aanding_vaagen", "Åndedræt vågen", "pr. min", MAAL.aanding, 1);
+  linje("c-aandingsoevn", "aanding_soevn", "Åndedræt under søvn", "pr. min", MAAL.aanding, 1);
+
+  // Søvn
+  stackChart(el("c-faser"), { label: "Søvnfaser pr. nat i timer", height: 200, fmt: v => fmt(v), ref: { y: 7, label: "7 t" },
+    series: [{ label: "dyb", color: FARVE.dyb }, { label: "let", color: FARVE.let }, { label: "REM", color: FARVE.rem }, { label: "vågen", color: FARVE.vaagen }],
+    points: dagP(x => ({ ys: [x.dyb_t, x.let_t, x.rem_t, x.vaagen_t] }), x => x.soevn_t == null ? ingen : `<b>${tm(x.soevn_t)}</b> søvn<br>dyb ${tm(x.dyb_t)} · let ${tm(x.let_t)} · REM ${tm(x.rem_t)} · vågen ${tm(x.vaagen_t)}`) });
+  barChart(el("c-score"), { label: "Søvnscore pr. nat", height: 200, fmt: v => fmt(v), color: MAAL.soevn,
+    points: dagP(x => ({ y: x.soevnscore }), x => x.soevnscore == null ? ingen : `score <b>${fmt(x.soevnscore)}</b>`) });
+  rangeChart(el("c-vindue"), { label: "Søvnens tidsrum pr. nat", height: 200, fmt: kl18, color: MAAL.soevn,
+    points: dagP(x => ({ lo: x.seng_t, hi: x.op_t }), x => x.seng_t == null ? ingen : `sov <b>${x.seng_kl.replace(":", ".")}</b> · vågnede <b>${x.op_kl.replace(":", ".")}</b>`) });
+  linje("c-soevnstress", "soevn_stress", "Stress under søvn", "", MAAL.stress);
+  // Sengetid og sen skærmtid fra overblik; aftenerne står under aftenens dato, Garmins nætter under dagen, du vågnede
+  const aften = n => `<div class="th">aften ${weekday(parseDate(n.dato))} ${dayMonth(parseDate(n.dato))}</div>`;
+  // Sengetiden er i fokus; den sene skærmtid er en tynd stiplet linje på sin egen akse til højre (0–2 t)
+  if (aftner.length) {
+    const tip = n => `${aften(n)}sengetid <b>${n.sengetid ? n.sengetid.replace(":", ".") : "–"}</b> · sen skærmtid <b>${n.sen_skaermtid_t == null ? "ingen data" : `${fmt(n.sen_skaermtid_t, 2)} t`}</b><br>søvn ${fmt(n.soevn_t, 1)} t · score ${fmt(n.soevnscore)}`;
+    const maks = Math.max(2, Math.ceil(Math.max(0, ...aftner.map(n => n.sen_skaermtid_t ?? 0))));
+    lineChart(el("c-seng"), { label: "Sengetid pr. aften med sen skærmtid", height: 210, fmt: kl18, color: MAAL.soevn,
+      line2: { label: "skærmtid efter kl. 23", max: maks, fmt: v => `${fmt(v, v % 1 ? 1 : 0)} t` },
+      points: aftner.map(n => ({ label: lbl(n.dato), y: n.sengetid_t, y2: n.sen_skaermtid_t, tip: tip(n) })) });
+  }
+  if (el("c-nat")) scatterChart(el("c-nat"), { label: "Sen skærmtid mod søvnscore pr. nat", height: 200, fmt: v => fmt(v, 0), color: MAAL.soevn,
+    xfmt: v => `${fmt(v, 1)} t`, xlabel: "sen skærmtid",
+    points: aftner.map(n => ({ x: n.sen_skaermtid_t, y: n.soevnscore, tip: `${aften(n)}sen skærmtid <b>${fmt(n.sen_skaermtid_t, 2)} t</b> · søvnscore <b>${fmt(n.soevnscore)}</b>` })) });
+
+  // Over længere tid
+  const hist = (id, h, label, enhed) => lineChart(el(id), { label, height: 190, fmt: v => fmt(v, 0), color: MAAL.krop,
+    points: (h?.maalinger || []).map(m => ({ label: `${MONTHS[parseDate(m.dato).getMonth()]} ${String(parseDate(m.dato).getFullYear()).slice(2)}`, y: m.v, tip: `<div class="th">${dayMonth(parseDate(m.dato))} ${parseDate(m.dato).getFullYear()}</div><b>${fmt(m.v, 1)}</b> ${enhed}` })) });
+  hist("c-vo2", H.vo2max, "VO2max over tid", "");
+  hist("c-vaegt", H.vaegt, "Vægt over tid", "kg");
+
+  // Aktiviteter
+  if (!pas.length) return;
+  const pasHead = p => `<div class="th">${weekday(parseDate(p.dato))} ${dayMonth(parseDate(p.dato))} kl. ${p.start.replace(":", ".")}</div><b>${esc(p.navn)}</b><br>`;
+  stackChart(el("c-zoner"), { label: "Minutter i pulszoner pr. aktivitet", height: 200, fmt: v => fmt(v),
+    series: FARVE.zone.map((c, i) => ({ label: `zone ${i + 1}`, color: c })),
+    points: pas.map(p => ({ label: lbl(p.dato), ys: p.zoner_min || [null, null, null, null, null],
+      tip: `${pasHead(p)}${p.zoner_min ? p.zoner_min.map((m, i) => `Z${i + 1} ${fmt(m)}`).join(" · ") + " min" : "ingen pulszoner"}` })) });
+  barChart(el("c-varighed"), { label: "Varighed pr. aktivitet", height: 170, fmt: v => fmt(v), color: MAAL.aktivitet,
+    points: pas.map(p => ({ label: lbl(p.dato), y: p.varighed_min, tip: `${pasHead(p)}<b>${fmt(p.varighed_min)} min</b>` })) });
+  barChart(el("c-pasdist"), { label: "Distance pr. aktivitet", height: 170, fmt: v => fmt(v), color: MAAL.aktivitet,
+    points: pas.filter(p => p.distance_km != null).map(p => ({ label: lbl(p.dato), y: p.distance_km, tip: `${pasHead(p)}<b>${fmt(p.distance_km, 2)} km</b>` })) });
+  barChart(el("c-pulsforskel"), { label: "Makspuls minus snitpuls pr. aktivitet", height: 170, fmt: v => fmt(v), color: MAAL.puls,
+    points: pas.map(p => ({ label: lbl(p.dato), y: p.puls_forskel, tip: `${pasHead(p)}snit <b>${fmt(p.snitpuls)}</b> · maks <b>${fmt(p.makspuls)}</b> · forskel <b>${fmt(p.puls_forskel)}</b> bpm` })) });
+}
+
+// ---------- Start ----------
+
+// liv.json (overblik) er valgfri: mangler den, står Søvn uden sengetid og sen skærmtid
+Promise.all([hent("kroppen.json"), hent("kroppen/index.json"), hent("liv.json").catch(() => null)]).then(([seneste, index, liv]) => {
+  if (seneste.fejl) throw new Error(`Kunne ikke beregne målingerne: ${seneste.fejl}`);
+  SENESTE = seneste; LIV = liv; INDEX = { ...index, i_dag: seneste.til };
+  el("meta").textContent = `${INDEX.dage.length} døgn fra ${dayMonth(parseDate(INDEX.dage[0]))} ${parseDate(INDEX.dage[0]).getFullYear()} · bygget ${stamp(seneste.genereret)}`;
+  el("root").innerHTML = `
+    ${raadKort(SENESTE.traening)}
+    <div class="afsnit-head" id="doegn-head"><h2 class="afsnit">Døgnet</h2>
+      <span class="nav">${pil("dag-forrige", "arrow-left", "Dagen før")}<span class="kal-wrap"><button id="dag-dato" aria-haspopup="dialog" aria-expanded="false"></button><div class="kal" id="kal" role="dialog" aria-label="Vælg dag" hidden></div></span>${pil("dag-naeste", "arrow-right", "Dagen efter")}<button id="dag-idag">I dag</button></span></div>
+    <div class="stack" id="doegn"><div class="card empty">Henter …</div></div>
+    <div class="afsnit-head"><h2 class="afsnit">Perioden</h2>
+      <span class="nav">${pil("per-aeldre", "arrow-left", "Ældre periode")}<select id="per-valg" aria-label="Vælg periode">${perioder().map(p => `<option value="${p.id}">${esc(p.navn)}</option>`).join("")}</select>${pil("per-nyere", "arrow-right", "Nyere periode")}</span></div>
+    <div class="stack" id="periode"><div class="card empty">Henter …</div></div>
+    <p class="meta">Fra Garmin via garmin-coach. Et døgn uden data fra uret står tomt, ikke som 0. I dag er kun indtil nu, så dagens døgntal tæller ikke med i snit, min og maks.
+      GPS-kort og løbsprognoser fra garmin-grafana er ikke med, fordi garmin-coach ikke henter dem.</p>`;
+  const flyt = n => { const i = INDEX.dage.indexOf(dagValgt) + n; if (INDEX.dage[i]) visDag(INDEX.dage[i]); };
+  el("dag-forrige").addEventListener("click", () => flyt(-1));
+  el("dag-naeste").addEventListener("click", () => flyt(1));
+  el("dag-idag").addEventListener("click", () => visDag(INDEX.dage[INDEX.dage.length - 1]));
+  el("dag-dato").addEventListener("click", () => el("kal").hidden ? aabnKalender() : lukKalender());
+  document.addEventListener("click", ev => { if (!ev.target.closest(".kal-wrap")) lukKalender(); });
+  document.addEventListener("keydown", ev => { if (ev.key === "Escape" && !el("kal").hidden) { lukKalender(); el("dag-dato").focus(); } });
+  const skift = n => { const ps = perioder(), i = ps.findIndex(p => p.id === periodeValgt) + n; if (ps[i]) visPeriode(ps[i].id); };
+  el("per-aeldre").addEventListener("click", () => skift(1));
+  el("per-nyere").addEventListener("click", () => skift(-1));
+  el("per-valg").addEventListener("change", e => visPeriode(e.target.value));
+  visDag(params.get("dag") || INDEX.dage[INDEX.dage.length - 1]);
+  visPeriode(params.get("periode") || "seneste");
+}).catch(e => { el("root").innerHTML = `<div class="card empty">${esc(e.message)}. Byg med <code>python -m garmin_coach.site byg</code>.</div>`; });
+</script>
+</body>
+</html>

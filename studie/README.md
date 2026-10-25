@@ -1,7 +1,7 @@
 # Studie
 
-Studie-delen af Kompas (`/studie/`): ugeoverblik, fag, genkald med spaced repetition, eksamenstræning, frister og
-en offline-app til telefonen. Koden ligger i `Scripts/` inde i en semestermappe og læser de filer, man alligevel
+Studie-delen af Kompas (`/studie/`): ugeoverblik, fag, genkald med spaced repetition, eksamenstræning, frister,
+selvstudie mod kursusbeskrivelsernes timer, USB-noter og en offline-app til telefonen. Koden ligger i `Scripts/` inde i en semestermappe og læser de filer, man alligevel
 arbejder i: køreplaner, genkaldsspørgsmål, begreber, drills og eksamenssæt i markdown og JavaScript.
 
 Kun koden er med her. Kursusmateriale, egne svar og forsøgsloggen hører til semestermappen og er ikke en del af
@@ -13,12 +13,13 @@ repoet. Demoen (`demo/projekter/studie.py`) laver opdigtede data i samme form.
 |---|---|
 | `Scripts/semester.js` | Semestret ét sted: fagene fra `fag.json`, frister og eksamensdage fra CLAUDE.md og eksamensformerne fra README.md. De andre scripts spørger herfra i stedet for at have egne lister. |
 | `Scripts/fag.example.json` | Eksempel på `fag.json` med demoens tre fag og en forklaring af hvert felt. Kopiér til semestermappens `Scripts/fag.json`. |
-| `Scripts/kompas-eksport.js` | Læser semestermappen og skriver `studie.json`, `fagnoter.json`, `kalender.json` og `kompas.json` til `~/.kompas/studie/`, plus en kopi af siderne. Læser kun; ændrer aldrig arbejdsfiler. |
-| `Scripts/kompas-server.js` | Lille server på `127.0.0.1:8767` (Caddy sender `/studie/api/*` hertil). Læser genkald, begreber, drills og eksamenssæt og skriver kun det, brugeren selv taster: svar, markeringer, begreber med egne ord, gæt og ugens I egne ord (`<fagmappe>/egne-ord.md`). Udleverer ugens forelæsninger og øvelser fra `<fagmappe>/Pensum/` til Fag-siden (kun læsning). Facit udleveres først efter et forsøg. |
-| `Scripts/kompas/` | Siderne: Ugeoverblik (`index.html`), Fag, Træning (`genkald.html`), Eksamen, Frister (`deadlines.html`) og På farten (`mobil.html` med service worker, manifest og ikoner). De bruger Kompas' designkit fra `/kompas/assets/`. |
+| `Scripts/kompas-eksport.js` | Læser semestermappen og skriver `studie.json`, `fagnoter.json`, `kalender.json`, `selvstudie.json` og `kompas.json` til `~/.kompas/studie/`, plus en kopi af siderne. Læser kun; ændrer aldrig arbejdsfiler. Al optælling sker her (genkald og drills i alt, rytmen pr. dag, ord pr. fagnote-uge, selvstudiet), så siderne ikke regner selv. |
+| `Scripts/kompas-server.js` | Lille server på `127.0.0.1:8767` (Caddy sender `/studie/api/*` hertil). Læser genkald, begreber, drills og eksamenssæt og skriver kun det, brugeren selv taster: svar, markeringer, begreber med egne ord, gæt, ugens I egne ord (`<fagmappe>/egne-ord.md`) og vurderingen af en uge i USB-noterne (`usb-vurdering.json`). Udleverer ugens forelæsninger og øvelser fra `<fagmappe>/Pensum/` til Fag-siden (kun læsning). En genkaldsfil, der ikke kan læses, springes over og står i loggen. Facit udleveres først efter et forsøg. |
+| `Scripts/kompas/` | Siderne: Ugeoverblik (`index.html`), Fag (med Rytme og Styr på), USB-noter (`usb.html`, under Fag), Træning (`genkald.html`), Eksamen (med Opgaver efter niveau), Selvstudie (`selvstudie.html`), Frister (`deadlines.html`) og På farten (`mobil.html` med service worker, manifest og ikoner). De bruger Kompas' designkit fra `/kompas/assets/`. |
 | `Scripts/drill-forklaringer.js` | Viser de drill-tjek, der mangler en forklaring, med det JavaScript faktisk giver. Læser kun. |
 | `Scripts/canvas-sortering.js` | Flytter Canvas-downloads fra `~/Downloads` ind i fagmapperne og giver dem ensartede navne (macOS; bruger `xattr`, `plutil` og evt. LibreOffice). Prøvekørsel uden `--kør`. |
-| `Scripts/undervisningsdage.example.json` | Eksempel på skemaet, `canvas-sortering.js` bruger. Kopiér til `undervisningsdage.json`. |
+| `Scripts/undervisningsdage.example.json` | Eksempel på skemaet, `canvas-sortering.js` bruger. Kopiér til `undervisningsdage.json`. Selvstudie tager første undervisningsdag herfra. |
+| `Scripts/fravaer.example.json` | Eksempel på `fravaer.json`: uger, du ikke var til stede, og slags undervisning, du ikke bruger. Selvstudie tæller dem ikke som brugt tid. |
 | `Scripts/fagnoter/` | Studie-rutinens værktøj til fagnoterne (Python, python-docx): `run_notes.py` sætter en uges noter ind i fagets Word-dokument, `verify_prog.py` kører kodeeksemplerne gennem node, og `labels.json` er skabelonens labels, som eksporten også læser. Formatet står i `Scripts/fagnoter/README.md`. |
 
 JavaScript-delen er CommonJS uden afhængigheder; Node 18 eller nyere. Eksporten bruger `unzip` til fagnoterne (Word).
@@ -62,6 +63,7 @@ KOMPAS_SEMESTER=/tmp/kopi STUDIE_PORT=18767 STUDIE_EKSPORT_UD=/tmp/studie-ud nod
     egne-ord.md                 I egne ord: én "## Uge NN" pr. uge, skrevet fra Fag-siden eller telefonen
     Eksamenstræning/
       <id>.md, <id>-svar.md     sæt og facit; besvarelser/ skrives af serveren
+      niveauer.json             underviserens oversigt over gamle opgaver (niveau, fokus, efter hvilken forelæsning)
   Gamma/vscode/                 faget med kode: drills og nummererede afleveringer
     Drills/kap01-lorem.js       drills  (+ tjek.js og forklaringer/kap01-lorem.md)
     Opgaver/README.md           "## Status"-tabel (| Opgave | Uge | Afleveret | Godkendt | Hvad drillede |)
@@ -72,6 +74,9 @@ KOMPAS_SEMESTER=/tmp/kopi STUDIE_PORT=18767 STUDIE_EKSPORT_UD=/tmp/studie-ud nod
     genkald-log.jsonl           alle forsøg; Dagens kort regnes ud herfra
     laest.json                  uger markeret som læst
     deadlines-status.json       frister markeret som færdige
+    usb-vurdering.json          din vurdering af hver uge i USB-noterne (skrives af serveren)
+    fravaer.json                undervisning, der ikke tæller som brugt tid på Selvstudie (se fravaer.example.json)
+    fagnoter/vurdering-handlet.json  de vurderinger, Studie-rutinen har rettet fagnoterne efter
     fagnoter/backup/            Studie-rutinens backup af fagnoterne før hver ændring
 ```
 
@@ -107,8 +112,10 @@ Alle under `/studie/api/`. Skrivninger kræver `Content-Type: application/json` 
 | `/repetition`, `/repetition/svar?noegle` | Dagens kort og statistik; svaret på ét kort |
 | `/laest` | uger markeret som læst |
 | `/eksamen`, `/eksamen/saet?fag&id`, `/eksamen/facit?fag&id[&nr]` | sættene, ét sæt, facit |
+| `/eksamen/niveauer` | Opgaver efter niveau: hver opgave med sin sektion i sættet og dine seneste markeringer |
+| `/usb-vurdering` | dine vurderinger af USB-noterne pr. fag og uge (eller hovedafsnit) |
 | `/egne-ord` | I egne ord pr. fag og uge |
-| `/pensum/<fag>/<Forelæsninger\|Øvelser>/<fil>` | én fil fra fagets `Pensum/` (pdf, pptx, docx) |
+| `/pensum/<fag>/<Forelæsninger\|Øvelser>/<fil>` | én fil fra fagets `Pensum/` (pdf, pptx, docx; øvelsessæt i markdown som ren tekst) |
 | `/pakke` | På farten: dagens kort med facit, ekstra genkald, tomme begreber, ugættede drills og I egne ord |
 
 | POST | Skriver |
@@ -119,6 +126,7 @@ Alle under `/studie/api/`. Skrivninger kræver `Content-Type: application/json` 
 | `/drill` | gæt i stedet for `TOM`; filen køres, og går den ned, sættes den tilbage |
 | `/repetition`, `/eksamen/resultat` | et forsøg i loggen (og i filen for genkald) |
 | `/eksamen/afslut` | besvarelsen i `Eksamenstræning/besvarelser/` |
+| `/usb-vurdering` | `usb-vurdering.json`: brugbar, for meget eller mangler noget plus en kommentar (højst 2000 tegn) for et fag med `usb_noter` |
 | `/laest`, `/deadline` | `laest.json`; færdig-markering i `deadlines-status.json` eller afleveringernes tabel |
 | `/sync` | svar givet på telefonen uden net, med samme skrivninger som ovenfor |
 
@@ -131,12 +139,24 @@ kunne det med 90 % sandsynlighed, så lette kort venter længere end svære. St�
 nye genkaldsspørgsmål om dagen, og kun fra uger, der er markeret som læst. Typerne (genkald, eksamen, begreb, drill) blandes på skift, og
 siden viser, hvor tit svaret sad, når man sagde "sikker", "usikker" eller "gætter".
 
+## Selvstudie og USB-noter
+
+**Selvstudie** sammenligner tiden pr. fag med kursusbeskrivelsens arbejdstimer (`arbejdsbyrde` i `fag.json`). Det brugte
+kommer fra overbliks `liv.json` (`studietid`): undervisningen i kalenderen pr. kursuskode og det selvstudie, der er
+logget i kalenderen. Forventet til nu regnes kun for et fag, der løber ét semester og har en eksamensdato. Øverst står
+dagsmålet fra `studiemaal` i `fag.json`: fremskridt i dag, ugen og måneden, dage i træk, medaljer, saldoen mod
+dagsmålet og en månedskalender. Eksporten regner det hele; siden viser det kun.
+
+**USB-noter** viser fagnoterne i Word for et fag med `usb_noter` uge for uge, med antal ord og kodeblokke. Du giver en
+uge en vurdering, og Studie-rutinen (se `RUTINE.md`, afsnit 6) skriver ugen om efter den med `RESET_WEEKS` i en
+notes-fil; det, der står under I egne ord, flyttes med uændret.
+
 ## Nyt semester
 
 Koden kender ingen fag; alt fagspecifikt står i semestermappens filer. Ved semesterskift:
 
 1. Lav en ny semestermappe med samme opbygning, og kopiér `Scripts/` med. Log- og statusfilerne
-   (`genkald-log.jsonl`, `laest.json`, `deadlines-status.json`, `canvas-*`) og fagnoternes backup
+   (`genkald-log.jsonl`, `laest.json`, `deadlines-status.json`, `usb-vurdering.json`, `fravaer.json`, `canvas-*`) og fagnoternes backup
    (`Scripts/fagnoter/backup/`) hører til det gamle semester.
 2. Skriv `Scripts/fag.json` (se `fag.example.json`) og `Scripts/undervisningsdage.json`.
 3. Skriv "Vigtige datoer" og "Egen plan" i `CLAUDE.md` (eksamensdagene læses herfra) og tabellen

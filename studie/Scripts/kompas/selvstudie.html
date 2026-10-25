@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Studie · Selvstudie</title>
+<!-- Selvstudie i Athenify-stil: øverst fremskridt mod dagsmålet, dage i træk, medaljer, saldo og en kalender; derunder
+     tiden pr. fag mod kursusbeskrivelsernes arbejdstimer. Læser kun selvstudie.json, som eksporten
+     (Scripts/kompas-eksport.js, selvstudie()) skriver ud fra overbliks studietid og arbejdsbyrde i fag.json.
+     Siden regner intet selv: alle tal, også "forventet til nu", står færdige i filen. -->
+<link rel="stylesheet" href="/kompas/assets/tokens.css">
+<link rel="stylesheet" href="/kompas/assets/page.css">
+<style>
+  .fag-h { display: flex; align-items: center; gap: 10px; }
+  .fag-h .sw { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+  .tal { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 4px 0 14px; color: var(--text-secondary); font-size: 13px; }
+  .tal b { color: var(--text-primary); font-weight: 600; }
+  .note { margin: 12px 0 0; font-size: 12.5px; color: var(--text-secondary); line-height: 1.5; }
+  table.poster { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+  table.poster td { padding: 6px 4px; border-top: 1px solid var(--divider); vertical-align: top; }
+  table.poster td.t { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  table.poster tr.sum td { font-weight: 600; }
+  .badge.u { background: var(--surface-inset); }
+  /* Medaljernes farver: ikke en del af designkittet, fordi kun denne side har medaljer */
+  :root { --guld: #d4a017; --soelv: #9aa0a6; --bronze: #b0703c;
+    /* Kalenderens grønne trin (under bronze, bronze, sølv, guld), som Athenify */
+    --t1: #b9ecd0; --t2: #5fc48e; --t3: #2f9e66; --t4: #1f6b45; }
+  .motiv { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+  .motiv > div { display: grid; gap: 16px; }
+  .pills { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; padding: 14px 16px; }
+  .pill .k { display: flex; align-items: center; gap: 6px; color: var(--text-secondary); font-size: 12.5px; }
+  .pill .v { font-size: 17px; font-weight: 600; margin: 2px 0 6px 20px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .pill .meter { margin-left: 20px; }
+  .meter { height: 7px; border-radius: 4px; background: var(--surface-inset); overflow: hidden; }
+  .meter i { display: block; height: 100%; border-radius: 4px; background: #3fa56c; }
+  .sek h2 { display: flex; align-items: center; gap: 6px; }
+  .sek h2 .meta { font-weight: 400; font-size: 14px; color: var(--text-secondary); }
+  .ringe { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; margin-top: 12px; }
+  .ring { display: grid; justify-items: center; gap: 6px; font-size: 11px; font-weight: 600; color: var(--text-secondary); letter-spacing: .02em; }
+  .ring .rund { position: relative; width: 40px; height: 40px; }
+  .ring svg { position: absolute; inset: 0; width: 40px; height: 40px; }
+  .ring .spor { stroke: transparent; } .ring .bue { stroke: #3fa56c; stroke-linecap: round; }
+  .ring .bund { fill: color-mix(in srgb, #3fa56c 10%, transparent); }
+  .ring .tjek { position: absolute; inset: 0; display: grid; place-items: center; color: #2f8a57; }
+  .saldo-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .idag-badge { font-size: 12.5px; font-weight: 600; padding: 3px 8px; border-radius: 8px; }
+  .idag-badge.ned { background: var(--destructive-tint); color: var(--destructive); }
+  .idag-badge.op { background: var(--success-tint); color: var(--success); }
+  .medaljer { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); text-align: center; margin-top: 8px; }
+  .medalje .navn { color: var(--text-secondary); font-size: 13px; }
+  .medalje .tal { display: flex; align-items: center; justify-content: center; gap: 4px; font-size: 34px; font-weight: 700; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+  .maaned-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 2px 0 12px; }
+  .maaned-top b { font-size: 17px; text-transform: capitalize; }
+  .maaned-top button { border: 0; background: none; color: var(--text-primary); cursor: pointer; width: 36px; height: 36px; border-radius: 8px; display: inline-grid; place-items: center; }
+  .maaned-top button:disabled { color: var(--text-subdued); cursor: default; }
+  .maaned-top button:not(:disabled):hover { background: var(--surface-hover); }
+  .mtal { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .mtal div { font-size: 12.5px; color: var(--text-secondary); }
+  .mtal div:nth-child(2) { text-align: center; } .mtal div:nth-child(3) { text-align: right; }
+  .mtal b { display: block; font-size: 18px; color: var(--text-primary); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .mbar { display: flex; align-items: center; gap: 10px; margin: 8px 0 14px; font-size: 13px; font-weight: 600; }
+  .mbar .meter { flex: 1; }
+  .mgrid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+  .mgrid .ud { font-size: 11px; font-weight: 600; text-align: center; color: var(--text-secondary); padding-bottom: 2px; }
+  .mgrid .c { border-radius: 10px; aspect-ratio: 1 / 1; display: grid; place-items: center; align-content: center; gap: 1px; font-variant-numeric: tabular-nums;
+    background: var(--surface-inset); color: var(--text-secondary); min-width: 0; }
+  .mgrid .c small { font-size: 10.5px; opacity: .85; }
+  .mgrid .c b { font-size: 14px; font-weight: 600; white-space: nowrap; }
+  .mgrid .c.tom { background: none; box-shadow: inset 0 0 0 1px var(--divider); }
+  .mgrid .c.t1 { background: var(--t1); color: #14532d; } .mgrid .c.t2 { background: var(--t2); color: #fff; }
+  .mgrid .c.t3 { background: var(--t3); color: #fff; } .mgrid .c.t4 { background: var(--t4); color: #fff; }
+  .fremtid { display: grid; gap: 8px; }
+  .fremtid .r { display: flex; justify-content: space-between; gap: 12px; font-size: 13.5px; }
+  .fremtid .r span:last-child { color: var(--text-secondary); text-align: right; }
+  @media (max-width: 760px) { .motiv { grid-template-columns: minmax(0, 1fr); } .pills { padding: 12px; gap: 8px; }
+    .pill .v, .pill .meter { margin-left: 0; } .pill .v { font-size: 15px; } .mgrid { gap: 4px; } .mgrid .c b { font-size: 12.5px; }
+    .mtal b { font-size: 15px; } .fremtid .r { flex-direction: column; gap: 2px; } .fremtid .r span:last-child { text-align: left; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="page">
+    <div><h1>Selvstudie</h1><p class="sub" id="sub">Tiden pr. fag mod kursusbeskrivelsernes arbejdstimer</p></div>
+  </header>
+  <div class="stack" id="root"><div class="card empty">Henter …</div></div>
+</div>
+
+<script src="/kompas/assets/icons.js"></script>
+<script src="/kompas/assets/liv.js"></script>
+<script src="/kompas/assets/chart.js"></script>
+<script src="studie.js"></script>
+<script>
+const t = x => `${fmt(x, 1)} t`;
+const dato = s => s ? dayMonth(parseDate(s)).replace(/\.$/, "") : "–";
+// Undervisningen i fagets farve, lysere; selvstudiet i fagets farve
+const lys = farve => `color-mix(in srgb, ${farve} 40%, var(--container))`;
+
+function fagPanel(f) {
+  const tn = f.forventet_til_nu, fv = f.forventet, b = f.brugt;
+  const forv = tn || { undervisning: fv.undervisning, selvstudie: fv.selvstudie, i_alt: fv.i_alt };
+  const forvLabel = tn ? "Forventet til nu" : "Hele kurset";
+  return `<section class="card panel">
+    <div class="panel-head"><h2 class="fag-h"><span class="sw" style="background:${f.farve}"></span>${esc(f.kort)}</h2>
+      <span class="meta">${esc(f.navn)}</span></div>
+    <div class="tal"><span>Brugt <b>${t(b.i_alt)}</b></span>
+      ${tn ? `<span>forventet til nu <b>${t(tn.i_alt)}</b> (${tn.andel} % af kurset gået)</span>` : ""}
+      <span>kurset i alt <b>${t(fv.i_alt)}</b></span></div>
+    <div class="cols">
+      <div><div class="meta" style="margin-bottom:6px">Brugt, fordelt</div><div id="pie-${f.id}"></div></div>
+      <div><div class="meta" style="margin-bottom:6px">${forvLabel} mod brugt</div><div id="bar-${f.id}"></div></div>
+    </div>
+    <p class="note">${tn ? `Forventet til nu er kursets ${t(fv.i_alt)} jævnt fordelt fra ${dato(tn.fra)} til eksamen ${dato(tn.til)}.` : esc(f.grund || "")}
+      ${f.undervisning_ikke_talt ? `${t(f.undervisning_ikke_talt)} undervisning i kalenderen tæller ikke (${[f.ikke_talt?.fravaer ? `${t(f.ikke_talt.fravaer)} fravær` : "",
+        f.ikke_talt?.bruges_ikke ? `${t(f.ikke_talt.bruges_ikke)}, du ikke bruger` : ""].filter(Boolean).join(", ")}).` : ""}
+      Studieblokke: ${t(b.studieblokke_planlagt)} planlagt, ${t(b.studieblokke_forbi)} forbi. Kun det, du logger i CalTask, tæller som selvstudie.</p>
+    <details style="margin-top:12px"><summary>Kursusbeskrivelsens arbejdstimer (${esc(fv.kilde)})</summary>
+      <table class="poster">${fv.poster.map(p => `<tr><td>${esc(p.navn)} ${p.undervisning ? '<span class="badge u">undervisning</span>' : ""}</td><td class="t">${t(p.timer)}</td></tr>`).join("")}
+        <tr class="sum"><td>I alt${fv.semestre > 1 ? ` (${fv.semestre} semestre)` : ""}</td><td class="t">${t(fv.i_alt)}</td></tr></table></details>
+  </section>`;
+}
+
+// ── Athenify-delen: alle tal er regnet af eksporten (motivation i selvstudie.json); siden viser dem kun ──
+const UGEDAG = ["MAN", "TIR", "ONS", "TOR", "FRE", "LØR", "SØN"], MEDALJE = { guld: "Guld", soelv: "Sølv", bronze: "Bronze" };
+// Timer som "12 min", "1 t 47 min" eller "46 t 22 min" (kun formatering)
+const tm = h => { const m = Math.round(Math.abs(h) * 60), tt = Math.floor(m / 60), r = m % 60;
+  return `${h < 0 ? "−" : ""}${tt && r ? `${tt} t ${r} min` : tt ? `${tt} t` : `${r} min`}`; };
+let MÅNED = null;  // den viste måned i kalenderen
+
+function pill(navn, p) {
+  return `<div class="pill"><div class="k">${icon("calendar", 14)}${navn}</div><div class="v">${tm(p.timer)}</div>
+    <div class="meter" aria-hidden="true" title="${p.pct} % af ${t(p.maal)}"><i style="width:${Math.min(100, p.pct)}%"></i></div></div>`;
+}
+// En ring pr. dag: buen så langt, som dagen nåede mod dagsmålet; flueben, når der er logget; dobbelt og tyk ring, når målet er nået
+function ring(d, mål) {
+  const r = 17, c = 2 * Math.PI * r, andel = Math.min(1, d.timer / mål), tyk = d.naaet ? 4 : 2.5;
+  return `<div class="ring" title="${esc(`${weekday(parseDate(d.dato))} ${dayMonth(parseDate(d.dato))}: ${tm(d.timer)}${d.medalje ? ` · ${MEDALJE[d.medalje]}` : ""}`)}">
+    <span>${UGEDAG[d.ugedag]}</span>
+    <span class="rund"><svg viewBox="0 0 40 40" aria-hidden="true">${d.timer > 0 ? `<circle class="bund" cx="20" cy="20" r="${r - 2}"/>` : `<circle cx="20" cy="20" r="${r}" fill="none" style="stroke:var(--divider)" stroke-width="2"/>`}
+      ${andel > 0 ? `<circle class="bue" cx="20" cy="20" r="${r}" fill="none" stroke-width="${tyk}" stroke-dasharray="${(c * andel).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 20 20)"/>` : ""}</svg>
+      ${d.timer > 0 ? `<span class="tjek">${icon(d.naaet ? "check-check" : "check", 16)}</span>` : ""}</span></div>`;
+}
+function kalender(m) {
+  const i = Math.max(0, m.maaneder.findIndex(x => x.maaned === MÅNED)), x = m.maaneder[i];
+  return `<div class="maaned-top"><b>${esc(x.navn)}</b><span>
+      <button type="button" data-mnd="${i - 1}" aria-label="Forrige måned"${i ? "" : " disabled"}>${icon("chevron-right", 18).replace('class="ic"', 'class="ic" style="transform:rotate(180deg)"')}</button>
+      <button type="button" data-mnd="${i + 1}" aria-label="Næste måned"${i < m.maaneder.length - 1 ? "" : " disabled"}>${icon("chevron-right", 18)}</button></span></div>
+    <div class="mtal"><div>Studietid<b>${tm(x.timer)}</b></div><div>Mål<b>${tm(x.maal)}</b></div><div>Sessioner<b>${x.sessioner}</b></div></div>
+    <div class="mbar"><div class="meter" aria-hidden="true"><i style="width:${Math.min(100, x.pct)}%"></i></div>${x.pct} %</div>
+    <div class="mgrid">${UGEDAG.map(u => `<div class="ud">${u}</div>`).join("")}${"<div></div>".repeat(x.forskyd)}${x.dage.map(d =>
+      `<div class="c ${d.timer == null ? "tom" : `t${d.trin}`}" title="${esc(`${weekday(parseDate(d.dato))} ${dayMonth(parseDate(d.dato))}: ${d.timer == null ? "ingen data" : tm(d.timer)}${d.sessioner ? ` · ${d.sessioner} ${d.sessioner === 1 ? "session" : "sessioner"}` : ""}${d.medalje ? ` · ${MEDALJE[d.medalje]}` : ""}`)}">
+        <small>${d.dag}</small>${d.timer ? `<b>${fmt(d.timer, d.timer < 10 ? 1 : 0)} t</b>` : ""}</div>`).join("")}</div>
+    <p class="note">Farven følger medaljerne: lysest under ${t(m.medaljer_graenser.bronze)}, mørkest fra ${t(m.medaljer_graenser.guld)}. Målet er ${t(m.maal)} om dagen fra ${dato(m.fra)}.</p>`;
+}
+function motivation(m, fag) {
+  if (!m) return "";
+  MÅNED ||= m.maaneder.at(-1)?.maaned;
+  const md = m.i_alt.medaljer;
+  return `<section class="card pills">${pill("I dag", m.i_dag)}${pill("Uge", m.uge)}${pill("Måned", m.maaned)}</section>
+    <div class="motiv"><div>
+      <section class="card panel sek"><h2>Dage i træk <span class="meta">· ${m.i_traek} ${m.i_traek === 1 ? "dag" : "dage"}</span><span style="color:var(--warning)">${icon("flame", 18)}</span></h2>
+        <div class="ringe">${m.seneste_7.map(d => ring(d, m.maal)).join("")}</div>
+        <p class="note">Dobbelt flueben: dagsmålet på ${t(m.maal)} er nået. ${m.i_traek_maal} ${m.i_traek_maal === 1 ? "dag" : "dage"} i træk med målet; længst ${m.laengst_i_traek} med selvstudie.</p></section>
+      <section class="card panel sek"><div class="saldo-top"><h2>Saldo <span class="meta">· ${tm(m.saldo)}</span></h2>
+          <span class="idag-badge ${m.saldo_i_dag < 0 ? "ned" : "op"}">I dag: ${m.saldo_i_dag > 0 ? "+" : ""}${tm(m.saldo_i_dag)} ${m.saldo_i_dag < 0 ? "↓" : "↑"}</span></div>
+        <div id="saldo"></div>
+        <p class="note">Den samlede forskel mellem logget selvstudie og ${t(m.maal)} om dagen siden ${dato(m.fra)}.</p></section>
+      <section class="card panel sek"><h2>Medaljer</h2>
+        <div class="medaljer">${["guld", "soelv", "bronze"].map(k => `<div class="medalje"><div class="navn">${MEDALJE[k]}</div>
+          <div class="tal"><span style="color:var(--${k})">${icon("trophy", 26)}</span><span style="color:var(--${k})">${md[k]}</span></div></div>`).join("")}</div>
+        <p class="note">Bronze fra ${t(m.medaljer_graenser.bronze)}, sølv fra ${t(m.medaljer_graenser.soelv)} og guld fra ${t(m.medaljer_graenser.guld)} logget på en dag, siden ${dato(m.fra)}.</p></section>
+    </div><div>
+      <section class="card panel sek"><h2>Kalender</h2><div id="kalender">${kalender(m)}</div></section>
+      <section class="card panel"><div class="panel-head"><h2>Eksamen</h2><span class="meta">${icon("target", 14)} hvad der skal til</span></div>
+        <div class="fremtid">${m.eksamener.map(e => { const f = fag.find(x => x.kort === e.fag), fs = f?.forudsigelse;
+          return `<div class="r"><span><b>${esc(e.fag)}</b> · ${dato(e.dato)} · om ${e.dage} dage</span><span>${fs
+            ? `${t(fs.tilbage)} selvstudie mangler efter kursusbeskrivelsen: ${t(fs.pr_uge)} om ugen`
+            : esc(f?.grund || "Ingen forudsigelse")}</span></div>`; }).join("")}</div></section>
+    </div></div>
+    <section class="card panel"><div class="panel-head"><h2>Dag for dag</h2><span class="meta">de seneste 28 dage, pr. fag</span></div>
+      <div id="dage"></div></section>`;
+}
+function tegnMotivation(m, fag) {
+  if (!m) return;
+  lineChart(document.getElementById("saldo"), { label: "Saldo mod dagsmålet", height: 150, color: "#2e7cf6", fyld: true, fmt: v => fmt(v, 0),
+    points: m.dage.map(d => ({ label: dato(d.dato), y: d.saldo, tip: `${dato(d.dato)}: saldo <b>${tm(d.saldo)}</b><br>logget ${tm(d.timer)}` })) });
+  document.getElementById("kalender").onclick = e => { const b = e.target.closest("[data-mnd]"); if (!b || b.disabled) return;
+    MÅNED = m.maaneder[+b.dataset.mnd].maaned; document.getElementById("kalender").innerHTML = kalender(m); };
+  const seneste = m.dage.slice(-28);
+  stackChart(document.getElementById("dage"), { label: "Logget selvstudie pr. dag og fag", height: 180, fmt: v => fmt(v, 0),
+    series: fag.map(f => ({ label: f.kort, color: f.farve })), ref: { y: m.maal, label: `Dagsmål ${t(m.maal)}` },
+    points: seneste.map(d => ({ label: dato(d.dato), ys: fag.map(f => d.pr_fag[f.id] || 0),
+      tip: `${weekday(parseDate(d.dato))} ${dayMonth(parseDate(d.dato))}: <b>${tm(d.timer)}</b>${fag.filter(f => d.pr_fag[f.id]).map(f => `<br>${esc(f.kort)} ${tm(d.pr_fag[f.id])}`).join("")}` })) });
+}
+
+function render(d) {
+  document.getElementById("sub").textContent = `Tiden pr. fag mod kursusbeskrivelsernes arbejdstimer · aflæst ${stamp(d.genereret)}`;
+  if (d.mangler) { document.getElementById("root").innerHTML = `<div class="card empty">${esc(d.mangler)}</div>`; return; }
+  const fag = d.fag;
+  document.getElementById("root").innerHTML = `${motivation(d.motivation, fag)}
+    <section class="card panel">
+      <div class="panel-head"><h2>Fordeling</h2><span class="meta">${t(d.i_alt.undervisning)} undervisning · ${t(d.i_alt.selvstudie)} selvstudie</span></div>
+      <div class="cols">
+        <div><div class="meta" style="margin-bottom:6px">Selvstudie pr. fag (logget i CalTask)</div><div id="pie-selvstudie"></div></div>
+        <div><div class="meta" style="margin-bottom:6px">Brugt tid pr. fag (undervisning og selvstudie)</div><div id="pie-brugt"></div></div>
+      </div>
+      <p class="note">Undervisningen er det, kalenderen har som undervisning, fra ${dato(d.kalender_fra)}; om du var der, ved Kompas ikke.
+        ${d.fravaer?.length ? `Undervisningen i uge ${d.fravaer.map(x => x.uge + (x.fag ? ` (${esc(x.fag)})` : "")).join(", ").replace(/, ([^,]*)$/, " og $1")} tæller ikke, fordi du ikke var til stede.` : ""}
+        ${d.bruges_ikke?.length ? `Det tæller heller ikke: ${d.bruges_ikke.map(x => `${esc(x.fag || "alle fag")} ${esc([x.art, x.form].filter(Boolean).join(" · "))}`).join(", ").replace(/, ([^,]*)$/, " og $1")}, som du ikke bruger.` : ""}
+        ${d.fravaer?.length || d.bruges_ikke?.length ? `Begge dele står i <code>Scripts/fravaer.json</code>.` : ""}
+        Selvstudie er det, du har logget i CalTask (fra ${dato(d.selvstudie_fra)}).${d.ukendt?.length ? ` Logget, men ikke knyttet til et fag: ${d.ukendt.map(u => `${esc(u.navn)} (${t(u.timer)})`).join(", ")}.` : ""}</p>
+    </section>
+    ${fag.map(fagPanel).join("")}
+    <section class="card panel">
+      <div class="panel-head"><h2>Uge for uge</h2><span class="meta">logget selvstudie pr. fag</span></div>
+      <div id="uger"></div>
+    </section>`;
+
+  pieChart(document.getElementById("pie-selvstudie"), { label: "Selvstudie pr. fag",
+    slices: fag.map(f => ({ label: f.kort, y: f.brugt.selvstudie, color: f.farve, tip: `${esc(f.kort)}: <b>${t(f.brugt.selvstudie)}</b> selvstudie` })),
+    midte: { tal: t(d.i_alt.selvstudie), tekst: "selvstudie" } });
+  pieChart(document.getElementById("pie-brugt"), { label: "Brugt tid pr. fag",
+    slices: fag.map(f => ({ label: f.kort, y: f.brugt.i_alt, color: f.farve, tip: `${esc(f.kort)}: <b>${t(f.brugt.i_alt)}</b> i alt` })),
+    midte: { tal: t(d.i_alt.brugt), tekst: "brugt" } });
+  for (const f of fag) {
+    const tn = f.forventet_til_nu, fv = f.forventet, b = f.brugt, forv = tn || fv;
+    pieChart(document.getElementById(`pie-${f.id}`), { label: `${f.kort}: brugt, fordelt`, height: 150,
+      slices: [{ label: "Undervisning", y: b.undervisning, color: lys(f.farve), tip: `Undervisning: <b>${t(b.undervisning)}</b>` },
+               { label: "Selvstudie", y: b.selvstudie, color: f.farve, tip: `Selvstudie: <b>${t(b.selvstudie)}</b>` }],
+      midte: { tal: t(b.i_alt), tekst: "brugt" } });
+    stackChart(document.getElementById(`bar-${f.id}`), { label: `${f.kort}: ${tn ? "forventet til nu" : "hele kurset"} mod brugt`, height: 170,
+      fmt: v => fmt(v, 0),
+      series: [{ label: "Undervisning", color: lys(f.farve) }, { label: "Selvstudie", color: f.farve }],
+      points: [{ label: tn ? "Forventet" : "Kurset", ys: [forv.undervisning, forv.selvstudie],
+                 tip: `${tn ? "Forventet til nu" : "Hele kurset"}: <b>${t(forv.i_alt)}</b><br>undervisning ${t(forv.undervisning)} · selvstudie ${t(forv.selvstudie)}` },
+               { label: "Brugt", ys: [b.undervisning, b.selvstudie],
+                 tip: `Brugt: <b>${t(b.i_alt)}</b><br>undervisning ${t(b.undervisning)} · selvstudie ${t(b.selvstudie)}` }] });
+  }
+  tegnMotivation(d.motivation, fag);
+  const uger = [...new Set(fag.flatMap(f => f.uger.map(u => u.mandag)))].sort();
+  stackChart(document.getElementById("uger"), { label: "Logget selvstudie pr. uge og fag", height: 190, fmt: v => fmt(v, 0),
+    series: fag.map(f => ({ label: f.kort, color: f.farve })),
+    points: uger.map(m => {
+      const ys = fag.map(f => f.uger.find(u => u.mandag === m)?.selvstudie ?? 0);
+      return { label: `U${isoWeek(parseDate(m))}`, ys,
+        tip: `Uge ${isoWeek(parseDate(m))}<br>${fag.map((f, i) => `${esc(f.kort)}: ${t(ys[i])}`).join("<br>")}` };
+    }) });
+}
+
+fetch("selvstudie.json", { cache: "no-store" }).then(r => { if (!r.ok) throw new Error(`selvstudie.json svarede ${r.status}`); return r.json(); })
+  .then(render)
+  .catch(e => { document.getElementById("root").innerHTML = `<div class="card empty">${esc(e.message)}. Kør <code>node Scripts/kompas-eksport.js</code> i semestermappen.</div>`; });
+</script>
+</body>
+</html>

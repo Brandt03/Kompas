@@ -20,13 +20,18 @@ const klik = tekst => `[...document.querySelector("iframe").contentDocument.quer
 
 // navn, adresse, bredde, højde, tema, skala, evt. et klik efter indlæsning
 const BILLEDER = [
-  ["i-dag", "/", 1440, 1460, "dark"],
-  ["i-dag-lys", "/", 1440, 1460, "light"],
+  ["i-dag", "/", 1440, 1600, "dark"],
+  ["i-dag-lys", "/", 1440, 1600, "light"],
   ["forbindelser", "/#/kompas/forbindelser.html", 1440, 1500, "dark"],
   ["studie", "/#/studie/", 1440, 1000, "dark"],
   ["genkald", "/#/studie/genkald.html", 1440, 1000, "dark"],
+  ["selvstudie", "/#/studie/selvstudie.html", 1440, 1000, "dark"],
+  ["selvstudie-mobil", "/studie/selvstudie.html", 390, 844, "dark", 2],
+  ["usb-noter", "/#/studie/usb.html", 1440, 1000, "dark"],
   ["perioder", "/#/form/perioder.html", 1440, 1000, "dark"],
-  ["soevn", "/#/form/soevn.html", 1440, 1000, "dark"],
+  ["kroppen", "/#/form/kroppen.html", 1440, 1000, "dark"],
+  ["ugereview", "/#/form/uge.html#planlagt", 1440, 1000, "dark"],
+  ["skaermtid", "/#/skaermtid/", 1440, 1000, "dark"],
   ["sprog", "/#/sprog/", 1440, 1000, "dark"],
   ["sprog-mobil", "/sprog/mobil.html", 390, 844, "dark", 2],
   ["forbrug", "/#/forbrug/", 1440, 1000, "dark", 1, klik("12 mdr.")],

@@ -1,6 +1,6 @@
 # Kompas
 
-Én side, der samler økonomi, studie, sprog og form fra projekterne. Ordlisten gælder på tværs af
+Én side, der samler økonomi, studie, sprog, form og skærmtid fra projekterne. Ordlisten gælder på tværs af
 projekterne, så sider, rutiner og samtaler bruger de samme ord.
 
 ## Platformen
@@ -10,21 +10,29 @@ Den samlede side, der viser projekternes sider bag én menu og selv ejer forside
 _Avoid_: portal, dashboard
 
 **Projekt**:
-Et selvstændigt program, der regner sine egne tal og leverer ét område til Kompas.
+Et selvstændigt program, der regner sine egne tal og leverer sider til ét område i Kompas.
 _Avoid_: app, modul, service
 
 **Område**:
-En gruppe i menuen, som ét projekt leverer: Økonomi, Studie, Sprog eller Form & fokus.
+En gruppe i menuen: Økonomi, Studie, Sprog eller Form & fokus. Flere projekter kan dele et område; Skærmtid står
+under Form & fokus.
 _Avoid_: sektion, fane
 
 **Rutine**:
-En planlagt Claude-kørsel, der skriver nyt indhold til et projekt: Studie, Træning, Overblik eller Sprog.
+En planlagt Claude-kørsel, der skriver nyt indhold til et projekt: Studie, Træning, Overblik, Sprog eller Skærmtid.
 _Avoid_: planlagt opgave, job, agent
 
 **Forbindelse**:
 Noget, Kompas henter fra eller kører på (en datakilde, en rutine, en server eller et baggrundsjob), med en status:
 ok, advarsel, fejl eller info.
 _Avoid_: integration
+
+**Står stille**:
+Det, der ikke er rørt i flere dage, selvom der venter noget: Sprog og Genkald efter 3 dage uden svar, en enhed
+efter 2 dage uden skærmtid (ikke en enhed, du sjældent bruger: `sjaelden` i `regler.json`), og studieblokke, når 2
+af de seneste 3 døgn havde studieblokke uden logget selvstudie. Vises på I dag; tidspunkterne kommer fra projekterne
+(`sidst_svar`, `enheder[].sidst`), grænserne står i `STILLE_DAGE` i I dag. Studieblokkene regner overblik selv (`glippede` i `liv.json`).
+_Avoid_: inaktiv, glemt
 
 **På farten**:
 Studie på telefonen: dagens kort hentes, mens Mac'en er vågen, og svarene sendes, når den er det igen.
@@ -92,6 +100,32 @@ _Avoid_: øvelseseksamen
 Studietid uden for undervisningen, logget i kalenderen.
 _Avoid_: læsetid
 
+**Dagsmål**:
+De timers logget selvstudie, du sigter efter hver dag. Står i `studiemaal` i Studies fag.json.
+_Avoid_: daglig kvote
+
+**Dage i træk**:
+Antal dage i træk med logget selvstudie, talt fra i dag, eller fra i går, når der ikke er logget noget i dag endnu.
+_Avoid_: streak (i tekst til brugeren)
+
+**Medalje**:
+Dagens bronze, sølv eller guld efter, hvor meget selvstudie der er logget (fra 2, 3 og 4 timer).
+
+**Saldo** (Studie):
+Den samlede forskel mellem logget selvstudie og dagsmålet, dag for dag, siden logningen begyndte.
+_Avoid_: share price
+
+**Studieblok**:
+En blok i skolekalenderen, lagt efter en studieplan, med mærket `#kompas-plan` sidst i noten. Mærket gør, at
+blokkene kan findes og erstattes uden at røre dine andre aftaler, og at overblik kan se, hvilke blokke der glipper.
+I dag måler ugens selvstudie mod ugens studieblokke (`studieuge` i `liv.json`).
+_Avoid_: planblok, indhentningsblok
+
+**Minimumsdag**:
+Det mindste, der tæller som en god studiedag: Dagens kort og ét lille skridt (et begreb eller et
+drill-tjek), højst 15 minutter. Køreplanen skriver ugens minimumsdag under Vigtigst i ugen.
+_Avoid_: nødplan, minimumsplan
+
 ## Sprog
 
 **Aktivt sprog**:
@@ -149,7 +183,8 @@ Rutinens skrevne bedømmelse af en periode: resumé, hvad der går godt og dårl
 _Avoid_: rapport
 
 **Fokus**:
-To til tre målbare mål til næste periode, som også vises på forsiden.
+To til tre handlinger til næste periode, hver med dag og tidspunkt, så man bagefter kan se, om de skete. Vises på
+Perioder og forsiden.
 _Avoid_: mål, fokuspunkter
 
 **Belastning**:
@@ -173,6 +208,46 @@ _Avoid_: udsving
 
 **Sammenhæng**:
 En fast hypotese om to tal, testet på tværs af uger: stærk, en antydning eller for få uger til at sige noget.
+
+## Skærmtid
+
+**Skærmtid**:
+Tiden, du bruger en enhed, regnet af ActivityWatch: på computerne kun tid, hvor du er aktiv; på telefonen tiden med
+skærmen tændt. Tid på flere enheder på én gang tæller én gang; hver enhed har stadig sin fulde tid.
+_Avoid_: screen time, forbrug (om tid)
+
+**Enhed**:
+Mac, Stationær, Bærbar eller Telefon: det, ActivityWatch logger på. Navnet står i `regler.json` ud for værtsnavnet.
+_Avoid_: device, maskine
+
+**Kategori**:
+Det, skærmtiden går til: Studie, Sprog, Økonomi, Form & fokus, Egne projekter, Kommunikation, Sociale medier,
+Video & streaming, Spil, Nyheder, Indkøb eller Hverdag (kort, kamera, billeder, musik, filer, fjernbetjeninger,
+indstillinger og den slags praktiske ting). Dit valg bestemmer den, ellers den første regel i `regler.json`, der passer (regler med titel alene prøves sidst); resten er
+ukategoriseret. Hver kategori hører til én gruppe.
+_Avoid_: tag, label
+
+**Gruppe** (Skærmtid):
+Det, kategorierne samles i, og som Skærmtid viser øverst: **Produktiv** (Studie, Sprog, Egne projekter,
+Form & fokus, Økonomi), **Passiv** (uproduktiv, passiv underholdning: Sociale medier, Video & streaming, Nyheder),
+**Gaming** (Spil) og **Praktisk** (Kommunikation, Hverdag, Indkøb). Grupperne er bevidst ikke neutrale: de svarer på,
+hvor meget af tiden der er produktiv. Tjek er ikke en gruppe, men et antal (se Kort tjek). Står i `regler.json` under
+`grupper`.
+_Avoid_: hovedkategori, type, Dopamin-tjek, Passiv underholdning
+
+**Kort tjek** (Skærmtid):
+En åbning af en app i Sociale medier eller Nyheder på telefonen, der varer under et minut. En åbning er sammenhængende
+tid i samme app; et skift til en anden app eller hjemmeskærmen afslutter den. Vises pr. dag ved siden af oplåsningerne.
+_Avoid_: check, session
+
+**Valg** (Skærmtid):
+Det, du vælger på Skærmtid-siden for ét program eller én side: en kategori eller "tæller ikke med". Går forud for
+reglerne og gemmes i `skaermtid/valg.json`.
+_Avoid_: override, undtagelse
+
+**Sen skærmtid**:
+Skærmtid efter kl. 23, til døgnet skifter kl. 6. Hører til aftenens dag.
+_Avoid_: natskærmtid
 
 ## Økonomi
 
@@ -198,5 +273,8 @@ eller skriver, bliver stående, selv om de bruger et ord fra en _Avoid_-linje, f
 - **Sprog**: kommandoerne i `sprog.js` (`rapport`, `tilfoej`, `tekst`, `feedback`, `regel`, `niveau`, `aktivt`, `rolle`), korttyperne
   (`frase`, `ret`, `ord`, `udfyld`, `test`), `regel` (kommandoen og kortenes felt), rollerne (`aktiv`, `vedligehold`, `pause`, `studie`) og felterne i `data/` (`forside`,
   `bagside`, `situation`, `nye_pr_dag`, `laert` …).
-- **På tværs**: rutinernes id'er (`studie-koereplan`, `traening-rapport`, `overblik-ugereview`, `sprog-ugen`),
+- **Skærmtid**: felterne i `regler.json` (`app`, `domaene`, `sti`, `titel`, `vaert`, `sjaelden`, `ignorer`, `browsere`) og i
+  `skaermtid.json` (`dage`, `uger`, `perioder`, `sen_timer`, `ukategoriseret`, `stoerste`), ActivityWatch' egne navne
+  (bucket, watcher, afk, `hostname`) og trinnet `skaermtid` i opdater.sh.
+- **På tværs**: rutinernes id'er (`studie-koereplan`, `traening-rapport`, `overblik-ugereview`, `sprog-ugen`, `skaermtid-ugen`),
   Sures `dashboard/`, `/dashboard-state/<navn>` og `/dashboard-category/<id>`, `mobil.html` og manifest-nøglen `fane`.

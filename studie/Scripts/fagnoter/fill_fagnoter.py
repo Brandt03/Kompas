@@ -2,7 +2,8 @@
 
 Pr. uge: tilføjer kilder, kernebegreber, en ny 'Modeller'-sektion med billeder,
 forbindelser og uafklaret/[EKS]. Tomme pladsholder-punkter fjernes kun, hvis de er tomme.
-'I egne ord' røres aldrig.
+'I egne ord' røres aldrig. reset_week tømmer en udfyldt uge (fx efter din vurdering på Kompas → USB-noter),
+så den kan udfyldes igen; det, der står under 'I egne ord', flyttes med uændret.
 """
 import copy
 import json
@@ -238,6 +239,57 @@ class Filler:
                     new.remove(r)
                 for pe in new.findall(qn("w:proofErr")):
                     new.remove(pe)
+
+    def _heading_el(self, el, level=None):
+        return el.tag == qn("w:p") and is_heading(self.P(el), level)
+
+    def _block_els(self, prefix):
+        """(overskrift, [elementer til næste overskrift]) for ugeblokken, der starter med prefix."""
+        kids = list(self.body.iterchildren())
+        start = next(i for i, el in enumerate(kids)
+                     if self._heading_el(el, 2) and self.P(el).text.strip().startswith(prefix))
+        end = next((i for i in range(start + 1, len(kids))
+                    if self._heading_el(kids[i]) or kids[i].tag == qn("w:sectPr")), len(kids))
+        return kids[start], kids[start + 1:end]
+
+    def reset_week(self, prefix):
+        """Tømmer en udfyldt uge og lægger skabelonens tomme blok ind i stedet. Overskriften bliver stående,
+        og afsnittene under 'I egne ord' (brugerens egne) flyttes uændret over i den nye blok."""
+        heading, els = self._block_els(prefix)
+        egne, inde = [], False
+        for el in els:
+            if el.tag != qn("w:p"):
+                inde = False
+                continue
+            p = self.P(el)
+            lab = label_of(p)
+            if lab is not None:
+                inde = lab == "I egne ord"
+                continue
+            if p.text.strip().startswith("Kopiér blokken"):
+                inde = False
+            elif inde and (p.text.strip() or "<w:drawing" in el.xml):
+                egne.append(copy.deepcopy(el))
+        for el in els:
+            el.getparent().remove(el)
+        _, tpl = self._block_els("Uge [x]")
+        anchor = heading
+        for el in tpl:
+            new = copy.deepcopy(el)
+            anchor.addnext(new)
+            anchor = new
+        if egne:
+            _, ny = self._block_els(prefix)
+            lab = next(el for el in ny if el.tag == qn("w:p") and label_of(self.P(el)) == "I egne ord")
+            pladsholder = lab.getnext()
+            anchor = lab
+            for el in egne:
+                anchor.addnext(el)
+                anchor = el
+            if pladsholder is not None and pladsholder.tag == qn("w:p") and not self.P(pladsholder).text.strip() \
+                    and label_of(self.P(pladsholder)) is None and "<w:drawing" not in pladsholder.xml:
+                pladsholder.getparent().remove(pladsholder)
+        return len(egne)
 
     # --- kode og ekstra lister ----------------------------------------------
     def add_code(self, after_el, title, code):

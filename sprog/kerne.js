@@ -139,13 +139,14 @@ function planlæg(hs) {
 }
 
 // ── eksamensperiode ──────────────────────────────────────────────────
-// Eksamener fra Studies frister (type eksamen, ikke markeret færdig), hvis dag ligger fra i dag til 14 dage frem.
-// En eksamen uden præcis dato gælder hele sin uge (fra-til). null: ingen eksamen inden for 14 dage. Kan Studies
-// eksport ikke læses, er der ingen eksamensperiode, og rapporten siger det (eksamener_kendt).
-function eksamener(nu = new Date()) {
+// Eksamener fra Studies frister (type eksamen, ikke markeret færdig), hvis dag ligger fra i dag til `dage` dage frem
+// (14 for i dag; rapporten kigger 14 dage ud over den uge, teksten skrives til). En eksamen uden præcis dato gælder hele
+// sin uge (fra-til). null: Studies eksport kan ikke læses; så er der ingen eksamensperiode, og rapporten siger det
+// (eksamener_kendt).
+function eksamener(nu = new Date(), dage = EKSAMEN_DAGE_FØR) {
   let d;
   try { d = JSON.parse(læs(STUDIE_JSON)); } catch { return null; }
-  const idag = isoDato(nu), g = new Date(nu); g.setDate(g.getDate() + EKSAMEN_DAGE_FØR);
+  const idag = isoDato(nu), g = new Date(nu); g.setDate(g.getDate() + dage);
   const grænse = isoDato(g);
   return (d.deadlines || []).filter(x => x && x.type === "eksamen" && !x.faerdig).map(x => ({ fag: x.fag || "", fra: x.dato || x.fra, til: x.dato || x.til }))
     .filter(x => x.fra && x.til && x.fra <= grænse && x.til >= idag).sort((a, b) => a.fra.localeCompare(b.fra));
@@ -225,6 +226,12 @@ function tekster() {
   return navne.sort().reverse().map(n => ({ ...læsJson(path.join(FIL.tekster, n), {}), svar: svar[n.slice(0, -5)] || null }));
 }
 const tekstFil = uge => path.join(FIL.tekster, `${uge}.json`);
+// Rutinen skriver feedback på ugens tekst og den nye tekst i samme kørsel søndag aften. Så længe den nye tekst ikke er
+// besvaret, står feedbacken på ugen før forrest på siderne (og I dag kan sige det). T: tekster(), nyeste først.
+function nyFeedback(T = tekster()) {
+  const [ny, før] = T;
+  return ny && !ny.svar && før?.feedback ? { uge: før.uge, titel: før.titel, skrevet: før.feedback.skrevet } : null;
+}
 
 // ── skrivninger fra siderne (kun det, du selv taster eller klikker) ──
 const kortFindes = id => kortListe().some(k => k.id === id);
@@ -255,8 +262,11 @@ function gemTekstSvar({ uge, tekst }, meta = {}) {
 function pakke(nu = new Date()) {
   const r = repetition(nu), S = sprogTilstand(), H = hændelser(logPoster());
   const regelkort = kortListe().filter(k => k.regel && k.type !== "test" && S.sprog[k.sprog]).map(k => kortUd(k, S, { ny: !H[k.id] }));
-  return { genereret: new Date().toISOString(), aktivt: S.aktivt, sprog: S.sprog, kort: r.kort, tekster: tekster().slice(0, 3), statistik: r.statistik,
-    regler: reglerListe(), regelkort };
+  // Dit seneste svar på et sprogkort eller ugens tekst, til "Står stille" på I dag
+  const sidst = logPoster().findLast(p => p.type === "svar" || p.type === "tekst-svar");
+  const T = tekster();
+  return { genereret: new Date().toISOString(), aktivt: S.aktivt, sprog: S.sprog, kort: r.kort, tekster: T.slice(0, 3), statistik: r.statistik,
+    regler: reglerListe(), regelkort, sidst_svar: sidst?.tid || null, ny_feedback: nyFeedback(T) };
 }
 // Hver post fra telefonen har et id; er det allerede gemt (svaret nåede ikke tilbage sidst), gemmes det ikke igen
 function sync({ poster }, nu = Date.now()) {
@@ -280,6 +290,6 @@ function sync({ poster }, nu = Date.now()) {
 
 module.exports = {
   DATA, FIL, STANDARD, TYPER, NIVEAUER, ROLLER, LÆRT, DAG, UGE, EKSAMEN_DAGE_FØR, eksamener, eksamensperiode, læs, skriv, læsJson, skrivJson, isoDato, isoUge, næsteMandag, dagStart,
-  sprogTilstand, gemSprog, kortListe, gemKort, reglerListe, gemRegler, logPoster, hændelser, planlæg, standardOpgave, repetition, tekster, tekstFil,
+  sprogTilstand, gemSprog, kortListe, gemKort, reglerListe, gemRegler, logPoster, hændelser, planlæg, standardOpgave, repetition, tekster, tekstFil, nyFeedback,
   gemSvar, gemTekstSvar, pakke, sync,
 };

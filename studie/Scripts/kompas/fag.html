@@ -38,6 +38,14 @@
   .nav-btn:hover:not(:disabled) { color: var(--text-primary); background: var(--container-hover); }
   .nav-btn:disabled { opacity: .4; cursor: default; }
   .ind { display: grid; gap: 6px; }
+  /* Rytme: dine svar pr. dag, en række pr. uge */
+  .ry { display: grid; grid-template-columns: 38px repeat(7, minmax(0, 1fr)); gap: 4px; }
+  .ry-h { font-size: 11px; color: var(--text-subdued); text-align: center; }
+  .ry-u { font-size: 12px; color: var(--text-secondary); align-self: center; font-variant-numeric: tabular-nums; }
+  .ry-c { height: 26px; border-radius: 6px; background: var(--surface-inset); display: grid; place-items: center; font-style: normal;
+    font-size: 11px; font-weight: 500; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+  .ry-c.fremtid { background: none; box-shadow: inset 0 0 0 1px var(--divider); }
+  .ry-c.idag { box-shadow: inset 0 0 0 1.5px var(--text-primary); }
   .ugeknap { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 12px; align-items: center; width: 100%; text-align: left;
     font: inherit; color: inherit; background: var(--container-inset); border: 0; box-shadow: inset 0 0 0 1px var(--border-subdued); border-radius: 10px; padding: 10px 12px; cursor: pointer; }
   .ugeknap:hover { background: var(--surface-hover); }
@@ -70,6 +78,12 @@
   .egne-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
   .btn { font: inherit; font-size: 13px; font-weight: 500; line-height: 1; padding: 9px 13px; border-radius: 8px; border: 0; cursor: pointer; background: var(--nav-indicator); color: var(--container); }
   .btn:hover { opacity: .88; } .btn:disabled { opacity: .45; cursor: default; }
+  .usb-kort { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 14px; align-items: center; text-decoration: none; color: inherit; }
+  .usb-kort:hover { background: var(--container-hover); }
+  .usb-kort .ico { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: var(--surface-inset); }
+  .usb-kort b { display: block; font-weight: 600; }
+  .usb-kort small { color: var(--text-secondary); font-size: 13px; line-height: 1.45; }
+  .usb-kort .go { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 500; white-space: nowrap; }
 </style>
 </head>
 <body>
@@ -107,13 +121,13 @@ const kort = iso => { if (!iso) return "–"; const d = new Date(iso); return `$
 function tiles(f) {
   const s = f.status, t = [];
   if (s.begreber) t.push(`<div class="card tile"><div class="label">Begreber i egne ord</div><div class="value">${s.begreber.udfyldt}<small>/ ${s.begreber.i_alt}</small></div>${meter(s.begreber.udfyldt, s.begreber.i_alt)}<div class="foot">ændret ${kort(s.begreber.ændret)}</div></div>`);
-  if (s.genkald) {
-    const g = s.genkald.reduce((a, x) => ({ q: a.q + x.spoergsmaal, m: a.m + x.sad + x.halvt + x.blankt, sad: a.sad + x.sad }), { q: 0, m: 0, sad: 0 });
+  if (s.genkald_i_alt) {
+    const i = s.genkald_i_alt, g = { q: i.spoergsmaal, m: i.forsoegt, sad: i.sad };  // talt af eksporten
     t.push(`<div class="card tile"><div class="label">Genkald forsøgt</div><div class="value">${g.m}<small>/ ${g.q}</small></div>${meter(g.m, g.q)}<div class="foot">${g.sad} sad helt</div></div>`);
   }
   if (s.modeller != null) t.push(`<div class="card tile"><div class="label">Tegnede modeller</div><div class="value">${s.modeller}</div><div class="foot">i ${esc(f.mappe)}/Modeller</div></div>`);
-  if (s.drills) {
-    const d = s.drills.reduce((a, x) => ({ p: a.p + x.pladser, g: a.g + x.gættet, st: a.st + x.stubbe }), { p: 0, g: 0, st: 0 });
+  if (s.drills_i_alt) {
+    const i = s.drills_i_alt, d = { p: i.pladser, g: i.gaettet, st: i.stubbe };  // talt af eksporten
     t.push(`<div class="card tile"><div class="label">Drills gættet</div><div class="value">${d.g}<small>/ ${d.p}</small></div>${meter(d.g, d.p)}<div class="foot">${d.st} kodestubbe tilbage</div></div>`);
   }
   if (s.afleveringer) t.push(`<div class="card tile"><div class="label">${esc(f.afleveringer?.navn || "Afleveringer")} godkendt</div><div class="value">${s.afleveringer.godkendt}<small>/ ${s.afleveringer.krav ?? "–"} krævet</small></div>${meter(s.afleveringer.godkendt, s.afleveringer.krav || 1)}<div class="foot">${s.afleveringer.afleveret} afleveret af ${s.afleveringer.ud_af ?? 8}</div></div>`);
@@ -141,8 +155,12 @@ function detaljer(f) {
 function plan(f) {
   const planer = S.planer.filter(p => p.fag[f.id]);
   if (!planer.length) return "";
-  const p = planer.find(x => x.uge === planUge) || planer.find(x => x.uge === S.aktuel_uge) || planer[planer.length - 1];
+  // I weekenden er næste uges køreplan ikke skrevet endnu; så vises sidste uges med et mærke (koereplan i studie.js)
+  const v = visUge(), kp = koereplan(planer, planUge, v);
+  const p = kp.plan || planer.find(x => x.uge === S.aktuel_uge) || planer[planer.length - 1];
   const i = planer.indexOf(p), a = p.fag[f.id];
+  const naar = kp.sidste ? ` <span class="badge">${SIDSTE_UGES}</span>`
+    : `<span class="meta">${p.uge === v.uge ? (v.naeste ? " · næste uge" : " · denne uge") : v.naeste && p.uge === S.aktuel_uge ? " · sidste uge" : ""} · skrevet før ugen</span>`;
   const sek = (k, titel, aaben) => a[k] ? `<details class="sec"${aaben ? " open" : ""}><summary>${titel}</summary><div class="md">${a[k]}</div></details>` : "";
   // To sæt noter pr. uge: køreplanens (skrevet før ugen, til forberedelse) og fagnoterne i Word
   // (udfyldt efter ugen ud fra slides og øvelser). Begge vises; fagnoterne kommer til, når ugen er slut.
@@ -170,7 +188,7 @@ function plan(f) {
         <span class="meta">${esc(o.niveau)}</span>${o.hvorfor ? ` · ${o.hvorfor}` : ""}</li>`).join("")}</ul>` : ""}</div>
       <p class="meta" style="margin:12px 0 0">Fra ${esc(S.leetcode.fil)}.</p></details>` : "";
   return `<section class="card panel">
-    <div class="plan-head"><h2>Køreplan, uge ${p.uge} <span class="meta">(${range(p.fra)})${p.uge === S.aktuel_uge ? " · denne uge" : visUge().naeste && p.uge === visUge().uge ? " · næste uge" : ""} · skrevet før ugen</span></h2>
+    <div class="plan-head"><h2>Køreplan, uge ${p.uge} <span class="meta">(${range(p.fra)})</span>${naar}</h2>
       <div class="weeknav">
         <button type="button" class="nav-btn" data-step="-1" aria-label="Ugen før"${i === 0 ? " disabled" : ""}>${icon("arrow-left", 14)}</button>
         <select id="uge" aria-label="Vælg uge">${planer.map(x => `<option value="${x.uge}"${x.uge === p.uge ? " selected" : ""}>Uge ${x.uge}</option>`).join("")}</select>
@@ -190,17 +208,22 @@ function plan(f) {
   </section>`;
 }
 
-// Ugens forelæsninger og øvelser fra <mappe>/Pensum/, øverst i køreplanen. Filen åbnes gennem Studie-serveren.
+// Ugens forelæsninger og øvelser fra <mappe>/Pensum/, øverst i køreplanen. Filen åbnes gennem Studie-serveren; på
+// telefonen i samme vindue, så På fartens service worker kan vise den uden net (et nyt vindue har ikke dens lager).
 function pensum(f, uge) {
   const p = f.status.pensum, fl = (p?.forelaesninger || []).filter(x => x.uge === uge), oe = (p?.oevelser || []).filter(x => x.uge === uge);
   if (!fl.length && !oe.length) return "";
-  const link = x => `<li><a href="/studie/api/pensum/${encodeURIComponent(f.id)}/${encodeURIComponent(x.mappe)}/${encodeURIComponent(x.fil)}" target="_blank" rel="noopener">
+  const link = x => `<li><a href="/studie/api/pensum/${encodeURIComponent(f.id)}/${encodeURIComponent(x.mappe)}/${encodeURIComponent(x.fil)}"${paaTelefon ? "" : ` target="_blank" rel="noopener"`}>
     ${icon("file-text", 14)}<span>${esc(x.titel)}</span></a><span class="meta">${dayMonth(parseDate(x.dato))}</span></li>`;
   const kol = (navn, xs) => `<div><div class="pl-k">${navn}</div>${xs.length ? `<ul class="pl">${xs.map(link).join("")}</ul>` : `<p class="meta" style="margin:0">Ikke lagt op</p>`}</div>`;
   return `<div class="cols pl-uge">${kol("Forelæsning", fl)}${kol("Øvelse", oe)}</div>`;
 }
 
+let STYR_FEJL = null;
 function styrPaa(f) {
+  if (f.genkald && STYR_FEJL) return `<section class="card panel"><div class="panel-head"><h2>Styr på</h2></div>
+    <p class="meta" style="margin:0">Kan ikke vises lige nu, fordi Studie-serveren ikke svarer (${esc(STYR_FEJL)}). Genstart:
+    <code>launchctl kickstart -k gui/$(id -u)/local.kompas.studie</code>, og se <code>~/.kompas/studie-server.log</code>.</p></section>`;
   if (!f.genkald || !LAEST) return "";
   // Uger med undervisning i faget: dem planerne har et afsnit for, til og med denne uge
   const uger = S.planer.filter(p => p.fag[f.id] && p.uge <= S.uge_nu).map(p => p.uge);
@@ -220,6 +243,26 @@ function styrPaa(f) {
   </section>`;
 }
 
+// Rytme: svarene pr. dag er talt af eksporten (status.rytme); siden lægger dem bare i et gitter, uge for uge
+function rytme(f) {
+  const r = f.status.rytme;
+  if (!r?.fra) return "";
+  const slut = parseDate(r.til), uger = [];
+  for (let m = parseDate(r.fra); m <= slut; m = addDays(m, 7)) uger.push(m);
+  const celle = d => {
+    if (d > slut) return `<i class="ry-c fremtid"></i>`;
+    const k = iso(d), n = r.dage[k] || 0;
+    const farve = n ? ` style="background:color-mix(in srgb, ${f.farve} ${Math.round(25 + 75 * n / r.flest)}%, transparent)"` : "";
+    return `<i class="ry-c${k === r.til ? " idag" : ""}" title="${weekday(d)} ${dayMonth(d)}: ${n ? `${n} svar` : "ingen svar"}"${farve}>${n || ""}</i>`;
+  };
+  return `<section class="card panel">
+    <div class="panel-head"><h2>Rytme</h2><span class="meta">${r.svar ? `${r.svar} svar på ${r.aktive_dage} ${r.aktive_dage === 1 ? "dag" : "dage"} · senest ${dayMonth(parseDate(r.seneste))}` : "ingen svar endnu"}</span></div>
+    <div class="ry"><span></span>${DAYS.map(d => `<span class="ry-h">${d.slice(0, 3)}</span>`).join("")}
+      ${uger.map(m => `<span class="ry-u">U${isoWeek(m)}</span>${[0, 1, 2, 3, 4, 5, 6].map(i => celle(addDays(m, i))).join("")}`).join("")}</div>
+    <p class="meta" style="margin:12px 0 0;line-height:1.5">Dine svar pr. dag i Træning og På farten (${[f.kode && "drills", f.genkald && "genkald", f.eksamenstraening && "eksamensopgaver"].filter(Boolean).join(", ")}). Selvstudie i kalenderen tæller ikke med.</p>
+  </section>`;
+}
+
 function render() {
   const f = S.fag.find(x => x.id === valgt) || S.fag[0];
   valgt = f.id;
@@ -231,9 +274,14 @@ function render() {
     <section class="card fag-head"><span class="sw" style="background:${f.farve}"></span><div>
       <h2>${esc(f.navn)}</h2>
       ${e.Eksamen ? `<p><b>Eksamen:</b> ${esc(e.Eksamen)}. <b>Det der virker:</b> ${esc((e["Det der virker"] || "").replace(/\*\*/g, ""))}.</p>` : ""}
-      ${kommende.length ? `<p><b>Næste:</b> ${kommende.map(d => `${d.hvad.replace(/<[^>]+>/g, "")} (${nedtaelling(d.dato || d.fra, !d.dato)})`).join(" · ")}</p>` : ""}
+      ${kommende.length ? `<p><b>Næste:</b> ${kommende.map(d => `${esc(udenHtml(d.hvad))} (${nedtaelling(d.dato || d.fra, !d.dato)})`).join(" · ")}</p>` : ""}
     </div></section>
     ${styrPaa(f)}
+    ${f.usb_noter ? `<a class="card panel usb-kort" href="usb.html#${encodeURIComponent(f.id)}">
+      <span class="ico">${icon("hard-drive", 18)}</span>
+      <span><b>USB-noter</b><small>Fagnoterne, du tager med på USB til eksamen, uge for uge. Giv en uge en vurdering, så strammer Studie-rutinen den ind.</small></span>
+      <span class="go">Åbn ${icon("arrow-right", 14)}</span></a>` : ""}
+    ${rytme(f)}
     ${tiles(f)}
     ${plan(f)}
     ${detaljer(f)}
@@ -290,11 +338,13 @@ document.getElementById("root").addEventListener("click", async e => {
 });
 fetch("/studie/api/egne-ord").then(r => r.ok ? r.json() : null).then(d => { EO = d; if (S) render(); }).catch(() => {});
 fetch("fagnoter.json", { cache: "no-store" }).then(r => r.ok ? r.json() : null).then(d => { FN = d; if (S) render(); }).catch(() => {});
-// Styr på hentes live; svarer serveren ikke, vises siden bare uden kortet
-Promise.all([fetch("/studie/api/laest").then(r => r.json()), fetch("/studie/api/genkald").then(r => r.json())])
-  .then(([l, g]) => { LAEST = l; GK = g; if (S) render(); }).catch(() => {});
+// Styr på hentes live. Svarer serveren ikke (eller med en fejl), står det i kortets plads, så du ved, hvor Styr på er
+const jsonEllerFejl = r => r.json().catch(() => ({})).then(d => { if (!r.ok) throw new Error(d.fejl || `svarede ${r.status}`); return d; });
+Promise.all([fetch("/studie/api/laest").then(jsonEllerFejl), fetch("/studie/api/genkald").then(jsonEllerFejl)])
+  .then(([l, g]) => { LAEST = l; GK = Array.isArray(g) ? g : []; STYR_FEJL = null; if (S) render(); })
+  .catch(e => { STYR_FEJL = e.message; if (S) render(); });
 // Samme uge som Ugeoverblik (visUge i studie.js: weekenden hører til næste uge). Er dens køreplan ikke skrevet endnu,
-// viser plan() den aktuelle
+// viser plan() sidste uges med et mærke (koereplan i studie.js) eller ellers den aktuelle
 loadStudie().then(d => { S = d; planUge = visUge().uge; render(); },
   e => { document.getElementById("root").innerHTML = `<div class="card empty">${esc(e.message)}. Kør <code>node Scripts/kompas-eksport.js</code> i semestermappen.</div>`; });
 </script>

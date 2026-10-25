@@ -23,8 +23,11 @@
   --container-inset: var(--gray-50);
   --nav-indicator: var(--black);
   --text-primary: var(--gray-900);
-  --text-secondary: var(--gray-500);
-  --text-subdued: var(--gray-400);
+  /* Lys tilstand er mørkere end Sures: begge grå når 4,5:1 på --container, --surface og --surface-inset, også i
+     11–12,5 px (secondary 6,7 / 6,2 / 5,9:1, subdued 5,3 / 5,0 / 4,7:1). Sures egne (gray-500 og gray-400) gav
+     4,7 / 4,4:1 og 2,7 / 2,5:1. Mørk tilstand er Sures. */
+  --text-secondary: var(--gray-600);
+  --text-subdued: #6b6b6b;
   --divider: rgba(11, 11, 11, 0.08);
   --border-subdued: rgba(11, 11, 11, 0.05);
   --shadow-xs: 0 1px 2px 0 rgba(11, 11, 11, 0.06);

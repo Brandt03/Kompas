@@ -126,6 +126,9 @@ async function test(navn, fn) { await fn(); ok++; console.log(`ok  ${navn}`); }
     assert.ok(K.repetition().kort.some(k => !k.ny), "gentagelsen fortsætter");
     eksamen(0);
     assert.strictEqual(nye(), 0, "på eksamensdagen");
+    // Rapporten skriver til næste uge: en eksamen 20 dage fremme giver eksamensperiode i den uge, uanset ugedag i dag
+    eksamen(20);
+    assert.strictEqual(cli("rapport").eksamener_inden_for_14_dage.length, 1);
     eksamen(-1);
     assert.ok(nye() > 0, "dagen efter");
     eksamen(3, { faerdig: "2026-10-01" });
@@ -156,6 +159,7 @@ async function test(navn, fn) { await fn(); ok++; console.log(`ok  ${navn}`); }
     assert.strictEqual(nye[0].regel, "es-ser-estar");
     assert.strictEqual(nye[0].opgave, "Sæt det manglende ind");
     const p = K.pakke();
+    assert.strictEqual(p.sidst_svar, K.logPoster().filter(x => ["svar", "tekst-svar"].includes(x.type)).at(-1).tid, "dit seneste svar, til I dag");
     assert.strictEqual(p.regler.length, 1);
     assert.deepStrictEqual(p.regelkort.map(k => k.id), [id]);
     assert.strictEqual(cli("rapport").regler[0].kort, 1);
@@ -213,11 +217,29 @@ async function test(navn, fn) { await fn(); ok++; console.log(`ok  ${navn}`); }
         { id: "abcdefgh-2", type: "svar", tid, data: { id: "xx", karakter: 4 } }];
       let r = await (await post("/sprog/api/sync", { poster })).json();
       assert.deepStrictEqual(r.resultater.map(x => x.ok), [true, false]);
+      await new Promise(ok => setTimeout(ok, 50));
+      assert.match(srvLog, /sync: 1 af 2 poster afvist/, "en afvist post fra telefonen står i loggen");
       r = await (await post("/sprog/api/sync", { poster: poster.slice(0, 1) })).json();
       assert.strictEqual(r.resultater[0].allerede, true);
       const gemt = K.logPoster().filter(p => p.sync_id === "abcdefgh-1");
       assert.strictEqual(gemt.length, 1);
       assert.strictEqual(gemt[0].tid, tid);
+    });
+
+    await test("ny tekst efter feedback: feedbacken på ugen før står forrest, til den nye er besvaret", async () => {
+      const nyt = async () => (await (await fetch(`${url}/sprog/kompas.json`)).json()).sider[0].nyt;
+      const pk = async () => (await fetch(`${url}/sprog/api/pakke`)).json();
+      assert.strictEqual((await pk()).ny_feedback, null, "feedbacken er på den nyeste tekst");
+      cli("tekst", fil("tekst2.json", { sprog: "es", niveau: "A2", titel: "En la estación", tekst: "Hola.", spoergsmaal: ["¿Adónde vas?"] }), "--uge", "2026-W44");
+      let p = await pk();
+      assert.strictEqual(p.ny_feedback.uge, "2026-W43");
+      assert.strictEqual(p.ny_feedback.titel, "En el mercado");
+      assert.ok(p.tekster.find(t => t.uge === "2026-W43").feedback, "feedbacken er med i pakken");
+      assert.strictEqual(await nyt(), "2026-W44+2026-W43-feedback", "prikken kommer med den nye tekst og feedbacken");
+      assert.strictEqual((await post("/sprog/api/tekst-svar", { uge: "2026-W44", tekst: "Voy a Madrid." })).status, 200);
+      p = await pk();
+      assert.strictEqual(p.ny_feedback, null, "den nye tekst er besvaret");
+      assert.strictEqual(await nyt(), "2026-W44+2026-W43-feedback", "dit eget svar giver ingen prik");
     });
   } finally {
     srv.kill();

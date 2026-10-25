@@ -17,7 +17,7 @@ a) Læs `CLAUDE.md` i roden. Dens regler gælder også for denne kørsel, og den
    nedenfor er fagets `mappe`. Felterne siger, hvad faget har: `genkald`, `begreber`,
    `kode` (mappen med drills og øvelser), `afleveringer` (mappe og præfiks som G i G1)
    og `eksamenstraening.form` (skriftlig, kode eller mundtlig). Vigtigst i CLAUDE.md:
-   - **Mine arbejdsfiler** (`*/Genkald/begreber.md`, eksisterende `genkald-*.md`,
+   - **Mine arbejdsfiler** (`*/Genkald/begreber.md`, `*/egne-ord.md`, `Scripts/usb-vurdering.json`, eksisterende `genkald-*.md`,
      alt i `<mappe>/<kode>/` for et kodefag) læser du kun. Du redigerer ALDRIG i dem.
    - **Mine opgaver** (drills, øvelsessæt, afleveringer, obligatoriske opgaver): til dem
      skriver du stof og spørgsmål, ALDRIG facit, heller ikke som kodeeksempel.
@@ -102,6 +102,11 @@ filen mangler i mappen. Opfind aldrig datoer.
      antal `[✓]`, `[~]`, `[✗]` og antal spørgsmål uden markering.
    - Aktivitet: filer ændret de sidste 7 dage i fagenes mapper
      (`find ... -mtime -7`), inkl. Fagnoter-dokumenterne.
+   - Læste uger: `Scripts/laest.json` (`{"<fag-id>": {"<uge>": "ÅÅÅÅ-MM-DD"}}`).
+   - Selvstudie: `selvstudie_timer` og `selvstudie_dage` for de to seneste afsluttede uger i
+     `$LIV_SITE/liv.json` (standard `~/.garmin-coach/site/liv.json`; listen `uger`, ISO-ugen i `uge`), og hvor mange af de
+     sidste 14 dage der har svar i `Scripts/genkald-log.jsonl`. `null` betyder ukendt, ikke 0.
+     Bruges til omfanget i afsnit 4b.
    Brug status til at målrette rådene: fx er en drill ikke begyndt, og en
    aflevering er denne uge, så sig det. Er noget umuligt at aflæse, så skriv det.
 
@@ -143,11 +148,15 @@ række), bog (kapitel, afsnitsoverskrift, sider i min udgave), slides
 `eksamenstraening.form` i fag.json, og eksamenens detaljer (varighed, hjælpemidler,
 opgavetyper) i fagets række i README's "… trænes forskelligt".
 
-  · **kode** — skriftlig prøve i kode. Er noter tilladt, så skriv et opslagsværk,
-    ikke forståelsesprosa. Syntaks, kaldsignatur og et minimaleksempel, der viser
-    hvad det returnerer, for hvert nyt konstrukt. De to-tre typiske fejl,
-    formuleret så jeg kan genkende dem i en fejlmeddelelse. Brug egne
-    eksempler, aldrig facit til mine opgaver.
+  · **kode** — skriftlig prøve i kode. En ugegennemgang i prosa som de andre fag,
+    ikke et opslagsværk: hvad ugens begreber er, hvilket problem hvert af dem løser,
+    og hvordan de hænger sammen med hinanden og med de tidligere uger. Tag
+    begreberne i den rækkefølge, de bygger på hinanden. Kode kun, hvor teksten ikke
+    kan stå alene: højst tre korte eksempler (højst seks linjer, kørt i node,
+    resultatet efter `// →`), som teksten forklarer. Opslagsværket med syntaks og
+    kodeblokke til USB'en er fagnoterne i Word (afsnit 6). Slut med **Typiske fejl**:
+    to-tre fejl, formuleret så jeg kan genkende dem i en fejlmeddelelse, og hvad der
+    får dem til at ske. Brug egne eksempler, aldrig facit til mine opgaver.
 
   · **skriftlig** — prosa, der forklarer sammenhængen. Slut ALTID med 5-8
     øvelsesspørgsmål i eksamensformatet fra README: fx multiple choice med plausible
@@ -231,7 +240,38 @@ med fagets `kort` fra fag.json i Fag-kolonnen.
 Kendes en præcis frist (opgavetekst i `<mappe>/Afleveringer/`, Canvas, eksamensplanen eller "Vigtige datoer" i CLAUDE.md), så skriv den
 som `dd.mm kl. tt:mm` i Dato-kolonnen og sæt Uge til fristens uge, ikke kursusplanens.
 
-**Vigtigst i ugen** — maks tre linjer.
+**Vigtigst i ugen** — maks tre linjer, valgt så de kan nås inden for omfanget i afsnit 4b.
+Derefter én linje, der begynder med `**Minimumsdag:**` (afsnit 4b). Kompas viser begge dele.
+
+## 4b. OMFANG: PLANLÆG EFTER DALEN, IKKE TOPPEN
+
+Motivationen svinger, så en plan, der kun holder på en god dag, falder sammen på dag to. Derfor:
+
+1. **Minimumsdag.** Hver køreplan har én minimumsdag for hele ugen: Dagens kort plus ét lille skridt
+   i det fag, eksamen eller min status peger på, fx ét begreb i egne ord (fag med `begreber`) eller
+   ét nyt drill-tjek (fag med `kode`). Højst 15 minutter. Den tæller som en god studiedag; alt andet
+   i planen er oven i. Skriv hverken tidspunkt eller sted, dem sætter jeg selv.
+2. **Omfang.** Det, køreplanen siger skal nås uden for undervisningen, skal passe til en almindelig
+   uge, ikke den bedste: snittet af `selvstudie_timer` for de to seneste afsluttede uger (afsnit 2,
+   trin 3). Fristerne går forud. Er et tal `null`, eller er det tydeligt for lavt i forhold til
+   mappen (fx en aflevering, der er lavet, men intet logget), så skriv det under Vigtigst i ugen og
+   planlæg efter minimumsdagen og fristerne. Gæt aldrig et timetal.
+3. **Indhentning.** Er der uger med undervisning, som ikke er læste (`laest.json`), så læg ikke det
+   hele ind. Rækkefølgen er: frister, ugens fagnoter og "markér som læst" (så genkaldet kommer i
+   Dagens kort), genkald, og bogen kun, hvor fagnoterne ikke rækker. Det, der ikke er plads til, står
+   som "hvis der er overskud", ikke som noget, der skal nås.
+
+Det samme gælder, når du sammen med mig lægger studieblokke i kalenderen eller retter en
+indhentningsplan uden for rutinen. Så gælder også:
+- Spørg, hvor blokken skal foregå, og skriv stedet på den.
+- **Når en blok glipper, så vælg i stedet for at flytte.** Flyt den ikke frem i sin helhed. Genkald
+  går før læsning, læsning skæres ned til fagnoterne, og resten droppes eller står som "hvis der er
+  overskud".
+- **Mærk hver studieblok.** Blokkene lægges i din studiekalender gennem Kalender-appen
+  (AppleScript). Titlen begynder med fagets `kort` og ` · ` (fx `Alfa · fagnoter uge 12`), og noten slutter med
+  linjen `#kompas-plan`. Mærket gør, at Står stille på I dag kan se, når blokke glipper, og at en gammel plan kan
+  findes og erstattes. Slet eller ret kun blokke med mærket, aldrig andre aftaler. Find dem på
+  `description contains "#kompas-plan"`, ikke på uid: Kalender-appen og Googles feed har forskellige id'er.
 
 ## 5. FRISTER OG KOMPAS
 
@@ -294,6 +334,31 @@ Fremgangsmåde per fag:
 
 Regler: "I egne ord" og alt, brugeren selv har skrevet, røres aldrig. Ingen facit til
 mine opgaver. Mangler en kilde, så skriv at den mangler, og opfind aldrig indhold eller sidetal.
+
+VURDERINGER FRA USB-NOTER — KUN FAG MED `usb_noter` I FAG.JSON, FØR UGENS NYE FAGNOTER
+Fagnoterne i et fag med `usb_noter` er det dokument, jeg tager med på USB til eksamen. Det skal være
+præcist og til at slå op i, ikke fyldt op. På Kompas → Studie → Fag → <faget> → USB-noter giver jeg en uge (eller et
+hovedafsnit som "Eksamen") en vurdering, som Studie-serveren gemmer i `Scripts/usb-vurdering.json`:
+`{"<fag>": {"<uge eller afsnit>": {"vurdering": "brugbar" | "for_meget" | "mangler" | null, "kommentar": "…", "dato": "ÅÅÅÅ-MM-DD"}}}`.
+Filen er min, og du læser den kun. Hvad du har rettet efter, skriver du i
+`Scripts/fagnoter/vurdering-handlet.json` (`{"<fag>": {"<uge eller afsnit>": "<vurderingens dato>"}}`, opret
+den, hvis den mangler); så viser siden, at vurderingen er taget.
+1. Tag de vurderinger, hvis `dato` er nyere end datoen for samme nøgle i `vurdering-handlet.json`, eller som
+   ikke står dér. Gør det, før du udfylder ugens nye fagnoter, så de nye uger følger det, jeg har sagt.
+2. **brugbar**: ret intet. Ugen er målestok for form og omfang, når du udfylder og retter uger i samme fag.
+   Skriv datoen i `vurdering-handlet.json`.
+3. **for_meget** eller **mangler**: skriv ugen forfra efter kommentaren. Læs først ugens nuværende blok
+   (`~/.kompas/studie/fagnoter.json`), og slå op i slides og bog som i trin 3 ovenfor. Fjern det, kommentaren
+   peger på, og det, der siger det samme som noget andet i ugen; tilføj det, der mangler. Skriv
+   `<scratch>/notes_<id>_ugeNN.py` med `RESET_WEEKS = [NN]` og den nye `WEEKS = {NN: dict(...)}`.
+   `RESET_WEEKS` tømmer ugen og flytter det, der står under "I egne ord", med. Følg så trin 5-6 (backup,
+   prøvekørsel mod en kopi), og tjek desuden, at alt uden for ugen er uændret, og at "I egne ord" står som før.
+   Kør `verify_prog.py` for fag med `kode`. Skriv datoen i `vurdering-handlet.json`, når det rigtige
+   dokument er gemt.
+4. Er kommentaren uklar, eller gælder vurderingen et hovedafsnit (fx "Eksamen"), så ret intet. Skriv i
+   slutsvaret, hvad du ville gøre, så jeg kan tage stilling.
+5. Siger kommentaren noget generelt (fx "færre begreber", "kun kode til nye konstrukter"), så gælder det også
+   de uger, du udfylder i denne kørsel.
 
 GENKALD — HVER UGE, KUN FAG MED `genkald` I FAG.JSON
 Når et fags fagnoter er gjort færdige (eller faget blev sprunget over pga. låsefil),
@@ -360,6 +425,7 @@ Afslut med et kort svar, én linje pr. punkt (udelad et punkt uden indhold):
 - Køreplanens filnavn, eller at den fandtes i forvejen (0c)
 - Andre oprettede filer, inkl. genkaldsfiler
 - Fagnoter- og genkald-uger udfyldt eller sprunget over, og hvorfor
+- USB-noter: uger rettet efter min vurdering, og vurderinger du ikke tog, med grunden
 - Antal drill-forklaringer (afsnit 6b), og tjek hvis resultat så forkert ud
 - Fag med video og CS50-forelæsning
 - Slides til ugen uploadet eller ej, og de vigtigste huller

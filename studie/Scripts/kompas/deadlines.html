@@ -87,7 +87,7 @@ function render(S) {
   const alle = [...S.deadlines].sort((a, b) => (target(a) || "").localeCompare(target(b) || ""));
   const aktive = alle.filter(d => !d.faerdig), faerdige = alle.filter(d => d.faerdig);
   const kommende = aktive.filter(d => (d.dato || d.til || d.fra || "") >= today);
-  const overstaaet = aktive.filter(d => !kommende.includes(d));
+  const overstaaet = aktive.filter(d => !kommende.includes(d) && d.type !== "ferie");  // en ferie er ikke noget at markere
   const naeste = kommende.find(d => HAARD.includes(d.type));
   const eksamen = kommende.find(d => d.type === "eksamen");
   document.getElementById("sub").textContent = `Fra ${S.deadline_kilde || "køreplanen"} · opdateret ${stamp(S.genereret)}`;
@@ -98,7 +98,7 @@ function render(S) {
     // Samme enhed som I dag og Eksamen: præcise datoer i dage, frister med kun en uge i uger
     const big = d.dato ? (n <= 0 ? "I dag" : n === 1 ? "I morgen" : `${n} dage`) : nedtaelling(target(d), true).replace(/^./, c => c.toUpperCase());
     return `<section class="card next"><div class="big">${big}</div>
-      <div class="what"><span class="meta">${label}</span><br>${esc(d.hvad.replace(/<[^>]+>/g, "").split(" — ")[0].replace(/^Eksamen: /, ""))}<small>${esc(d.fag)} · ${esc(whenText(d))}${d.tid ? ` kl. ${esc(d.tid)}` : ""}${d.dato ? "" : " (ingen præcis dato endnu)"}</small></div></section>`;
+      <div class="what"><span class="meta">${label}</span><br>${esc(udenHtml(d.hvad).split(" — ")[0].replace(/^Eksamen: /, ""))}<small>${esc(d.fag)} · ${esc(whenText(d))}${d.tid ? ` kl. ${esc(d.tid)}` : ""}${d.dato ? "" : " (ingen præcis dato endnu)"}</small></div></section>`;
   };
 
   // Forudsætningen for eksamen: afleveringer, der skal godkendes, eller en frist af fagets forudsætningstype (fag.json)
@@ -150,7 +150,7 @@ document.getElementById("root").addEventListener("click", async e => {
   b.disabled = true;
   try {
     await saet(k, nu);
-    const titel = d.hvad.replace(/<[^>]+>/g, "").split(" — ")[0];
+    const titel = udenHtml(d.hvad).split(" — ")[0];
     toast(nu ? `${titel}: færdig` : `${titel}: ikke færdig`, () => saet(k, !nu).catch(x => toast(`Kunne ikke fortryde: ${x.message}`)));
   } catch (x) { toast(`Kunne ikke gemme: ${x.message}`); b.disabled = false; }
 });

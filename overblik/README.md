@@ -14,6 +14,8 @@ ugetabel og fortolker den. Alt kører lokalt.
 | garmin | `~/.garmin-coach/coach.db` (læses kun) | søvn, HRV, hvilepuls, stress, skridt, træning |
 | sure | `~/kompas/okonomi/dashboard/public/data.json` | take-away, café/bar, dagligvarer, variable køb |
 | kalender | garmin-coach's `calendar_events` | undervisning (begivenheder, garmin-coach har givet en `fag_kode`) og selvstudie (CalTask-begivenheder der starter med `Selvstudie ·`) |
+| skærmtid | `~/.kompas/skaermtid/skaermtid.json` (læses kun) | endnu ingen ugekolonner; sen skærmtid pr. aften i `naetter` og dagens forløb i `dagsplan` (se På Kompas) |
+| studie | `~/.kompas/studie/studie.json` (læses kun) | endnu ingen ugekolonner; svar pr. dag i Træning og På farten i `dagsplan` |
 
 **En tom celle (`–`) betyder at kilden ikke dækker ugen, ikke 0.** Selvstudie
 før `LIV_SELVSTUDIE_FRA`, dagen logningen i CalTask begyndte, er ukendt. Undervisning før kalendervinduet er ukendt.
@@ -61,7 +63,12 @@ begivenheder der er slut tæller, og de skal være synket ind i garmin-coach.
 - **variabelt_kr**: positive beløb i "Variable udgifter", uden "Deling med
   venner". Refusioner tæller ikke, fordi de hører til en anden uges udgift.
 - **takeaway_kr** m.fl.: netto for kategorien, så MobilePay tilbage fra en
-  ven trækkes fra. Kan derfor blive en smule negativ.
+  ven trækkes fra. **takeaway_kr** og **cafe_bar_kr** bliver dog aldrig
+  negative: er tilbagebetalingen eller refusionen større end ugens køb (fx
+  300 kr. tilbage i en uge med 40 kr. take-away), hører resten til en anden
+  uges udgift, ligesom refusionerne under variabelt_kr, og ugen står til 0.
+  Et negativt tal ville ellers trække Forbrug (Uge for uge) og afvigelserne
+  skævt. Dagligvarer er stadig netto uden grænse.
 - **belastning**: træningsbelastning (TRIMP), regnet af garmin-coach og læst fra
   `~/.garmin-coach/site/belastning.json` (`LIV_BELASTNING_JSON`). Styrkepas er med
   via Hevy. Garmins egen belastning bruges ikke: den mangler på styrkepas.
@@ -75,6 +82,8 @@ Stier, datoer og titelmønstre kan overstyres med miljøvariabler (se `overblik/
 | `LIV_GARMIN_DB` | `~/.garmin-coach/coach.db` | garmin-coach's database (læses kun) |
 | `LIV_BELASTNING_JSON` | `~/.garmin-coach/site/belastning.json` | træningsbelastning pr. dag og pr. pas, skrevet af garmin-coach's `site byg` |
 | `LIV_SURE_JSON` | `~/kompas/okonomi/dashboard/public/data.json` | Sures eksport |
+| `LIV_SKAERMTID_JSON` | `~/.kompas/skaermtid/skaermtid.json` | Skærmtids eksport (læses kun): sen skærmtid pr. aften og dagens forløb |
+| `LIV_STUDIE_JSON` | `~/.kompas/studie/studie.json` | Studies eksport (læses kun): svar pr. dag i Træning og På farten |
 | `LIV_SITE` | `~/.garmin-coach/site` | hvor `liv eksport` lægger `liv.json` |
 | `LIV_SELVSTUDIE_PRAEFIKS` | `Selvstudie ·` | titlen, CalTask-begivenheder starter med |
 | `LIV_SELVSTUDIE_FRA` | `2026-09-28` | dagen logningen af selvstudie begyndte |
@@ -109,8 +118,9 @@ Tidsplanen styres i Claude-appen; siden Forbindelser i Kompas viser den aktuelle
 
 ## På Kompas
 
-Ugereviewet vises på forsiden I dag og grafisk under Form & fokus → Ugen i tal
-(`https://kompas.localhost/form/uge.html`).
+Ugereviewet vises på forsiden I dag og grafisk under Form & fokus → Ugereview
+(`https://kompas.localhost/form/uge.html`). Økonomi → Forbrug viser ugernes `variabelt_kr`, `takeaway_kr` og
+`cafe_bar_kr` under Uge for uge, så en ændring af de felter rammer også dén side.
 
 ```bash
 liv gem-review reviews/2026-W39.json --uge 2026-09-21   # gem teksten med ugens tal
@@ -137,5 +147,37 @@ tidszone; de får intet påført bagefter.
 `LIV_SITE`): alle uger, kilder, den nuværende `metode` og de gemte reviews
 med deres `genereret` og `metode`. Er der ikke skrevet review for sidste hele
 uge, kommer den med som tal uden tekst (og uden `genereret` og `metode`).
+
+`dagsplan` er planlagt mod faktisk for de seneste 14 døgn (kl. 6 til kl. 6, som Skærmtid) til Ugereview og til I dag, der
+viser `faktisk` under hver af dagens blokke, når den er begyndt (blokken findes på dato og starttid). Plan er
+undervisningen og dine egne blokke i kalenderen; faktisk er Skærmtids forløb i kvarterer, det, CalTask har logget som
+selvstudie, og Garmins pas. Hver planlagt blok får `faktisk`: minutterne pr. gruppe og kategori, der faldt i den, minutter
+uden skærm, logget selvstudie og træning. Uden forløb fra Skærmtid er `skaerm` null, ikke en dag uden skærm. En blok med
+`plan: true` er en studieblok: den har mærket `#kompas-plan` i kalenderens note (garmin-coach gemmer det som `plan_blok`).
+
+`glippede` er til I dag (Står stille): de seneste 3 afsluttede døgn i `dagsplan`, og hvilke af dem der havde studieblokke,
+men intet selvstudie logget i CalTask i hele døgnet. `vis` er sand fra 2 sådanne døgn (`GLIPPET_DAGE` og
+`GLIPPET_GRAENSE` i `side.py`). Er kalenderen ikke hentet siden i går, er `vis` falsk, og `status` siger hvorfor.
+
+`studieuge` er til I dag (Selvstudie i ugen): denne ISO-uges loggede selvstudie (`selvstudie_timer` og `selvstudie_dage` fra
+ugetabellen) mod ugens planlagte studieblokke (`planlagt_timer` og `planlagt_blokke`), dvs. alle blokke med planmærket fra
+mandag til søndag, også dem, der ikke er kommet endnu. En blok tæller under den dato, den starter. Er kalenderen ikke hentet
+siden i går, har `studieuge` en `status`, der siger hvorfor.
+
+`studietid` er til Studies side Selvstudie: undervisningen pr. kursuskode (`fag_kode`), det, CalTask har logget som
+selvstudie pr. titel ("Selvstudie · Beta🤖" bliver "Beta", også pr. dag i `dage` og antal logninger pr. dag i `sessioner`) og studieblokkene pr. det, der står før " · " i titlen, i alt og pr.
+ISO-uge, og undervisningen også pr. slags (`former`: garmin-coach's `art` og `form`, fx Forelæsning · forudindspillet).
+Undervisning og selvstudie tæller, når de er slut; studieblokkene både planlagt i alt og forbi. Navnene
+oversættes ikke her; Studies eksport knytter dem til fagene (`kursuskode`, `kort` og `alias` i fag.json) og stiller dem
+mod kursusbeskrivelsernes arbejdstimer.
+
+`naetter` er de seneste 28 nætter til Form & fokus → Kroppen i tal, hver under aftenens dato: Garmins sengetid
+(`sengetid` som kl. og `sengetid_t` som timer efter kl. 18, fra `raw` → `sleep.dailySleepDTO`), søvnen fra Garmins
+række dagen efter (Garmin daterer natten ved opvågningen) og `sen_skaermtid_t`, Skærmtids sene skærmtid samme aften.
+En aften uden måling står som null, også en dag, hvor ingen enhed sendte skærmtid.
+
+`nat_sammenhaeng` er én fast hypotese pr. nat: sen skærmtid ↔ søvnscore samme nat, på alle de nætter Skærmtid dækker
+(op til 56). Spearman med permutation i blokke af 3 nætter, mindst 28 nætter; "stærk" ved p < 0,01 og "antydning"
+ved p < 0,05, begge med |rho| ≥ 0,3. Den vises som punktdiagram på Kroppen i tal under Søvn.
 Kompas' opdatering hvert 30. minut (`~/kompas/bin/opdater.sh`) kører
 `liv opdater` og `liv eksport` efter kalenderen og, når den hentes, Garmin.

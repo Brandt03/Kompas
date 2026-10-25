@@ -35,7 +35,9 @@ er medianen af de seneste 60 dages målte hvilepuls, ellers Garmins profil.
 Værktøjet `profil` viser hvad der bruges og hvor hvert tal kom fra.
 - `GC_ICS_URLS` — den hemmelige iCal-adresse til din kalender. I Google Kalender
   ligger den under Indstillinger → vælg kalenderen → "Hemmelig adresse i
-  iCal-format". Kan udelades hvis du ikke vil have kalenderen med.
+  iCal-format". Kan udelades hvis du ikke vil have kalenderen med. Står
+  `#kompas-plan` i en begivenheds beskrivelse, gemmes den med `plan_blok = 1`:
+  en studieblok fra Kompas' studieplan, som overblik holder øje med.
 
 - `HEVY_API_KEY` — valgfri. Bruger du Hevy til styrketræning, giver nøglen
   (Settings → API, kræver Hevy Pro) sæt, vægt og RPE, som ellers går tabt når
@@ -121,7 +123,7 @@ Alternativt kan du bare bede om en `sync` midt i en samtale.
 | `traeningsbelastning` | Akut/kronisk, ACWR, monotoni, strain, ugefordeling, styrke pr. uge |
 | `restitution` | HRV og hvilepuls i SD fra 60-dages baseline, søvn, readiness |
 | `seneste_traening` | De enkelte pas med beregnet belastning |
-| `periode` | Alle nøgletal for en periode, i formatet fra siden Perioder |
+| `periode` | Alle nøgletal for en periode, som rutinen Træning vurderer |
 | `maanedsoversigt` | Det store billede: nøgletal måned for måned og udviklingen fra start til nu |
 | `kalender` | Dagens program, optaget tid og frie træningsvinduer |
 | `kropsudvikling` | Vægttrend og VO2max |
@@ -138,10 +140,11 @@ takt med filen her.
 
 ## Form & fokus
 
-En lokal side med perioder på 14 dage fra lørdag til fredag (tal plus en
-skrevet vurdering) og det store billede måned for måned. Siden ligger i `site/index.html`; data bygges
-til `~/.garmin-coach/site`, som Caddy leverer på `https://localhost/form/`
-(kun tilgængelig fra denne Mac):
+Tre sider i Kompas: Perioder (perioder på 14 dage fra lørdag til fredag, tal plus en skrevet vurdering),
+Ugereview og Kroppen i tal. Siderne ligger i `site/`; `byg` kopierer dem og bygger data til
+`~/.garmin-coach/site`, som Caddy leverer på `https://kompas.localhost/form/`. `/form/` selv
+(`site/index.html`) sender videre til Perioder; den gamle samlede side og `maaneder.json` er væk, og `byg`
+fjerner en gammel `maaneder.json`.
 
 ```bash
 .venv/bin/python -m garmin_coach.site byg        # byg siden med de nyeste tal
@@ -151,14 +154,55 @@ til `~/.garmin-coach/site`, som Caddy leverer på `https://localhost/form/`
 Mappen kan flyttes med `GC_SITE` (standard `~/.garmin-coach/site`).
 
 Kompas.app bygger siden, henter nye data i baggrunden og åbner den.
-Perioderne skrives af rutinen Træning hver anden lørdag med `gem-periode`, som
+Perioderne skrives af rutinen Træning hver anden søndag med `gem-periode`, som
 selv regner tallene, så kun vurderingen kommer fra modellen. Rutinens
 instruktioner står i `RUTINE.md`.
 
-Visningen "Ugen" (`/form/#ugen`) viser ugereviewet fra ~/kompas/overblik:
-afvigelser fra det normale, dag for dag, ugekalenderen, sammenhænge og
-udviklingen uge for uge. Den henter `liv.json`, som overblik skriver i
+Siden "Perioder" (`/form/perioder.html`) viser vurderingen af hver periode med fokus og opfølgningen på
+perioden før lige under resuméet (opfølgningen er åben, når et fokus ikke blev nået), styrken (arbejdssæt, RPE og
+e1RM pr. løft), løb og svømning (`kondition` i perioden: distance, længste tur, tempo, puls, løbets hurtigste
+1 og 5 km og kadence, svømningens SWOLF) mod perioden før, træningen fordelt på sport, studie og kalender og det
+lange perspektiv. Perioder gemt før `kondition` kom med, får den regnet af `byg` ud fra aktiviteterne.
+Søvn, puls, stress og belastning står på "Kroppen i tal".
+
+Siden "Ugereview" (`/form/uge.html`) viser ugereviewet fra ~/kompas/overblik:
+afvigelser fra det normale (kun de tydelige som fliser, resten samlet på én linje), dag for dag,
+ugekalenderen, sammenhænge og udviklingen uge for uge. Nederst står planlagt mod faktisk for de seneste
+14 døgn til i dag; det følger ikke den valgte uge. Undervisning og selvstudie har faste farver
+(`--undervisning`, `--selvstudie` i `site/form.css`), som Skærmtids grupper ikke bruger. Den henter `liv.json`, som overblik skriver i
 samme mappe med `liv eksport` eller `liv gem-review`; `byg` rører ikke filen.
+
+Siden "Kroppen i tal" (`/form/kroppen.html`) er idéen fra garmin-grafana: alle Garmins døgn- og
+nattemålinger på én side, og man kan gå tilbage i tid. Allerøverst står dagens råd og flagene om HRV,
+hvilepuls og søvn. Så ét døgn ad gangen (pil, kalenderen eller klik
+på en dag i ugetabellen eller heatmappet; kalenderen har en prik pr. aktivitet). Har døgnet en aktivitet, står den
+først med Garmins tal for passet (tid, distance, tempo, puls, træningseffekt, belastning og det, der er målt for
+netop den sport), tid i pulszoner (med hvor meget af passet, der var i zone 1–5), pulsen under passet og Hevy-øvelserne. Derefter puls hen over døgnet, farvet efter Garmins aktivitetsniveau og med
+dine pulszoner i baggrunden, stress i Garmins egne niveauer, body battery, skridt pr. kvarter og natten
+(søvnfaser, puls, HRV, SpO2, åndedræt, stress, body battery). Nedenunder en periode, de seneste 60 dage
+eller én kalendermåned: ugen i overblik (med snittet for ugen før), heatmappet, træningsbelastning (TRIMP dag for dag og uge for uge),
+aktivitet, stress og body battery, puls og helbred, søvn (med sengetid og sen skærmtid fra overblik) og
+aktiviteternes pulszoner. Det, der er målt mod i dag, står kun under de seneste 60 dage: belastningen nu
+(ACWR), intensiteten de seneste 28 dage og grundniveauet for HRV og hvilepuls. VO2max og vægt står altid
+med hele historikken. Hvert mål har samme farve
+overalt på siden.
+
+`byg` skriver `kroppen.json` (de seneste 60 dage) og under `kroppen/` én fil pr. døgn (`dag/<dato>.json`) og
+pr. måned (`maaned/<ÅÅÅÅ-MM>.json`) plus `index.json`. Alt regnes i `garmin_coach/kroppen.py`, også snit,
+min og maks; siden regner ikke selv. Kun filer, hvis kilde har ændret sig, skrives igen (`kilder.json`
+holder styr på det; hæv `FORMAT` i `kroppen.py`, når filernes indhold ændres). I dag er kun indtil nu, så
+dagens døgntal (skridt, kalorier, stress …) tæller ikke med i snittene.
+
+Døgnets kurver (puls hvert 2. min, stress og body battery hvert 3. min, skridt pr. kvarter) hentes med den
+almindelige sync, tre kald mere pr. døgn, og fylder omkring 60 KB pr. døgn i databasen og 40 KB pr. døgn i
+siden. Til dage, der blev hentet før kurverne kom med:
+
+```bash
+.venv/bin/python -m garmin_coach.ingest_garmin --fra 2025-01-01 --kurver
+```
+
+Den tager nyeste dag først, springer dage med kurver over og stopper, hvis Garmin afviser kald; kør den
+bare igen. GPS-kort og løbsprognoser er ikke med, fordi de ikke hentes fra Garmin.
 
 ## Verificér uden Garmin-adgang
 

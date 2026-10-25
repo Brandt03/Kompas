@@ -27,7 +27,7 @@ def test_defekte_perioder_springes_over_med_advarsel(conn, tmp_path, caplog):
         res = site.byg(conn, tmp_path / "site")
     assert res["perioder"] == 1
     assert res["sprunget_over"] == ["2026-08-01", "2026-08-15", "2026-08-29", "2026-09-12"]
-    assert json.loads((tmp_path / "site" / "perioder.json").read_text()) == [GOD]
+    assert json.loads((tmp_path / "site" / "perioder.json").read_text()) == [GOD | {"kondition": {"loeb": None, "svoemning": None}}]
     advarsler = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
     assert sum("Springer periode" in a for a in advarsler) == 4
     assert any("2026-08-29" in a and "mangler 'slut'" in a for a in advarsler)
@@ -49,7 +49,8 @@ def test_kompas_json_skrives_sidst(conn, tmp_path, monkeypatch):
     monkeypatch.setattr(site, "_write", lambda path, text: (raekkefoelge.append(path.name), skriv(path, text)))
     site.byg(conn, tmp_path / "site")
     assert raekkefoelge[-1] == "kompas.json"
-    assert {"perioder.json", "maaneder.json", "oversigt.json", "soevn.json", "coach.json"} <= set(raekkefoelge[:-1])
+    assert {"perioder.json", "oversigt.json", "soevn.json", "coach.json"} <= set(raekkefoelge[:-1])
+    assert "maaneder.json" not in raekkefoelge
 
 
 def test_fejl_undervejs_lader_det_gamle_manifest_staa(conn, tmp_path, monkeypatch):
@@ -65,3 +66,13 @@ def test_fejl_undervejs_lader_det_gamle_manifest_staa(conn, tmp_path, monkeypatc
         site.byg(conn, out)
     assert json.loads((out / "kompas.json").read_text()) == {"gammelt": True}
     assert not list(out.glob("*.tmp"))
+
+
+def test_form_sender_videre_til_perioder_og_maaneder_json_fjernes(conn, tmp_path):
+    out = tmp_path / "site"
+    out.mkdir()
+    (out / "maaneder.json").write_text("[]")  # fra den gamle samlede side
+    site.byg(conn, out)
+    assert not (out / "maaneder.json").exists()
+    index = (out / "index.html").read_text()
+    assert 'http-equiv="refresh" content="0; url=perioder.html"' in index and 'href="perioder.html"' in index

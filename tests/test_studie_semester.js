@@ -25,9 +25,9 @@ fs.writeFileSync(path.join(rod, "CLAUDE.md"), `# Testsemester
 
 | Uge | Fag | Hvad |
 |---|---|---|
-| 41 | Bet | **A1** — onsdag 07.10 kl. 23:59 |
-| 46-47 | Gamma | **Præsentation i øvelsestimen**, forudsætning for eksamen |
-| 50 | Alfa | **Eksamen: skriftlig stedprøve** — torsdag 10.12.2026 kl. 09:00-11:00 |
+| 42 | Bet | **A1** — tirsdag 13.10 kl. 20:00 |
+| 44-45 | Gamma | **Præsentation i øvelsestimen**, forudsætning for eksamen |
+| 51 | Alfa | **Eksamen: skriftlig stedprøve** — mandag 14.12.2026 kl. 13:00-16:00 |
 | 1 | Gamma | **Eksamen: mundtlig** — torsdag 07.01.2027 |
 | 51 | Beta | **Eksamen** (datoen er ikke kommet endnu) |
 
@@ -66,7 +66,7 @@ tjek("semestrets navn fra fag.json", S.semester() === "Testsemester", S.semester
 
 // ── afleveringer ──
 tjek("afleveringsNr finder præfikset fra fag.json", S.afleveringsNr("Husk A3 i aften") === "A3");
-tjek("afleveringsNr kender ikke andre semestres præfiks", S.afleveringsNr("G1 (dart)") === null);
+tjek("afleveringsNr kender ikke andre semestres præfiks", S.afleveringsNr("G1 (lorem)") === null);
 tjek("afleveringsNr kræver et helt ord", S.afleveringsNr("AA3 og A3x") === null);
 tjek("afleveringsNr tillader ét mellemrum efter præfikset", S.afleveringsNr("se A 4 i aften") === "A 4");
 
@@ -77,9 +77,9 @@ const d = r => S.deadline(r, 2026, 36);
 const [a1, praes, alfaEks, gammaEks, betaEks] = rækker.map(d);
 tjek("A1 er en aflevering, selvom ordet ikke står der", a1.type === "aflevering", vis(a1));
 tjek("en frist med et tidligere kortnavn får fagets nuværende", a1.fag === "Beta", a1.fag);
-tjek("A1 får datoen fra teksten", a1.dato === "2026-10-07" && a1.tid === "23.59", vis([a1.dato, a1.tid]));
-tjek("præsentation før eksamen er en præsentation", praes.type === "praesentation" && praes.fra === "2026-11-09" && praes.til === "2026-11-22", vis(praes));
-tjek("Alfas eksamen", alfaEks.type === "eksamen" && alfaEks.dato === "2026-12-10" && alfaEks.tid === "09.00–11.00", vis(alfaEks));
+tjek("A1 får datoen fra teksten", a1.dato === "2026-10-13" && a1.tid === "20.00", vis([a1.dato, a1.tid]));
+tjek("præsentation før eksamen er en præsentation", praes.type === "praesentation" && praes.fra === "2026-10-26" && praes.til === "2026-11-08", vis(praes));
+tjek("Alfas eksamen", alfaEks.type === "eksamen" && alfaEks.dato === "2026-12-14" && alfaEks.tid === "13.00–16.00", vis(alfaEks));
 tjek("en januar-eksamen i en efterårsplan ligger året efter", gammaEks.dato === "2027-01-07", vis(gammaEks));
 tjek("en eksamen uden dato har kun ugen", betaEks.type === "eksamen" && betaEks.dato === null && betaEks.fra === "2026-12-14", vis(betaEks));
 
@@ -88,15 +88,15 @@ const plan = r => S.deadline({ Uge: "41", Fag: "Alfa", Bemærkning: "", ...r }, 
 const kunDato = plan({ Dato: "06.10 kl. 08:00", Aktivitet: "Gæsteoplæg" });
 tjek("klokkeslættet læses fra Dato-kolonnen", kunDato.dato === "2026-10-06" && kunDato.tid === "08.00", vis(kunDato));
 tjek("kl. 8.00 i Dato-kolonnen", plan({ Dato: "06.10 kl. 8.00", Aktivitet: "Gæsteoplæg" }).tid === "08.00");
-tjek("Dato-kolonnen vinder over teksten", plan({ Dato: "07.10 kl. 23:59", Aktivitet: "**A1**, kl. 12:00 i timen" }).tid === "23.59");
-tjek("uden klokkeslæt i Dato-kolonnen bruges teksten", plan({ Dato: "07.10", Aktivitet: "**A1** kl. 12:00-14:00" }).tid === "12.00–14.00");
+tjek("Dato-kolonnen vinder over teksten", plan({ Dato: "13.10 kl. 20:00", Aktivitet: "**A1**, kl. 12:00 i timen" }).tid === "20.00");
+tjek("uden klokkeslæt i Dato-kolonnen bruges teksten", plan({ Dato: "13.10", Aktivitet: "**A1** kl. 12:00-14:00" }).tid === "12.00–14.00");
 tjek("ingen klokkeslæt nogen steder", plan({ Dato: "uge 41", Aktivitet: "Exercise 5" }).tid === null);
 
 // ── eksamensdage ──
 const nu = new Date(2026, 8, 1);
 const eks = S.eksamensdatoer(nu);
 tjek("eksamensdage for fagene med en dato", vis(Object.keys(eks).sort()) === '["alfa","gamma"]', vis(eks));
-tjek("Alfas eksamensdag er lokal midnat", eks.alfa === new Date(2026, 11, 10).getTime(), String(new Date(eks.alfa)));
+tjek("Alfas eksamensdag er lokal midnat", eks.alfa === new Date(2026, 11, 14).getTime(), String(new Date(eks.alfa)));
 tjek("Gammas eksamensdag i januar", eks.gamma === new Date(2027, 0, 7).getTime(), String(new Date(eks.gamma)));
 
 // ── eksamensformer fra README.md ──

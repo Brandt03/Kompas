@@ -25,7 +25,7 @@ for (const k of ["log", "warn", "error"]) {
 const PORT = +(process.env.SPROG_PORT || 8769);
 const ORIGIN = "https://kompas.localhost";
 // Telefonen kommer ind gennem Tailscale med sin egen adresse (https://<mac>.<tailnet>.ts.net), sat i LaunchAgent'en
-// af bin/tailscale-mobil.sh i Kompas
+// af bin/tailscale.sh i Kompas
 const ORIGINS = [ORIGIN, ...String(process.env.SPROG_ORIGINS || "").split(",").map(s => s.trim()).filter(Boolean)];
 // Kun de navne, Kompas selv bruger (mod DNS rebinding, som Studie-serveren). 8768 er Caddys blok til telefonen.
 const VAERTER = new Set(["kompas.localhost", `127.0.0.1:${PORT}`, `localhost:${PORT}`, "127.0.0.1:8768", "localhost:8768",
@@ -34,9 +34,12 @@ const SIDE = path.join(__dirname, "side");
 const TYPER = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
   ".svg": "image/svg+xml", ".png": "image/png", ".webmanifest": "application/manifest+json" };
 
-// Kompas bygger menuen ud fra denne. "nyt" er den nyeste tekst eller feedback, så menuen viser en prik ved Oversigt.
+// Kompas bygger menuen ud fra denne. "nyt" er den nyeste tekst og den nyeste feedback, så menuen viser en prik ved
+// Oversigt, når rutinen skriver en af dem (også feedback på ugen før, som kommer sammen med den nye tekst), men ikke,
+// når du selv svarer. Fx "2026-W43+2026-W42-feedback", eller "2026-W43-feedback", når feedbacken er på den nyeste.
 function manifest() {
-  const t = K.tekster()[0], nyt = t ? `${t.uge}${t.feedback ? "-feedback" : ""}` : null;
+  const T = K.tekster(), t = T[0], f = T.find(x => x.feedback);
+  const nyt = t ? `${t.uge}${!f ? "" : f === t ? "-feedback" : `+${f.uge}-feedback`}` : null;
   const r = K.reglerListe().map(g => g.opdateret || g.oprettet).sort().pop();
   return { omraade: "Sprog", ikon: "languages", raekkefoelge: 25, kilde: "~/kompas/sprog/server.js (live, port 8769)", opdateret: new Date().toISOString(),
     sider: [
@@ -83,9 +86,15 @@ const server = http.createServer(async (req, res) => {
     const d = JSON.parse(krop || "{}");
     if (sti === "/api/svar") return send(res, 200, K.gemSvar(d));
     if (sti === "/api/tekst-svar") return send(res, 200, K.gemTekstSvar(d));
-    if (sti === "/api/sync") return send(res, 200, K.sync(d));
+    if (sti === "/api/sync") {
+      // Svar fra telefonen, der ikke kunne gemmes, logges, så en fejlet sync ses i loggen og ikke kun på telefonen
+      const r = K.sync(d), afvist = r.resultater.filter(x => !x.ok);
+      if (afvist.length) console.error(`sync: ${afvist.length} af ${r.resultater.length} poster afvist (${[...new Set(afvist.map(x => x.fejl))].join(", ").slice(0, 200)})`);
+      return send(res, 200, r);
+    }
     return send(res, 404, { fejl: "ikke fundet" });
   } catch (e) {
+    console.error(`fejl: ${req.method} ${sti.slice(0, 40)}: ${String(e.message).slice(0, 200)}`);
     return send(res, 400, { fejl: e.message });
   }
 });
