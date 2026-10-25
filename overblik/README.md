@@ -85,6 +85,7 @@ Stier, datoer og titelmønstre kan overstyres med miljøvariabler (se `overblik/
 | `LIV_SKAERMTID_JSON` | `~/.kompas/skaermtid/skaermtid.json` | Skærmtids eksport (læses kun): sen skærmtid pr. aften og dagens forløb |
 | `LIV_STUDIE_JSON` | `~/.kompas/studie/studie.json` | Studies eksport (læses kun): svar pr. dag i Træning og På farten |
 | `LIV_SITE` | `~/.garmin-coach/site` | hvor `liv eksport` lægger `liv.json` |
+| `LIV_TZ` | `Europe/Copenhagen` | vægtiden, som dagsplanen regner i, uanset maskinens tidszone |
 | `LIV_SELVSTUDIE_PRAEFIKS` | `Selvstudie ·` | titlen, CalTask-begivenheder starter med |
 | `LIV_SELVSTUDIE_FRA` | `2026-09-28` | dagen logningen af selvstudie begyndte |
 | `LIV_FRA` | `2025-06-02` | første uge, der beregnes |

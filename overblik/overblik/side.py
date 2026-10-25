@@ -20,6 +20,7 @@ import os
 import sqlite3
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from . import config, kilder, rapport
 from .db import KOLONNER
@@ -109,9 +110,10 @@ DOEGNSKIFTE = 6  # kl.; som Skærmtid, så en aften efter midnat hører til dage
 
 
 def _lokal(s: str) -> datetime:
-    """ISO-tidspunkt, med eller uden zone, som lokal vægtid uden zone (kalenderen gemmer uden, Skærmtid med)."""
+    """ISO-tidspunkt, med eller uden zone, som vægtid i config.TZ uden zone (kalenderen gemmer uden, Skærmtid med).
+    Ikke maskinens tidszone: ellers flytter planlagt mod faktisk sig, når den kører et andet sted (fx i CI)."""
     t = datetime.fromisoformat(s)
-    return t.astimezone().replace(tzinfo=None) if t.tzinfo else t
+    return t.astimezone(ZoneInfo(config.TZ)).replace(tzinfo=None) if t.tzinfo else t
 
 
 def _minutter(a: datetime, z: datetime, b: datetime, y: datetime) -> float:

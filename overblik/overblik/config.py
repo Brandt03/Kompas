@@ -11,6 +11,9 @@ def _path(env: str, default: str) -> Path:
     return Path(os.environ.get(env) or default).expanduser()
 
 
+# Vægtiden, som kalenderen og dagsplanen regner i (som garmin-coach's GC_TZ), uanset maskinens egen tidszone.
+TZ = os.environ.get("LIV_TZ", "Europe/Copenhagen")
+
 # Egen database med én række pr. uge.
 DB_PATH = _path("LIV_DB", "~/.overblik/liv.db")
 
