@@ -15,6 +15,12 @@
 //   CANVAS_VAERT      Canvas-adressen, downloads kommer fra; standard canvas.instructure.com
 // Kurserne står under "canvas" i fag.json, undervisningsdagene i Scripts/undervisningsdage.json
 // (se undervisningsdage.example.json).
+//
+// Står filens Canvas-modul og titlen i modulet i Scripts/canvas-set.json (valgfri, { filer: { <fil-id>: { modul, titel } } }),
+// afgøres mappe og undervisningsdag af filnavnet først, derefter titlen og til sidst modulet (fx "Øvelse uge 44" i
+// modulet "Uge 44. Tema 3 …", eller "Module 7").
+//
+// --fra <mappe> (og --set <fil>) sorterer fra en anden mappe end ~/Downloads; til test, kun som prøvekørsel.
 
 const fs = require("fs");
 const path = require("path");
@@ -24,12 +30,15 @@ const { execFileSync } = require("child_process");
 
 const S = require("./semester");
 const ROD = S.ROD;
-const DOWNLOADS = path.join(os.homedir(), "Downloads");
+const FRA = process.argv.indexOf("--fra");
+const DOWNLOADS = FRA > 0 ? path.resolve(process.argv[FRA + 1]) : path.join(os.homedir(), "Downloads");
+const SÆT = process.argv.indexOf("--set");
+const SET = SÆT > 0 ? path.resolve(process.argv[SÆT + 1]) : path.join(S.DATA, "canvas-set.json");
 const TILSTAND = path.join(S.DATA, "canvas-tilstand.json");
 const LOG = path.join(S.DATA, "canvas-log.txt");
 const CANVAS = (process.env.CANVAS_VAERT || "canvas.instructure.com").replace(/\./g, "\\.");
 const INDBAKKE = path.join(ROD, "_Indbakke");
-const KØR = process.argv.includes("--kør");
+const KØR = process.argv.includes("--kør") && FRA < 0;
 
 // Kursus-id -> fagets mappe og standardmappe, når filnavnet ikke afgør det (fra "canvas" i fag.json).
 // standard: null betyder, at usikre filer går i _Indbakke.
@@ -37,11 +46,11 @@ const KURSER = Object.fromEntries(S.fag().flatMap(f => f.canvas.map(c => [c.kurs
 // Afleveringer genkendes på fagenes præfiks (fx G1) ud over ordene
 const AFL = S.afleveringsMoenster();
 
-// Filnavn -> undermappe. Første regel, der passer, vinder.
+// Filnavn -> undermappe. Første regel, der passer, vinder. "Opgaver" og "Løsningsforslag" er øvelsessæt.
 const REGLER = [
   { mappe: "Studieteknik", mønster: /studieteknik|notatteknik/i },
   { mappe: "Afleveringer", mønster: new RegExp(`aflevering|assignment|godkendelsesopgave${AFL ? `|${AFL}` : ""}`, "i") },
-  { mappe: "Øvelser", mønster: /øvelse|exercise/i },
+  { mappe: "Øvelser", mønster: /øvelse|exercise|(?:^|[\s_])opgaver|l(?:ø|oe)sningsforslag/i },
   { mappe: "Forelæsninger", mønster: /\bFL\s?\d|forelæsning|lecture/i },
 ];
 
@@ -77,8 +86,11 @@ function datoPræfiks(fil) {
 }
 
 // Undervisningsdagen filen hører til, fra Scripts/undervisningsdage.json.
-//   1. Et nummer i navnet ("forelæsning 5", "FL5", "øvelsessæt 5", "Exercise 5") -> n'te dato.
+//   1. Et nummer i navnet ("forelæsning 5", "FL5", "øvelsessæt 5", "Exercise 5", "Module 5") -> n'te dato.
 //   2. "uge 40" i navnet -> datoen i den uge.
+//   Navnet prøves først, så titlen og modulet fra Canvas (ekstra). Et nummer går forud for en uge, fordi moduler
+//   kan have ugerne fra før en skemaændring ("Uge 45: Forelæsning 8", der nu er i uge 46).
+//   Kommer datoen fra modulet, bruges emnet ikke i navnet: flere filer i samme modul skal ikke hedde det samme.
 //   3. Ellers den første undervisningsdag på eller efter download (materiale lægges op før
 //      undervisningen), højst 10 dage frem; ellers den seneste før.
 // Returnerer { dato: "ÅÅÅÅMMDD", sikker } eller null, hvis faget/mappen ikke står i tabellen.
@@ -94,18 +106,22 @@ function isoUge(d) {
   return Math.ceil(((t - Date.UTC(t.getUTCFullYear(), 0, 1)) / 864e5 + 1) / 7);
 }
 
-function undervisningsdato(navn, fag, mappe, fil) {
+function undervisningsdato(navn, fag, mappe, fil, ekstra = {}) {
   const liste = ((UNDERVISNING[fag] || {})[mappe] || []).map((x) => (typeof x === "string" ? { dato: x } : x));
   if (!liste.length) return null;
-  const svar = (i, sikker) => ({ dato: liste[i].dato.replace(/-/g, ""), nr: i + 1, emne: sikker ? liste[i].emne || null : null, sikker });
-  const nr = /(?:^|[^a-zæøå])(?:forelæsning|FL|lecture|øvelsessæt|exercise|øvelse)\s*_?0?(\d{1,2})(?!\d)/i.exec(navn);
-  if (nr && liste[Number(nr[1]) - 1]) return svar(Number(nr[1]) - 1, true);
-  const nrFør = /(?:^|[^\d])0?(\d{1,2})[_\s-]+(?:forelæsning|lecture|øvelsessæt|exercise|øvelse)/i.exec(navn.replace(/^\d{8}_/, ""));
-  if (nrFør && liste[Number(nrFør[1]) - 1]) return svar(Number(nrFør[1]) - 1, true);
-  const uge = /(?:^|[^a-zæøå])uge\s*_?(\d{1,2})(?!\d)/i.exec(navn);
-  if (uge) {
+  const svar = (i, sikker, medEmne = sikker) => ({ dato: liste[i].dato.replace(/-/g, ""), nr: i + 1, emne: medEmne ? liste[i].emne || null : null, sikker });
+  const tekster = [[navn, true], [ekstra.titel, true], [ekstra.modul, false]].filter(([t]) => t);
+  for (const [tekst, medEmne] of tekster) {
+    const nr = /(?:^|[^a-zæøå])(?:forelæsning|FL|lecture|øvelsessæt|exercise|øvelse|modul|module|modele)\s*_?0?(\d{1,2})(?!\d)/i.exec(tekst);
+    if (nr && liste[Number(nr[1]) - 1]) return svar(Number(nr[1]) - 1, true, medEmne);
+    const nrFør = /(?:^|[^\d])0?(\d{1,2})[_\s-]+(?:forelæsning|lecture|øvelsessæt|exercise|øvelse)/i.exec(tekst.replace(/^\d{8}_/, ""));
+    if (nrFør && liste[Number(nrFør[1]) - 1]) return svar(Number(nrFør[1]) - 1, true, medEmne);
+  }
+  for (const [tekst, medEmne] of tekster) {
+    const uge = /(?:^|[^a-zæøå])uge[\s_-]*(\d{1,2})(?!\d)/i.exec(tekst);
+    if (!uge) continue;
     const i = liste.findIndex((x) => isoUge(new Date(x.dato)) === Number(uge[1]));
-    if (i >= 0) return svar(i, true);
+    if (i >= 0) return svar(i, true, medEmne);
   }
   const hentet = fs.statSync(fil).birthtime;
   const dag = new Date(hentet.getFullYear(), hentet.getMonth(), hentet.getDate());
@@ -230,6 +246,7 @@ function log(linje) {
 
 function main() {
   const tilstand = fs.existsSync(TILSTAND) ? JSON.parse(fs.readFileSync(TILSTAND, "utf8")) : {};
+  const hentet = fs.existsSync(SET) ? JSON.parse(fs.readFileSync(SET, "utf8")).filer || {} : {};
   let noget = false;
 
   for (const navn of fs.readdirSync(DOWNLOADS)) {
@@ -262,12 +279,14 @@ function main() {
       mål = ledigSti(path.join(ROD, kendt.sti.replace(/_v\d+(\.[^.]+)$/, "$1")));
       log(`NY VERSION ${navn}  -> ${rel(mål)}  (gammel version bevaret)`);
     } else {
-      const regel = REGLER.find((r) => r.mønster.test(navn));
+      const ekstra = (kilde.filId && hentet[kilde.filId]) || {};
+      const regel = [navn, ekstra.titel, ekstra.modul].filter(Boolean)
+        .reduce((fundet, tekst) => fundet || REGLER.find((r) => r.mønster.test(tekst)), null);
       const mappe = regel ? regel.mappe : standard;
       const dir = mappe === null ? INDBAKKE
         : mappe === "Afleveringer" || mappe === "Studieteknik" ? path.join(ROD, fag, mappe)
         : path.join(ROD, fag, "Pensum", mappe);
-      const uv = mappe && !["Afleveringer", "Studieteknik"].includes(mappe) ? undervisningsdato(navn, fag, mappe, fil) : null;
+      const uv = mappe && !["Afleveringer", "Studieteknik"].includes(mappe) ? undervisningsdato(navn, fag, mappe, fil, ekstra) : null;
       let filnavn = nytNavn(navn, mappe) || ensartetNavn(uv, fag, mappe, navn) || `${datoPræfiks(fil)}_${rensNavn(navn)}`;
       if (erSlides) filnavn = somPdf(filnavn);
       mål = ledigSti(path.join(dir, mappe === null ? `${fag}_${filnavn}` : filnavn));

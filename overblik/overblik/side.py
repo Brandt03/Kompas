@@ -120,10 +120,10 @@ def _minutter(a: datetime, z: datetime, b: datetime, y: datetime) -> float:
     return max(0.0, (min(z, y) - max(a, b)).total_seconds() / 60)
 
 
-def _dagsplan(g: sqlite3.Connection, idag: date, n: int = DAGSPLAN_DAGE) -> list[dict]:
+def _dagsplan(g: sqlite3.Connection, idag: date, log: dict | None, n: int = DAGSPLAN_DAGE) -> list[dict]:
     """Planlagt mod faktisk for de seneste n døgn (kl. 6 til kl. 6, som Skærmtid). Plan er undervisningen og dine egne
-    blokke i kalenderen; faktisk er skærmtiden i kvarterer (Skærmtids forløb), det, CalTask har logget som selvstudie,
-    og Garmins pas. Hver planlagt blok får minutterne pr. gruppe og kategori, der faldt i den, og hvor meget af den der
+    blokke i kalenderen; faktisk er skærmtiden i kvarterer (Skærmtids forløb), selvstudiet fra Studies sessioner (log,
+    hvert stykke for sig, så pauserne ikke tæller) og Garmins pas. Hver planlagt blok får minutterne pr. gruppe og kategori, der faldt i den, og hvor meget af den der
     var selvstudie eller træning. Uden Skærmtids forløb for dagen er `skaerm` null, ikke en dag uden skærm."""
     try:
         skaerm = {d["dato"]: d.get("forloeb") for d in json.loads(config.SKAERMTID_JSON.read_text()).get("dage") or []}
@@ -158,12 +158,16 @@ def _dagsplan(g: sqlite3.Connection, idag: date, n: int = DAGSPLAN_DAGE) -> list
             if not i_dagen(s):
                 continue
             type_ = _type(e["summary"] or "", e["fag_kode"])
+            if type_ == "selvstudie":  # CalTasks gamle logning; den står i Studies sessioner nu
+                continue
             blok = {"start": s.isoformat(timespec="minutes"), "slut": slut.isoformat(timespec="minutes"),
                     "titel": e["summary"] or "", "fag": e["fag_navn"]}
-            if type_ == "selvstudie":  # CalTask logger, hvad du faktisk studerede
-                logget.append(blok | {"type": "selvstudie"})
-            else:
-                plan.append(blok | ({"type": "undervisning"} if type_ == "undervisning" else {"type": "blok", "plan": bool(e["plan_blok"])}))
+            plan.append(blok | ({"type": "undervisning"} if type_ == "undervisning" else {"type": "blok", "plan": bool(e["plan_blok"])}))
+        for x in (log or {}).get("sessioner", []):
+            for s, slut in x["stykker"]:
+                if i_dagen(s):
+                    logget.append({"start": s.isoformat(timespec="minutes"), "slut": slut.isoformat(timespec="minutes"),
+                                   "titel": x["kort"], "type": "selvstudie"})
         for p in pas:
             s = _lokal(p["start_local"].replace(" ", "T"))
             if i_dagen(s):
@@ -199,8 +203,11 @@ GLIPPET_DAGE = 3     # de seneste afsluttede døgn, der ses på
 GLIPPET_GRAENSE = 2  # så mange af dem uden logget studietid, før I dag siger det
 
 
-def _kalender_gammel(kalender_hentet: str | None, nu: datetime) -> str | None:
-    """Hvorfor det loggede ikke kendes: kalenderen er ikke hentet siden i går. None, når den er frisk."""
+def _kalender_gammel(kalender_hentet: str | None, nu: datetime, log: dict | None = None) -> str | None:
+    """Hvorfor det loggede ikke kendes: Studies sessioner mangler, eller kalenderen (planen) er ikke hentet siden i går.
+    None, når begge kendes."""
+    if log is None:
+        return "Studies sessioner.json mangler"
     if not kalender_hentet:
         return "kalenderen er aldrig hentet"
     if kalender_hentet < (nu.date() - timedelta(days=1)).isoformat():
@@ -208,12 +215,12 @@ def _kalender_gammel(kalender_hentet: str | None, nu: datetime) -> str | None:
     return None
 
 
-def _glippede(dagsplan: list[dict], kalender_hentet: str | None, nu: datetime) -> dict:
+def _glippede(dagsplan: list[dict], kalender_hentet: str | None, nu: datetime, log: dict | None) -> dict:
     """Planens studieblokke uden logget studietid de seneste GLIPPET_DAGE afsluttede døgn. Et døgn er glippet, når det
-    havde blokke med planmærket, og CalTask intet selvstudie har logget i hele døgnet, også uden for blokkene. `vis`
-    er sand fra GLIPPET_GRAENSE glippede døgn. Er kalenderen ikke hentet siden i går, kendes det loggede ikke."""
+    havde blokke med planmærket, og intet selvstudie er logget i hele døgnet, også uden for blokkene. `vis` er sand fra
+    GLIPPET_GRAENSE glippede døgn. Mangler Studies sessioner, eller er kalenderen ikke hentet siden i går, kendes det ikke."""
     res = {"dage": GLIPPET_DAGE, "graense": GLIPPET_GRAENSE, "glippet": [], "vis": False}
-    if status := _kalender_gammel(kalender_hentet, nu):
+    if status := _kalender_gammel(kalender_hentet, nu, log):
         return res | {"status": status}
     afsluttede = [d for d in dagsplan if _lokal(d["til"]) <= nu][-GLIPPET_DAGE:]
     for d in afsluttede:
@@ -226,7 +233,7 @@ def _glippede(dagsplan: list[dict], kalender_hentet: str | None, nu: datetime) -
                   "vis": len(res["glippet"]) >= GLIPPET_GRAENSE}
 
 
-def _studieuge(g: sqlite3.Connection, uge: dict | None, kalender_hentet: str | None, nu: datetime) -> dict:
+def _studieuge(g: sqlite3.Connection, uge: dict | None, kalender_hentet: str | None, nu: datetime, log: dict | None) -> dict:
     """Denne ISO-uges selvstudie mod ugens planlagte studieblokke (blokke med planmærket, hele ugen, også dem, der
     ikke er kommet endnu). Det loggede er ugetabellens `selvstudie_timer` og `selvstudie_dage` (null før logningen
     begyndte). Blokkene tælles under den dato, de starter, som selvstudiet i ugetabellen."""
@@ -237,28 +244,24 @@ def _studieuge(g: sqlite3.Connection, uge: dict | None, kalender_hentet: str | N
         "AND date(start_local) BETWEEN ? AND ?", [m.isoformat(), (m + timedelta(days=6)).isoformat()])]
     res = {"mandag": m.isoformat(), "planlagt_timer": round(sum(blokke), 2), "planlagt_blokke": len(blokke),
            "selvstudie_timer": (uge or {}).get("selvstudie_timer"), "selvstudie_dage": (uge or {}).get("selvstudie_dage")}
-    return res | ({"status": status} if (status := _kalender_gammel(kalender_hentet, nu)) else {})
+    return res | ({"status": status} if (status := _kalender_gammel(kalender_hentet, nu, log)) else {})
 
 
 def _studietid(g: sqlite3.Connection, nu: datetime) -> dict:
-    """Tid pr. fag fra kalenderen, til Studies side Selvstudie: undervisningen pr. kursuskode (garmin-coach's fag_kode),
-    det, CalTask har logget som selvstudie pr. titel ("Selvstudie · Beta🤖" → "Beta"), og studieblokkene (planmærket) pr. det, der
-    står før " · " i titlen. Undervisning og selvstudie tæller kun, når de er slut; studieblokkene både planlagt i alt og
-    det, der er forbi. Alt pr. ISO-uge (mandagens dato). Navnene oversættes ikke her; Studie kender sine fag."""
-    import re
+    """Tid pr. fag fra kalenderen, til Studies side Selvstudie: undervisningen pr. kursuskode (garmin-coach's fag_kode), i
+    alt, pr. slags (`former`) og hver gang for sig (`gange`: dato, start, slut, art, form og timer), og studieblokkene (planmærket) pr. det, der står før " · " i titlen. Undervisningen tæller kun, når den er slut;
+    studieblokkene både planlagt i alt og det, der er forbi. Alt pr. ISO-uge (mandagens dato). Navnene oversættes ikke
+    her; Studie kender sine fag. Selvstudiet regner Studie selv ud fra sine sessioner."""
     plan_sql = "plan_blok" if "plan_blok" in {r[1] for r in g.execute("PRAGMA table_info(calendar_events)")} else "0"
     rows = g.execute(f"""SELECT start_local, end_local, summary, fag_kode, fag_navn, fag_art, fag_form, {plan_sql} AS plan FROM calendar_events
                         WHERE NOT all_day AND end_local IS NOT NULL ORDER BY start_local""").fetchall()
-    undervisning, selvstudie, blokke = {}, {}, {}
+    undervisning, blokke = {}, {}
 
-    def læg(d, nøgle, navn, m, timer, felt="timer", dag=None):
+    def læg(d, nøgle, navn, m, timer, felt="timer"):
         x = d.setdefault(nøgle, {"navn": navn, "timer": 0.0, "uger": {}})
         x[felt] = x.get(felt, 0.0) + timer
         if felt == "timer":
             x["uger"][m] = x["uger"].get(m, 0.0) + timer
-        if dag:  # selvstudiet også pr. dag (den dag, sessionen begyndte), til dage i træk, medaljer og kalenderen
-            x.setdefault("dage", {})[dag] = x.setdefault("dage", {}).get(dag, 0.0) + timer
-            x.setdefault("sessioner", {})[dag] = x.setdefault("sessioner", {}).get(dag, 0) + 1  # én CalTask-logning
 
     set_ = set()
     for r in rows:
@@ -280,10 +283,10 @@ def _studietid(g: sqlite3.Connection, nu: datetime) -> dict:
                 f = undervisning[r["fag_kode"]].setdefault("former", {}).setdefault((r["fag_art"] or "", r["fag_form"] or ""), {"timer": 0.0, "uger": {}})
                 f["timer"] += timer
                 f["uger"][m] = f["uger"].get(m, 0.0) + timer
-        elif titel.startswith(config.SELVSTUDIE_PRAEFIKS):
-            if e <= nu:
-                navn = re.sub(r"[^\w\s&-]+", "", titel[len(config.SELVSTUDIE_PRAEFIKS):]).strip()
-                læg(selvstudie, navn, navn, m, timer, dag=s.date().isoformat())
+                # Og hver gang for sig, så Studie kan lade dem, du ikke var til, ude (fremmøde, som du markerer på Selvstudie)
+                undervisning[r["fag_kode"]].setdefault("gange", []).append({
+                    "dato": s.date().isoformat(), "start": s.strftime("%H:%M"), "slut": e.strftime("%H:%M"),
+                    "art": r["fag_art"] or "", "form": r["fag_form"] or "", "timer": round(timer, 2)})
         elif r["plan"]:
             navn = titel.split(" · ")[0].strip()
             læg(blokke, navn, navn, m, timer, "planlagt_timer")
@@ -294,13 +297,12 @@ def _studietid(g: sqlite3.Connection, nu: datetime) -> dict:
         return [{**({"kode": k} if kode else {}), "navn": x["navn"], "timer": round(x.get("timer", 0.0), 2),
                  **({"planlagt_timer": round(x["planlagt_timer"], 2)} if "planlagt_timer" in x else {}),
                  "uger": {m: round(t, 2) for m, t in sorted(x["uger"].items())},
-                 **({"dage": {dg: round(t, 2) for dg, t in sorted(x["dage"].items())},
-                     "sessioner": dict(sorted(x["sessioner"].items()))} if "dage" in x else {}),
                  **({"former": [{"art": a, "form": fo, "timer": round(v["timer"], 2), "uger": {m: round(t, 2) for m, t in sorted(v["uger"].items())}}
-                                for (a, fo), v in sorted(x["former"].items())]} if "former" in x else {})} for k, x in sorted(d.items())]
+                                for (a, fo), v in sorted(x["former"].items())]} if "former" in x else {}),
+                 **({"gange": sorted(x["gange"], key=lambda g: (g["dato"], g["start"]))} if "gange" in x else {})} for k, x in sorted(d.items())]
     første = rows[0]["start_local"][:10] if rows else None
     return {"fra": første, "selvstudie_fra": config.SELVSTUDIE_FRA, "til": nu.date().isoformat(),
-            "undervisning": ud(undervisning, kode=True), "selvstudie": ud(selvstudie), "studieblokke": ud(blokke)}
+            "undervisning": ud(undervisning, kode=True), "studieblokke": ud(blokke)}
 
 
 def _nat_sammenhaeng(g: sqlite3.Connection, idag: date) -> dict:
@@ -352,7 +354,10 @@ def _fag(r: sqlite3.Row) -> dict | None:
 
 
 def _kalender(g: sqlite3.Connection, m: date) -> list[dict]:
-    return [
+    """Ugens kalender fra garmin-coach og selvstudiet fra Studies sessioner, ét stykke pr. begivenhed med sessionens id
+    (`session`), så en pause ikke tæller som selvstudie. CalTasks gamle begivenheder står i sessionerne og springes over.
+    Et stykke over midnat deles ved midnat ("24:00"), så hver dag får sine timer."""
+    ud = [
         {"dato": r["start_local"][:10], "start": None if r["all_day"] else r["start_local"][11:16],
          "slut": None if r["all_day"] or not r["end_local"] else r["end_local"][11:16],
          "titel": r["summary"] or "", "heldag": bool(r["all_day"]), "type": _type(r["summary"] or "", r["fag_kode"]),
@@ -361,7 +366,17 @@ def _kalender(g: sqlite3.Connection, m: date) -> list[dict]:
             f"""SELECT start_local, end_local, summary, all_day, kalender, {_FAG_SQL} FROM calendar_events
                WHERE date(start_local) BETWEEN ? AND ? ORDER BY start_local""",
             [m.isoformat(), (m + timedelta(days=6)).isoformat()])
+        if _type(r["summary"] or "", r["fag_kode"]) != "selvstudie"
     ]
+    for x in (kilder.sessioner() or {}).get("sessioner", []):
+        for a, z in x["stykker"]:
+            while a < z:
+                midnat = datetime.combine(a.date() + timedelta(days=1), datetime.min.time())
+                if m <= a.date() <= m + timedelta(days=6):
+                    ud.append({"dato": a.date().isoformat(), "start": a.strftime("%H:%M"), "slut": z.strftime("%H:%M") if z <= midnat else "24:00",
+                               "titel": x["kort"], "heldag": False, "type": "selvstudie", "fag": None, "kalender": "Selvstudie", "session": x["id"]})
+                a = midnat
+    return sorted(ud, key=lambda e: (e["dato"], not e["heldag"], e["start"] or ""))
 
 
 def _med_fag(g: sqlite3.Connection, rs: list[dict]) -> None:
@@ -437,18 +452,26 @@ def eksport(conn: sqlite3.Connection, mappe: Path = config.SITE_DIR) -> dict:
             pass
     denne = mandag_i(date.today())
     g = _garmin()
-    kalender = {} if g is None else {
-        m.isoformat(): _kalender(g, m) for m in (denne - timedelta(days=7), denne, denne + timedelta(days=7))}
+    # Ugens kalender fra den første uge, kalenderen har, til næste uge, som den ser ud i garmin-coach nu, så Ugeoverblik
+    # viser det, der faktisk stod i kalenderen, også i ældre uger (ikke ugereviewets øjebliksbillede fra før ugen)
+    kalender = {}
+    if g is not None:
+        første = g.execute("SELECT min(date(start_local)) FROM calendar_events").fetchone()[0]
+        m = mandag_i(date.fromisoformat(første)) if første else denne - timedelta(days=7)
+        while m <= denne + timedelta(days=7):
+            kalender[m.isoformat()] = _kalender(g, m)
+            m += timedelta(days=7)
     uger = [dict(r) for r in conn.execute("SELECT * FROM uger ORDER BY mandag")]
     naetter, dagsplan, nat, glippede, studieuge, studietid = [], [], None, None, None, None
     if g is not None:
         _med_fag(g, rs)
         naetter = _naetter(g, date.today())
-        dagsplan = _dagsplan(g, date.today())
+        log = kilder.sessioner()
+        dagsplan = _dagsplan(g, date.today(), log)
         hentet = g.execute("SELECT value FROM sync_state WHERE key = 'last_calendar_sync'").fetchone()
-        glippede = _glippede(dagsplan, hentet[0] if hentet else None, datetime.now())
+        glippede = _glippede(dagsplan, hentet[0] if hentet else None, datetime.now(), log)
         studieuge = _studieuge(g, next((u for u in uger if u["mandag"] == denne.isoformat()), None),
-                               hentet[0] if hentet else None, datetime.now())
+                               hentet[0] if hentet else None, datetime.now(), log)
         nat = _nat_sammenhaeng(g, date.today())
         studietid = _studietid(g, datetime.now())
         g.close()
@@ -474,7 +497,7 @@ def eksport(conn: sqlite3.Connection, mappe: Path = config.SITE_DIR) -> dict:
         "glippede": glippede,
         # Til I dag: denne uges selvstudie mod ugens planlagte studieblokke (null uden garmin-coach)
         "studieuge": studieuge,
-        # Til Studies side Selvstudie: undervisning, logget selvstudie og studieblokke pr. fag og uge (null uden garmin-coach)
+        # Til Studies side Selvstudie: undervisning og studieblokke pr. fag og uge (null uden garmin-coach)
         "studietid": studietid,
     }
     mappe.mkdir(parents=True, exist_ok=True)

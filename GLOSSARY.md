@@ -45,11 +45,13 @@ Et af semestrets kurser, kendt ved sit kortnavn (i demoen Alfa, Beta og Gamma).
 _Avoid_: kursus
 
 **Køreplan**:
-Ugens plan for de tre fag med læsning, noter, frister og det vigtigste i ugen. Vises på Ugeoverblik.
+Ugens plan for de tre fag med læsning, træning, frister og det vigtigste i ugen. Ugens noter står i fagnoterne.
+Vises på Ugeoverblik.
 _Avoid_: ugeplan
 
 **Fagnoter**:
-Det løbende notedokument for et fag, som udvides uge for uge efter undervisningen.
+Det løbende notedokument for et fag med ugens noter: skrevet foreløbigt søndagen før ugen og rettet søndagen efter,
+når slides og øvelser er lagt op. Det er også dokumentet til USB'en.
 _Avoid_: noter, resumé
 
 **Opgave**:
@@ -85,8 +87,31 @@ _Avoid_: genkald (om det hele)
 **Dagens kort**:
 De kort, repetitionen har planlagt til i dag.
 
+**Sikkerhed**:
+Hvor sandsynligt du tror, dit svar på et kort er rigtigt, sat på skyderen fra 0 til 100 % (rød til grøn), før svaret
+vises. Fra 70 % hedder det sikker, fra 30 % usikker, ellers gætter; "Kan ikke" er 0 %. Kalibreringen på Træning viser,
+hvor tit det sad ved hver sikkerhed. Står i `genkald-log.jsonl`.
+_Avoid_: confidence (i tekst til brugeren)
+
+**Tænk højt**:
+Feltet under svaret på et kort, hvor du skriver eller dikterer, hvordan du tænkte, og hvad du er i tvivl om. Valgfrit.
+Står kun i `genkald-log.jsonl`, ikke i genkaldsfilen.
+_Avoid_: noter, refleksion
+
+**Tjek ugen først**:
+Knappen over "Sådan lærer du uge N" på Fag i fag med genkald: ugens genkaldsspørgsmål fra hukommelsen og med
+sikkerhed, før du læser ugen, så du kan springe de skridt over, du var sikker på og havde ret i.
+_Avoid_: forhåndstest, probe
+
+**Dine huller**:
+Første trin i en uges studieguide, når du har svaret sikkert, men forkert i faget de sidste 14 dage (fra 70 % og
+halvt eller blankt, eller et forkert drill-gæt uden flueben i *gættede*): højst tre kort med hvad der gik galt, ud fra
+Tænk højt, og hvor du læser det igen. Studie-rutinen skriver det.
+_Avoid_: fejl, svagheder
+
 **Læst uge**:
-En uge, du har markeret som læst i et fag. Først da kommer ugens genkald med i dagens kort.
+En uge, du har markeret som læst i et fag under Styr på. I fag med genkald kommer ugens genkald først da med i dagens
+kort; i alle fag planlægger Studie-rutinen indhentningen efter de uger, der ikke er læste.
 
 **Frist**:
 Et tidspunkt, hvor en aflevering, præsentation eller eksamen skal være klar. Kan markeres færdig.
@@ -97,12 +122,51 @@ Et gammelt eksamenssæt taget på tid som generalprøve; din egen plan, ikke en 
 _Avoid_: øvelseseksamen
 
 **Selvstudie**:
-Studietid uden for undervisningen, logget i kalenderen.
+Studietid uden for undervisningen, logget med stopuret på Studies side Selvstudie.
 _Avoid_: læsetid
 
+**Session** (Selvstudie):
+Én gang selvstudie i ét fag, fra du starter timeren, til du stopper den, eller som du selv har tilføjet bagefter. En
+pause deler sessionen i stykker; kun stykkerne tæller. Kan have en aktivitet (fx Øvelser) og en note. Står i Studies
+`Scripts/sessioner.json`.
+_Avoid_: logning, blok
+
+**Timer**:
+Knappen under Frister i Kompas' menu, der logger en session: et stopur, der tæller op, eller Pomodoro (fokus på fx 25,
+45 eller 60 minutter, et antal fokus og en pause imellem, som du vælger i timeren). Mens den kører, står en tæller
+øverst over siden, og fanens titel tæller med. Stop åbner Gem session, hvor du kan rette start, slut, pause og fag og
+skrive en aktivitet og en note. ▶ på knappen starter det sidste fag med dine sidste valg. Studie-serveren holder den,
+så den kan startes på Mac'en og stoppes på bærbaren.
+
+**Stopur**:
+Timeren, når den tæller op i stedet for Pomodoro.
+
+**Rytme** (Selvstudie):
+Hvornår du studerer: timerne pr. ugedag og pr. time på døgnet (samlet i tidsrum på fire timer, 2-6, 6-10 …) for denne
+uge, denne måned eller det hele, efter uret og ikke efter den dag, sessionen begyndte. Regnet af Studies eksport.
+_Avoid_: mønster, vane
+
+**Forslag** (Selvstudie):
+Selvstudie, Kompas foreslår ud fra tidspunkterne på dine svar (Dagens kort, Genkald, drills, sprogkort), også fra
+telefonen, og som først tæller, når du gemmer det på Selvstudie. Svar med højst 10 minutter imellem hører sammen; tid,
+der allerede er logget, trækkes fra. Et forslag i flere fag gemmes som én session pr. fag. Sprogs forslag gemmes hos
+Sprog og tæller ikke i dagsmålet. Et afvist forslag kommer ikke igen.
+_Avoid_: auto-log, automatisk session
+
 **Dagsmål**:
-De timers logget selvstudie, du sigter efter hver dag. Står i `studiemaal` i Studies fag.json.
+De timers logget selvstudie, du sigter efter på dine studiedage. Sættes under Indstillinger på Selvstudie (Studies
+`Scripts/studiemaal.json`, som går forud for `studiemaal` i fag.json).
 _Avoid_: daglig kvote
+
+**Fremmøde** (Studie):
+Om du var til en undervisningsgang. Du markerer de gange, du ikke var til, i Ugeoverblik (klik på undervisningen), også
+bagud; de tæller så ikke som brugt tid på Selvstudie. Slags, du aldrig bruger, står i `fravaer.json` og kan ikke markeres. Gemmes i Studies `Scripts/fremmoede.json`.
+_Avoid_: tilstedeværelse, check-in
+
+**Fridag** (Selvstudie):
+En dag uden dagsmål, fordi den ikke er valgt under Indstillinger. Den trækker ikke saldoen ned og bryder ikke dage i
+træk; det, du alligevel studerer, tæller. Vises med en kop.
+_Avoid_: hviledag, pausedag
 
 **Dage i træk**:
 Antal dage i træk med logget selvstudie, talt fra i dag, eller fra i går, når der ikke er logget noget i dag endnu.
@@ -110,6 +174,12 @@ _Avoid_: streak (i tekst til brugeren)
 
 **Medalje**:
 Dagens bronze, sølv eller guld efter, hvor meget selvstudie der er logget (fra 2, 3 og 4 timer).
+
+**Semester**:
+En semestermappe med sine egne fag, frister og sessioner (`Scripts/fag.json`). Det aktuelle er det, `~/kompas/studie`
+peger på, og alt under Studie viser det; de tidligere står samlet på siden Semestre. Perioden går fra første
+undervisningsdag til sidste eksamen.
+_Avoid_: term, termin
 
 **Saldo** (Studie):
 Den samlede forskel mellem logget selvstudie og dagsmålet, dag for dag, siden logningen begyndte.
@@ -255,6 +325,21 @@ _Avoid_: natskærmtid
 Overvågningen af årets indkomst mod SU-fribeløbet.
 _Avoid_: fribeløbsberegner
 
+**Fast betaling**:
+En udgift, der kommer igen: samme modtager og kategori i mindst 3 af 6 måneder (eller én gang om året) til omtrent samme
+beløb. Sures eksport finder dem; Forbrug viser de aktive og dem, der ikke er betalt i over halvanden måned (årlige: et år).
+_Avoid_: abonnement (et abonnement er én slags fast betaling), tilbagevendende transaktion (Sures egen, der kun finder få)
+
+**Tag** (Økonomi):
+En rejse eller begivenhed i Sure, fx "Sommerferie", sat på forbruget mellem to datoer, så Forbrug kan vise det samlet
+uanset periode. Claude sætter det, når du beder om det, eller du tagger selv i Sure.
+_Avoid_: etiket, label
+
+**Månedens gennemgang**:
+Økonomi-rutinens gennemgang af den måned, der lige er slut: forbrug mod budget, faste betalinger og forslag til
+budgettet. Den foreslår kun; du retter selv i Sure. Står på siden Gennemgang under Økonomi.
+_Avoid_: månedsrapport, budgetrevision
+
 ## Tekniske navne
 
 Ordene ovenfor gælder for tekst, du læser: sider, rapporter, rutinernes prosa og svar. Navne, som scripts læser
@@ -276,5 +361,5 @@ eller skriver, bliver stående, selv om de bruger et ord fra en _Avoid_-linje, f
 - **Skærmtid**: felterne i `regler.json` (`app`, `domaene`, `sti`, `titel`, `vaert`, `sjaelden`, `ignorer`, `browsere`) og i
   `skaermtid.json` (`dage`, `uger`, `perioder`, `sen_timer`, `ukategoriseret`, `stoerste`), ActivityWatch' egne navne
   (bucket, watcher, afk, `hostname`) og trinnet `skaermtid` i opdater.sh.
-- **På tværs**: rutinernes id'er (`studie-koereplan`, `traening-rapport`, `overblik-ugereview`, `sprog-ugen`, `skaermtid-ugen`),
-  Sures `dashboard/`, `/dashboard-state/<navn>` og `/dashboard-category/<id>`, `mobil.html` og manifest-nøglen `fane`.
+- **På tværs**: rutinernes id'er (`studie-koereplan`, `traening-rapport`, `overblik-ugereview`, `sprog-ugen`, `skaermtid-ugen`,
+  `okonomi-maaneden`), Sures `dashboard/`, `/dashboard-state/<navn>` og `/dashboard-category/<id>`, `mobil.html` og manifest-nøglen `fane`.

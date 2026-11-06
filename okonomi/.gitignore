@@ -10,6 +10,10 @@ dashboard/public/config.json
 dashboard/public/state/*
 !dashboard/public/state/.gitkeep
 
+# Månedens gennemgange: rutinens tekst og tal, og det, siden Gennemgang viser
+/gennemgang/
+dashboard/public/gennemgang/gennemgange.json
+
 # Mellemregninger til Excel og logs
 scripts/*.csv
 *.log

@@ -3,6 +3,7 @@
 // En lille lokal server, der viser Sprog-siderne og lader dem gemme DINE svar. Den kan kun skrive:
 //   - din karakter (1-4) og det, du skrev, på et kort i data/log.jsonl
 //   - dit svar på ugens tekst, også i data/log.jsonl
+//   - et forslag til tid på sprog, du godkender eller afviser, og en session, du sletter, i data/sessioner.json
 // Kortene, ugens tekst og feedbacken skriver rutinen (Kompas · Sprog) gennem sprog.js; serveren finder aldrig på noget.
 // På farten (mobil.html) henter en pakke med dagens kort, så du kan svare uden net, og sender svarene med /sync,
 // når Mac'en er vågen. Samme mønster som Studie-serverens På farten.
@@ -74,6 +75,7 @@ const server = http.createServer(async (req, res) => {
       if (sti === "/api/pakke") return send(res, 200, K.pakke());
       if (sti === "/api/tekster") return send(res, 200, K.tekster());
       if (sti === "/api/regler") return send(res, 200, K.reglerListe());
+      if (sti === "/api/tid") return send(res, 200, K.tid());
       if (sti.startsWith("/api/")) return send(res, 404, { fejl: "ikke fundet" });
       return sendFil(res, sti.slice(1));
     }
@@ -86,6 +88,8 @@ const server = http.createServer(async (req, res) => {
     const d = JSON.parse(krop || "{}");
     if (sti === "/api/svar") return send(res, 200, K.gemSvar(d));
     if (sti === "/api/tekst-svar") return send(res, 200, K.gemTekstSvar(d));
+    if (sti === "/api/forslag") return send(res, 200, K.gemForslag(d));
+    if (sti === "/api/session") return send(res, 200, K.sletSession(d));
     if (sti === "/api/sync") {
       // Svar fra telefonen, der ikke kunne gemmes, logges, så en fejlet sync ses i loggen og ikke kun på telefonen
       const r = K.sync(d), afvist = r.resultater.filter(x => !x.ok);

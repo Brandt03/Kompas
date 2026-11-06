@@ -81,9 +81,9 @@ const navn = v => (VALG.find(x => x[0] === v) || [])[1] || "";
 const kort = iso => { if (!iso) return "–"; const d = parseDate(iso); return `${d.getDate()}/${d.getMonth() + 1}`; };
 const tal = n => n.toLocaleString("da-DK");
 
-// Ugerne (kun dem, rutinen har udfyldt) og bagefter dokumentets øvrige hovedafsnit, i dokumentets rækkefølge
+// Ugerne (kun dem, rutinen har udfyldt eller skrevet foreløbigt; titlen siger "(foreløbig)") og bagefter dokumentets øvrige hovedafsnit, i dokumentets rækkefølge
 function dele(fn) {
-  const uger = Object.entries(fn.uger).filter(([, u]) => u.udfyldt).sort((a, b) => a[0] - b[0])
+  const uger = Object.entries(fn.uger).filter(([, u]) => u.udfyldt || u.foreloebig).sort((a, b) => a[0] - b[0])
     .map(([n, u]) => ({ ...u, noegle: n, navn: `Uge ${n}`, titel: u.titel.replace(/^Uge\s+\d+\s*[—–-]\s*/i, "") }));
   return [...uger, ...(fn.dele || []).map(d => ({ ...d, noegle: d.titel, navn: d.titel, titel: "" }))];
 }

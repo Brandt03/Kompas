@@ -1,6 +1,6 @@
 #!/bin/zsh
 # Holder Kompas frisk i baggrunden, også når Sure er lukket. Køres hvert 30. minut af LaunchAgent
-# local.kompas.opdater (~/Library/LaunchAgents). Log: ~/.kompas/opdater.log. Luk Kompas slår den fra, Kompas-appen til.
+# local.kompas.opdater (~/Library/LaunchAgents). Log: ~/.kompas/opdater.log. kompas-stop.sh slår den fra, Kompas-appen til.
 #
 #   kalender + Form & Fokus-siderne   hver gang (hurtigt, kun kalenderfeeds og lokale beregninger)
 #   Garmin                            højst hver 3. time (logger ind hos Garmin; tokens caches), og med det

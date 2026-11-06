@@ -478,7 +478,7 @@ except server.ToolError:
 print("\nPERIODE\n  → sidens felter, samme belastningsskala, forbehold ved manglende kalender")
 
 # e1RM: kun frie vægte og højst 12 gentagelser; RPE følger med som oplysning.
-# Selvstudie er null før første CalTask-session, ikke 0.
+# Selvstudie er null, før logningen begyndte, ikke 0.
 lconn = connect(Path(tempfile.mkdtemp()) / "loeft.db")
 d0 = (today - timedelta(days=3)).isoformat()
 upsert(lconn, "activities", {"activity_id": "g1", "start_local": f"{d0} 17:00:00",

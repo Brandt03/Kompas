@@ -3,10 +3,9 @@
 # Adds our own tabs to Sure's left menu (right after Budgets/Plan) and shows the Caddy-served dashboard pages
 # inside Sure's own layout:
 #   Forbrug    /forbrug-side    -> https://localhost/forbrug/
-#   Scenarier  /scenarier-side  -> https://localhost/forbrug/scenarier/
 #   SU-vagt    /su-side         -> https://localhost/forbrug/su/
 #
-# The pages keep their settings (payslip figures, scenario inputs) as JSON in dashboard/public/state/, which
+# The pages keep their settings (payslip figures) as JSON in dashboard/public/state/, which
 # Caddy serves read-only at /forbrug/state/<name>.json. Writes go through PUT /dashboard-state/<name> below,
 # so they need a signed-in Sure session.
 #
@@ -25,13 +24,12 @@ require "fileutils"
 module DashboardTabs
   VIEW_DIR = Rails.root.join("tmp", "dashboard_tab_views")
   STATE_DIR = Pathname.new("/rails/custom_state")
-  STATE_NAMES = %w[su scenarier].freeze
+  STATE_NAMES = %w[su].freeze
   STATE_MAX_BYTES = 256.kilobytes
 
   # name, Sure path, iframe src, lucide icon
   TABS = [
     [ "Forbrug", "/forbrug-side", "/forbrug/", "wallet" ],
-    [ "Scenarier", "/scenarier-side", "/forbrug/scenarier/", "chart-spline" ],
     [ "SU-vagt", "/su-side", "/forbrug/su/", "graduation-cap" ]
   ].freeze
 

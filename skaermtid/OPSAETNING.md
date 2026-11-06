@@ -116,7 +116,8 @@ Tjek: efter et minuts browsing viser **Raw Data** også `aw-watcher-web-edge…`
 3. På PC'en: **Tilføj mappe** (Add Folder):
    - **Mappenavn:** `ActivityWatchSync`
    - **Mappe-ID:** `aw-sync`
-   - **Mappesti:** `C:\Users\<dit brugernavn>\ActivityWatchSync`
+   - **Mappesti:** `C:\Users\<dit brugernavn>\ActivityWatchSync`, skrevet helt ud. Syncthings side forstår
+     ikke `%USERPROFILE%` og laver i stedet en ny mappe, der hedder sådan.
    - Fanen **Deling:** flueben ved **Mac**. **Gem**.
    Dukker der i stedet et banner op om, at Mac vil dele ActivityWatchSync, så tryk **Tilføj** og brug samme
    navn og sti.
@@ -283,4 +284,14 @@ skal melde 4 enheder med data (3 uden bærbaren).
 - **Telefonen holder op med at sende:** batteriindstillingen i T2 er sat tilbage, eller Syncthing-Fork kører kun på
   wifi eller under opladning (dens indstillinger → **Kørselsbetingelser**).
 - **PC'en bliver ved at være gammel:** er ActivityWatch startet (ikon i proceslinjen), og har opgaven aw-sync kørt
-  (Opgavestyring → **Seneste kørselstidspunkt**)?
+  (Opgavestyring → **Seneste kørselstidspunkt**)? Har PC'en ingen fjernenheder på http://127.0.0.1:8384, så er
+  Syncthing dér blevet nulstillet og har fået et nyt id (Handlinger → **Vis ID**). Lav S4 igen, og skift det gamle
+  id ud med det nye på Mac'en.
+- **Mappen ligger forkert på en enhed:** skift ikke stien på en mappe, der allerede synkroniserer. Syncthing tager
+  så filerne i den nye sti som ændringer og sender dem til de andre. Gamle kopier overskriver nyere, og filer,
+  der mangler dér, bliver slettet overalt. Sæt i stedet enheden på pause på Mac'ens Syncthing-side (enheden →
+  **Pause**), fjern mappen på enheden (**Rediger** → **Fjern**; filerne bliver liggende), tilføj den igen med den
+  rigtige sti, og slå pausen fra. Mac'ens ActivityWatch-database er det rigtige lager, og den rører Syncthing
+  aldrig. Bliver sync-mappen alligevel rodet, så skriver
+  `/Applications/ActivityWatch.app/Contents/Resources/aw-sync --sync-dir ~/ActivityWatchSync sync` Mac'ens egen fil
+  igen, og de andre enheder skriver deres, næste gang de synkroniserer.

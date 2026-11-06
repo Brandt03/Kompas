@@ -659,7 +659,8 @@ async function gem(x, handling, el) {
     svar = await r.json().catch(() => null);
   } catch { r = null; }
   if (!r || !r.ok) {
-    const why = !r || [502, 503, 504].includes(r.status)
+    const why = !r && telefon ? "Mac'en svarer ikke. Et valg kan kun gemmes, mens Mac'en er vågen."
+      : !r || [502, 503, 504].includes(r.status)
       ? "Skærmtid-serveren kører ikke. Genstart den med launchctl kickstart -k gui/$(id -u)/local.kompas.skaermtid"
       : svar?.fejl || `Serveren svarede ${r.status}.`;
     status(`Ikke gemt: ${x.navn}. ${why}`, true);
@@ -721,6 +722,10 @@ $("root").addEventListener("change", ev => {
   const sel = ev.target.closest("select[data-i]");
   if (sel && sel.value) gem(ITEMS[+sel.dataset.i], sel.value, sel);
 });
+
+// På telefonen (Tailscale, ingen port) gemmer en service worker siden og de sidst byggede tal, så den åbner uden net
+const telefon = !/(^|\.)localhost$/.test(location.hostname) && !location.port;
+if ("serviceWorker" in navigator && telefon) navigator.serviceWorker.register("/skaermtid/sw.js", { scope: "/skaermtid/" }).catch(() => {});
 
 // Siden tegnes, efter at tallene er hentet, så et anker i adressen (fx #enheder) skal findes bagefter
 hent().then(d => { render(d); if (location.hash.length > 1) $(location.hash.slice(1))?.scrollIntoView(); },

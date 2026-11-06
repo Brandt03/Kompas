@@ -53,10 +53,16 @@
   .res.ok { color: var(--success); } .res.nej { color: var(--destructive); }
   .hvorfor { font-size: 13px; line-height: 1.5; color: var(--text-secondary); } .hvorfor p { margin: 0; }
   .hint { color: var(--text-subdued); font-size: 12.5px; line-height: 1.5; }
+  textarea.tanker { min-height: 70px; font-size: 13.5px; }
+  .sik { display: grid; grid-template-columns: auto minmax(140px, 1fr) 52px auto; gap: 8px 12px; align-items: center; }
+  .sik input[type=range] { width: 100%; margin: 0; }
+  .sik input.urort { opacity: .4; }
+  .sik .tal { font-variant-numeric: tabular-nums; text-align: right; }
+  .kal-maal { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--text-primary); opacity: .5; }
   .skjult { filter: blur(6px); user-select: none; pointer-events: none; }
   #toast { position: fixed; left: 50%; bottom: 20px; transform: translate(-50%, 20px); opacity: 0; transition: .15s; z-index: 50; background: var(--nav-indicator); color: var(--container); border-radius: 10px; padding: 10px 14px; font-size: 13.5px; pointer-events: none; }
   #toast.vis { opacity: 1; transform: translate(-50%, 0); }
-  @media (max-width: 760px) { .drill { grid-template-columns: minmax(0, 1fr); } .q { padding: 18px 16px; } }
+  @media (max-width: 760px) { .drill { grid-template-columns: minmax(0, 1fr); } .q { padding: 18px 16px; } .sik { grid-template-columns: minmax(0, 1fr) 52px; } .sik > .meta, .sik > .row { grid-column: 1 / -1; } }
 </style>
 </head>
 <body>
@@ -85,23 +91,46 @@
 const API = "/studie/api";
 const MK = { "✓": "sad", "~": "halvt", "✗": "blankt" };
 let fane = (location.hash.slice(1) || "idag"), G = null, B = null, D = null, S = null, R = null;
-let rCur = null, rVist = false, rSik = null, rSvar = null, gSik = null;
-// Kalibrering: vælg hvor sikker du er, før svaret vises
+let rCur = null, rVist = false, rPct = null, rSvar = null, gPct = null;
+// Kalibrering: hvor sikker du er (de tre ord, som serveren udleder af procenten; svarene fra før skyderen har kun ordet)
 const SIK = [["sikker", "Sikker"], ["usikker", "Usikker"], ["gaet", "Gætter / kan ikke"]];
+// Sikkerhed: hvor sandsynligt du tror, dit svar er rigtigt, 0-100 % i trin af 10, før svaret vises. Skyderen har ingen
+// startværdi, for en 50 %, du ikke har rørt, ville ligne en, du har valgt. Rød ved 0 %, grøn ved 100 %.
+const sikFarve = p => `color-mix(in oklab, var(--success) ${p}%, var(--destructive))`;
+const sikTal = p => p == null ? "" : `<b style="color:${sikFarve(p)}">${p} %</b>`;
 // Karakter efter et forsøg, som i FSRS: 4 let, 3 sad, 2 halvt, 1 blankt. Let og Sad står begge som [✓] i filen.
 const KAR = [[4, "sad", "✓ Let", "Sad med det samme, uden at tænke dig om"], [3, "sad", "✓ Sad", "Sad, men du skulle tænke dig om"],
   [2, "halvt", "~ Halvt", "Noget af det, eller kun med besvær"], [1, "blankt", "✗ Blankt", "Kunne det ikke"]];
 const KAR_DRILL = [[4, "sad", "✓ Let", "Vidste det med det samme"], [3, "sad", "✓ Rigtigt", "Rigtigt, men du skulle tænke dig om"], [1, "blankt", "✗ Forkert", "Forkert"]];
 const karKnapper = (data, kar = KAR) => kar.map(([g, m, t, h]) => `<button type="button" class="btn m-${m}" data-${data}="${g}" title="${h}">${t}</button>`).join("");
 const karMark = g => KAR.find(x => x[0] === +g)[1];
-const sikKnapper = (kræverTekst) => `<div class="row"><span class="meta">Hvor sikker er du?</span>${SIK.map(([k, t], i) =>
-  `<button type="button" class="btn${i ? " ghost" : ""}" data-sik="${k}"${kræverTekst && k !== "gaet" ? " data-krav" : ""}>${t}</button>`).join("")}<span class="spacer"></span><span class="meta">så vises svaret</span></div>`;
+// "Vis svar" kræver, at du har rørt skyderen (og i Genkald et svar eller Tænk højt); "Kan ikke" er 0 % og kræver intet
+const sikVælger = (pct, kræverTekst) => `<div class="sik"><span class="meta">Hvor sikker er du på dit svar?</span>
+  <input type="range" min="0" max="100" step="10" value="${pct ?? 50}" data-skyder aria-label="Sikkerhed i procent"${pct == null ? ' class="urort"' : ` style="accent-color:${sikFarve(pct)}"`}>
+  <span class="tal" data-sik-tal>${pct == null ? "–" : sikTal(pct)}</span>
+  <span class="row"><button type="button" class="btn" data-vis${kræverTekst ? " data-krav" : ""} disabled>Vis svar</button><button type="button" class="btn ghost" data-kan-ikke title="0 %, og du behøver ikke at skrive noget">Kan ikke</button></span></div>`;
+const tankerFelt = (id, k) => `<textarea id="${id}" class="tanker" placeholder="Tænk højt (valgfrit): hvordan kom du frem til det, og hvad er du i tvivl om? Tryk to gange på fn for at diktere.">${esc(kladde.hent(k))}</textarea>`;
+function opdVis() {
+  const pct = fane === "idag" ? rPct : gPct, idag = fane === "idag";
+  const tekst = [idag ? "r-svar" : "svar", idag ? "r-tanker" : "tanker"].some(id => document.getElementById(id)?.value.trim());
+  document.querySelectorAll("[data-vis]").forEach(b => b.disabled = pct == null || (b.hasAttribute("data-krav") && !tekst));
+}
+function sætSik(el) {
+  const p = +el.value; if (fane === "idag") rPct = p; else gPct = p;
+  el.classList.remove("urort"); el.style.accentColor = sikFarve(p);
+  el.parentElement.querySelector("[data-sik-tal]").innerHTML = sikTal(p);
+  opdVis();
+}
 let gFag = null, gFil = "alle", gCur = null, gVist = false, gFacit = null;
+// Tjek ugen først (fra Sådan lærer du på Fag): genkald.html?fag=<id>&uge=<N>#genkald viser kun ugens spørgsmål
+let gUge = null;
 let bFag = null, bTilstand = "udfyld", bCur = null, bVist = false, bRet = null;  // bRet: et udfyldt begreb, du retter
 // Drills åbner på første kapitel med ugættede (som På farten); et kapitel, du vælger, gælder kun i denne visning
 let dKap = null, dKunTomme = false;
 const startKap = D => Math.max(0, D.findIndex(k => k.tjek.some(t => t.status === "tom")));
 try { const x = JSON.parse(localStorage.getItem("genkald-valg") || "{}"); ({ gFag = gFag, bFag = bFag } = x); } catch (e) {}
+{ const q = new URLSearchParams(location.search); if (q.get("fag") && +q.get("uge")) { gFag = q.get("fag"); gUge = +q.get("uge"); } }
+const slipUge = () => { gUge = null; history.replaceState(null, "", location.pathname + location.hash); };
 const huskValg = () => { try { localStorage.setItem("genkald-valg", JSON.stringify({ gFag, bFag })); } catch (e) {} };
 const kladde = { hent: k => { try { return localStorage.getItem("kladde:" + k) || ""; } catch (e) { return ""; } },
   gem: (k, v) => { try { v ? localStorage.setItem("kladde:" + k, v) : localStorage.removeItem("kladde:" + k); } catch (e) {} } };
@@ -118,14 +147,23 @@ const root = () => document.getElementById("root");
 // ── Dagens kort (spaced repetition på tværs af genkald, begreber og drills) ──
 const TYPENAVN = { genkald: "Genkald", begreb: "Begreb", drill: "Drill", eksamen: "Eksamen" };
 const pct = (a, b) => b ? Math.round(100 * a / b) : 0;
-function rNulstil() { rVist = false; rSik = null; rSvar = null; }
-function kalibrering(k) {
+// Før svaret vises kun faget, ikke uge og emne: til eksamen står der heller ikke, hvor et spørgsmål er fra
+const kunFag = kicker => kicker.split(" · ")[0];
+function rNulstil() { rVist = false; rPct = null; rSvar = null; }
+function kalibrering(st) {
+  const k = st.kalibrering, kp = (st.kalibrering_procent || []).filter(x => x.n);
+  // Med skyderen: én række pr. spand, og stregen er, hvor tit det burde sidde, når du siger det
+  const rowsPct = kp.map(x => `<div class="row" style="gap:10px"><span style="width:120px">${x.fra}-${x.til} %</span>
+    <span class="meter" style="flex:1;height:8px;border-radius:4px;background:var(--surface-inset);position:relative"><i style="display:block;height:100%;border-radius:4px;width:${pct(x.sad, x.n)}%;background:var(--mark)"></i><i class="kal-maal" style="left:${(x.fra + x.til) / 2}%" title="Her burde det ligge"></i></span>
+    <span class="meta" style="width:130px;text-align:right">${pct(x.sad, x.n)} % sad · ${x.n} kort</span></div>`).join("");
+  // Med ordene: alle svar, også dem fra før skyderen (sikker fra 70 %, usikker fra 30 %)
   const rows = SIK.filter(([s]) => k[s]?.n).map(([s, t]) => `<div class="row" style="gap:10px"><span style="width:120px">${t}</span>
     <span class="meter" style="flex:1;height:8px;border-radius:4px;background:var(--surface-inset);overflow:hidden"><i style="display:block;height:100%;width:${pct(k[s].sad, k[s].n)}%;background:var(--mark)"></i></span>
     <span class="meta" style="width:130px;text-align:right">${pct(k[s].sad, k[s].n)} % sad · ${k[s].n} kort</span></div>`).join("");
   if (!rows) return `<p class="meta" style="margin:0">Når du har svaret på nogle kort, kan du her se, hvor tit du har ret, når du er sikker. Det er målet: at "sikker" betyder sikker.</p>`;
   const s = k.sikker, over = s?.n >= 5 && pct(s.sad, s.n) < 75;
-  return `<div style="display:grid;gap:8px">${rows}</div>${over ? `<p class="meta" style="margin:10px 0 0;color:var(--warning)">Når du er sikker, sidder det kun ${pct(s.sad, s.n)} % af gangene. Brug fejlene til at finde de emner, hvor du overvurderer dig selv.</p>` : ""}`;
+  return `${rowsPct ? `<div style="display:grid;gap:8px">${rowsPct}</div><p class="meta" style="margin:10px 0 0">Stregen er, hvor tit det burde sidde, når du siger det. Ligger baren under stregen, overvurderer du dig selv.</p>
+    <div class="grp" style="margin:16px 0 8px">Alle svar, også fra før skyderen</div>` : ""}<div style="display:grid;gap:8px">${rows}</div>${over ? `<p class="meta" style="margin:10px 0 0;color:var(--warning)">Når du er sikker, sidder det kun ${pct(s.sad, s.n)} % af gangene. Brug fejlene til at finde de emner, hvor du overvurderer dig selv.</p>` : ""}`;
 }
 // Hvor meget af det, du har gennemgået, du kan på eksamensdagen, hvis du stopper med at repetere nu
 function tilEksamen(st) {
@@ -150,41 +188,46 @@ function renderIdag() {
       <span class="spacer"></span><span class="meta">${st.laert} af ${st.i_alt} kort sidder (90 % om tre uger)</span></div>
     <div class="meter" style="height:6px;border-radius:3px;background:var(--surface-inset);overflow:hidden;margin:-4px 0 4px"><i style="display:block;height:100%;width:${pct(st.klaret_i_dag, ialt)}%;background:var(${fortsat ? "--success" : "--mark"})"></i></div>
     ${k ? `<section class="card q">
-      <div class="kicker">${typeChip(k.type)}<span>${esc(k.kicker)}</span>${k.ny ? `<span class="mk">ny</span>` : ""}</div>
+      <div class="kicker">${typeChip(k.type)}<span>${esc(rVist ? k.kicker : kunFag(k.kicker))}</span>${k.ny ? `<span class="mk">ny</span>` : ""}</div>
       ${k.type === "begreb" ? `<div class="begreb">${esc(k.titel)}</div>` : `<div class="d" style="font-weight:500">${esc(k.titel)}</div>`}
       <div class="spm md">${md(k.spoergsmaal)}</div>
       ${k.kontekst ? `<div class="meta" style="margin-bottom:-8px">Fra filen</div><pre style="margin:0;font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--container-inset);padding:10px 12px;border-radius:8px;overflow-x:auto">${esc(k.kontekst)}</pre>` : ""}
       ${k.udtryk ? `<pre style="margin:0;font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--container-inset);padding:10px 12px;border-radius:8px;overflow-x:auto">${esc(k.udtryk)}</pre>` : ""}
       <textarea id="r-svar" placeholder="${k.type === "drill" ? "Dit gæt …" : "Svar fra hukommelsen (eller sig det højt) …"}" style="min-height:${k.type === "drill" ? 60 : 110}px">${esc(kladde.hent("r:" + k.id))}</textarea>
+      ${tankerFelt("r-tanker", "rt:" + k.id)}
       ${rVist ? `<div class="facit"><div class="lbl">${k.type === "genkald" ? "Facit" : k.type === "begreb" ? "Dine egne ord" : "JavaScript giver"}</div>
           ${rSvar?.form === "md" ? `<div class="md">${md(rSvar.svar || "Der er ingen facit.")}</div>` : rSvar?.form === "kode" ? `<pre style="margin:0;font:13px ui-monospace,Menlo,monospace">${esc(rSvar.svar ?? "")}</pre>` : `<div>${esc(rSvar?.svar || "")}</div>`}
           ${rSvar?.se ? `<div class="lbl" style="margin-top:10px">${esc(rSvar.se_navn || "Hvad det får dig til at se")}</div><div>${esc(rSvar.se)}</div>` : ""}
           ${rSvar?.forklaring ? `<div class="lbl" style="margin-top:10px">Hvorfor</div><div class="md">${md(rSvar.forklaring)}</div>` : ""}</div>
         <div class="row"><span class="meta">Hvordan gik det?</span>${karKnapper("rkar", k.type === "drill" ? KAR_DRILL : KAR)}
-          <span class="spacer"></span><span class="meta">du sagde: ${esc(SIK.find(([s]) => s === rSik)?.[1] || "")}</span></div>`
-      : `${sikKnapper(false)}<div class="row"><span class="spacer"></span><button type="button" class="btn quiet" id="r-spring">Tag den senere</button></div>`}
+          <span class="spacer"></span><span class="meta">du sagde: ${sikTal(rPct)}</span></div>`
+      : `${sikVælger(rPct, false)}<div class="row"><span class="spacer"></span><button type="button" class="btn quiet" id="r-spring">Tag den senere</button></div>`}
     </section>` : `<div class="card empty">Du er igennem dagens kort.${st.naeste ? ` Næste kort kommer ${dayMonth(new Date(st.naeste)).replace(/\.$/, "")}.` : ""}<br>Vil du mere, så tag nye spørgsmål under Genkald eller skriv begreber under Begreber.</div>`}
     ${st.nye_venter_paa_laesning ? `<a class="card panel" href="fag.html" style="display:flex;gap:12px;align-items:center;text-decoration:none;color:inherit">
       <span class="mk" style="min-width:auto;padding:0 8px">${st.nye_venter_paa_laesning}</span>
       <span style="flex:1">nye genkaldsspørgsmål venter, til du markerer deres uge som læst under <b>Fag → Styr på</b>.</span>${icon("arrow-right", 14)}</a>` : ""}
     ${tilEksamen(st)}
-    <section class="card panel"><div class="panel-head"><h2>Kalibrering</h2><span class="meta">hvor tit sad det, når du sagde …</span></div>${kalibrering(st.kalibrering)}</section>
-    <p class="hint">Kortene planlægges med FSRS: hvert kort kommer igen, når du regnes for at kunne det med 90 % sandsynlighed, så lette kort venter længere end svære. Ville et kort i et fag med eksamen først komme efter eksamen, men du kan det med under ${Math.round(100 * st.maal_eksamen)} % på eksamensdagen, kommer det før. Let: sad med det samme. Sad: du skulle tænke dig om. Drills er de tjek, du har gættet forkert på eller sat flueben i <i>gættede</i> ved (rigtige og sikre i første hug kommer ikke igen); begreber er dem, du selv har defineret. Er der flere forfaldne kort end plads, kommer faget med den nærmeste eksamen først og fag uden eksamen sidst. Op til 5 nye genkaldsspørgsmål om dagen fra de uger, du har markeret som læst: ældste uge først og på skift mellem fagene.</p>`;
-  const ta = document.getElementById("r-svar");
+    <section class="card panel"><div class="panel-head"><h2>Kalibrering</h2><span class="meta">hvor tit sad det, når du sagde …</span></div>${kalibrering(st)}</section>
+    <p class="hint">Før svaret står kun faget over kortet; ugen og emnet kommer med svaret, for til eksamen står der heller ikke, hvor et spørgsmål er fra. Kortene planlægges med FSRS: hvert kort kommer igen, når du regnes for at kunne det med 90 % sandsynlighed, så lette kort venter længere end svære. Ville et kort i et fag med eksamen først komme efter eksamen, men du kan det med under ${Math.round(100 * st.maal_eksamen)} % på eksamensdagen, kommer det før. Let: sad med det samme. Sad: du skulle tænke dig om. Drills er de tjek, du har gættet forkert på eller sat flueben i <i>gættede</i> ved (rigtige og sikre i første hug kommer ikke igen); begreber er dem, du selv har defineret. Er der flere forfaldne kort end plads, kommer faget med den nærmeste eksamen først og fag uden eksamen sidst. Op til 5 nye genkaldsspørgsmål om dagen fra de uger, du har markeret som læst: ældste uge først og på skift mellem fagene.</p>`;
+  const ta = document.getElementById("r-svar"), tk = document.getElementById("r-tanker");
   if (ta) { ta.oninput = () => kladde.gem("r:" + k.id, ta.value); if (!rVist) ta.focus(); }
+  if (tk) tk.oninput = () => kladde.gem("rt:" + k.id, tk.value);
+  opdVis();
 }
-async function rVisSvar(sik) {
+async function rVisSvar(pct) {
   const k = R.kort[0];
-  try { rSvar = await hent(`/repetition/svar?noegle=${encodeURIComponent(k.id)}`); rSik = sik; rVist = true; renderIdag(); }
+  try { rSvar = await hent(`/repetition/svar?noegle=${encodeURIComponent(k.id)}`); rPct = pct; rVist = true; renderIdag(); }
   catch (e) { toast(`Kunne ikke hente svaret: ${e.message}`); }
 }
 async function rMarker(karakter) {
-  const k = R.kort[0], svar = document.getElementById("r-svar")?.value || "", mark = karMark(karakter);
+  const k = R.kort[0], svar = document.getElementById("r-svar")?.value || "", tanker = document.getElementById("r-tanker")?.value || "", mark = karMark(karakter);
   try {
-    await post("/repetition", { noegle: k.id, karakter: +karakter, sikkerhed: rSik, svar: k.type === "genkald" ? svar : undefined });
-    kladde.gem("r:" + k.id, "");
-    R.kort.shift(); R.statistik.klaret_i_dag++;
-    const kal = R.statistik.kalibrering[rSik]; if (kal) { kal.n++; kal[mark]++; }
+    await post("/repetition", { noegle: k.id, karakter: +karakter, procent: rPct, tanker, svar: k.type === "genkald" ? svar : undefined });
+    kladde.gem("r:" + k.id, ""); kladde.gem("rt:" + k.id, "");
+    const st = R.statistik; R.kort.shift(); st.klaret_i_dag++;
+    // Kalibreringen tælles med det samme; ordet udledes med serverens grænser
+    const ord = rPct >= st.sikker_fra ? "sikker" : rPct >= st.usikker_fra ? "usikker" : "gaet";
+    for (const kal of [st.kalibrering[ord], st.kalibrering_procent?.find(x => rPct >= x.fra && rPct <= x.til)]) if (kal) { kal.n++; kal[mark]++; }
     rNulstil(); rCur = null; renderIdag();
     if (k.type === "genkald") G = null;
     // Tom kø: hent igen, så "næste kort" og statistikken er rigtige
@@ -196,7 +239,8 @@ async function rMarker(karakter) {
 // Rækkefølge: ikke forsøgt (i filens orden), så ✗, så ~, så ✓ — ældste forsøg først
 function gAlle() {
   return G.filter(f => f.fag === gFag && (gFil === "alle" || f.fil === gFil))
-    .flatMap(f => f.spoergsmaal.map(q => ({ ...q, fil: f.fil, fag: f.fag, uger: f.uger, har_facit: f.har_facit })));
+    .flatMap(f => f.spoergsmaal.map(q => ({ ...q, fil: f.fil, fag: f.fag, uger: f.uger, har_facit: f.har_facit })))
+    .filter(q => !gUge || q.uge === gUge);
 }
 const vægt = { null: 0, "✗": 1, "~": 2, "✓": 3 };
 function gNaeste(efter) {
@@ -208,44 +252,49 @@ function renderGenkald() {
   const fagene = [...new Set(G.map(f => f.fag))];   // serveren tager genkaldsfagene fra fag.json
   if (!fagene.includes(gFag)) gFag = fagene[0];
   const filer = G.filter(f => f.fag === gFag), qs = gAlle();
-  if (!gCur || !qs.find(q => q.fil === gCur.fil && q.nr === gCur.nr)) { gCur = gNaeste(); gVist = false; gFacit = null; }
+  if (!gCur || !qs.find(q => q.fil === gCur.fil && q.nr === gCur.nr)) { gCur = gNaeste(); gVist = false; gFacit = null; gPct = null; }
   const q = gCur && qs.find(x => x.fil === gCur.fil && x.nr === gCur.nr);
   const n = { sad: 0, halvt: 0, blankt: 0 }; qs.forEach(x => x.mark && n[MK[x.mark]]++);
   const forsøgt = n.sad + n.halvt + n.blankt, k = q ? `${q.fag}/${q.fil}#${q.nr}` : "";
   root().innerHTML = `
     <div class="bar"><div class="seg" role="group" aria-label="Fag">${fagene.map(f => `<button type="button" data-gfag="${esc(f)}" aria-pressed="${f === gFag}">${esc(fagKort(f))}</button>`).join("")}</div>
-      <select id="gfil" aria-label="Fil"><option value="alle">Alle uger</option>${filer.map(f => `<option value="${esc(f.fil)}"${f.fil === gFil ? " selected" : ""}>${esc(f.uger)}</option>`).join("")}</select>
+      ${gUge ? `<span class="mk" style="min-width:auto;padding:0 8px;height:28px">Tjek af uge ${gUge}</span><button type="button" class="btn quiet" id="alle-uger">Alle uger</button>`
+        : `<select id="gfil" aria-label="Fil"><option value="alle">Alle uger</option>${filer.map(f => `<option value="${esc(f.fil)}"${f.fil === gFil ? " selected" : ""}>${esc(f.uger)}</option>`).join("")}</select>`}
       <span class="spacer"></span><span class="meta">${forsøgt} af ${qs.length} forsøgt · ${n.sad} sad · ${n.halvt} halvt · ${n.blankt} blankt</span></div>
+    ${gUge ? `<p class="hint" style="margin:0">${forsøgt === qs.length && qs.length ? `Du har svaret på alle ugens spørgsmål. Spring de skridt over i <a href="fag.html#${esc(gFag)}/${gUge}">Sådan lærer du uge ${gUge}</a>, du var sikker på og havde ret i, og brug tiden på resten.`
+      : `Svar fra hukommelsen, før du læser ugen. Det, du var sikker på og havde ret i, kan du springe over i <a href="fag.html#${esc(gFag)}/${gUge}">Sådan lærer du uge ${gUge}</a>.`}</p>` : ""}
     ${q ? `<section class="card q">
       <div class="kicker"><span>${esc(q.uger)} · ${esc(q.afsnit)}</span><span>spørgsmål ${q.nr}</span>${q.mark ? `<span class="mk ${MK[q.mark]}">${q.mark}</span>` : ""}</div>
       <div class="spm md">${md(q.tekst)}</div>
       ${q.svar ? `<details><summary>Dit forrige svar${q.dato ? ` (${esc(q.dato)})` : ""}</summary><div class="forrige">${esc(q.svar)}</div></details>` : ""}
       <textarea id="svar" placeholder="Skriv dit svar fra hukommelsen, før du ser facit …">${esc(kladde.hent(k))}</textarea>
+      ${tankerFelt("tanker", "t:" + k)}
       ${gVist ? `<div class="facit"><div class="lbl">Facit</div><div class="md">${gFacit ? md(gFacit) : "Der er ingen facit til dette spørgsmål."}</div></div>
         <div class="row"><span class="meta">Hvordan gik det?</span>${karKnapper("gkar")}
-          <span class="spacer"></span><span class="meta">gemmes i ${esc(q.fil)}</span></div>`
-      : `${sikKnapper(true)}<div class="row"><span class="spacer"></span><button type="button" class="btn quiet" id="spring">Spring over</button></div>`}
+          <span class="spacer"></span><span class="meta">du sagde: ${sikTal(gPct)} · gemmes i ${esc(q.fil)}</span></div>`
+      : `${sikVælger(gPct, true)}<div class="row"><span class="spacer"></span><button type="button" class="btn quiet" id="spring">Spring over</button></div>`}
     </section>` : `<div class="card empty">Ingen spørgsmål her.</div>`}
     <section class="card panel"><div class="panel-head"><h2>Alle spørgsmål</h2><span class="meta">klik for at øve et bestemt</span></div>
-      <div class="liste">${filer.filter(f => gFil === "alle" || f.fil === gFil).map(f => `<div class="grp">${esc(f.titel)}</div>` + f.spoergsmaal.map(x =>
+      <div class="liste">${filer.filter(f => (gFil === "alle" || f.fil === gFil) && (!gUge || f.spoergsmaal.some(x => x.uge === gUge))).map(f => `<div class="grp">${esc(f.titel)}</div>` + f.spoergsmaal.filter(x => !gUge || x.uge === gUge).map(x =>
         `<button type="button" class="li" data-fil="${esc(f.fil)}" data-nr="${x.nr}" aria-current="${q && q.fil === f.fil && q.nr === x.nr}"><span class="n">${x.nr}.</span><span class="t">${esc(x.tekst.replace(/[*_`]/g, "").split("\n")[0])}</span><span class="mk ${x.mark ? MK[x.mark] : ""}">${x.mark || "·"}</span></button>`).join("")).join("")}</div></section>`;
-  const ta = document.getElementById("svar");
-  // "Sikker" og "Usikker" kræver et svar; "Gætter / kan ikke" gør ikke
-  if (ta) { const opd = () => { kladde.gem(k, ta.value); document.querySelectorAll("[data-krav]").forEach(b => b.disabled = !ta.value.trim()); }; ta.oninput = opd; opd(); if (!gVist) ta.focus(); }
+  const ta = document.getElementById("svar"), tk = document.getElementById("tanker");
+  if (ta) { ta.oninput = () => { kladde.gem(k, ta.value); opdVis(); }; if (!gVist) ta.focus(); }
+  if (tk) tk.oninput = () => { kladde.gem("t:" + k, tk.value); opdVis(); };
+  opdVis();
 }
-async function gVisFacit(sik) {
-  gSik = sik || null;
+async function gVisFacit(pct) {
+  gPct = pct;
   const r = await hent(`/facit?fag=${gCur.fag}&fil=${encodeURIComponent(gCur.fil)}&nr=${gCur.nr}`);
   gFacit = r.facit; gVist = true; renderGenkald();
 }
 async function gMarker(karakter) {
-  const k = `${gCur.fag}/${gCur.fil}#${gCur.nr}`, svar = document.getElementById("svar").value;
+  const k = `${gCur.fag}/${gCur.fil}#${gCur.nr}`, svar = document.getElementById("svar").value, tanker = document.getElementById("tanker")?.value || "";
   try {
-    await post("/genkald", { fag: gCur.fag, fil: gCur.fil, nr: gCur.nr, svar, karakter: +karakter, sikkerhed: gSik });
+    await post("/genkald", { fag: gCur.fag, fil: gCur.fil, nr: gCur.nr, svar, karakter: +karakter, procent: gPct, tanker });
     R = null;
-    kladde.gem(k, "");
+    kladde.gem(k, ""); kladde.gem("t:" + k, "");
     const forrige = gCur; G = await hent("/genkald");
-    gCur = gNaeste(forrige); gVist = false; gFacit = null; renderGenkald();
+    gCur = gNaeste(forrige); gVist = false; gFacit = null; gPct = null; renderGenkald();
     toast(`Gemt i ${forrige.fil}`);
   } catch (e) { toast(`Kunne ikke gemme: ${e.message}`); }
 }
@@ -358,13 +407,16 @@ document.getElementById("faner").addEventListener("click", e => {
 });
 root().addEventListener("click", e => {
   const t = e.target.closest("button, [data-fil]"); if (!t) return;
-  if (t.dataset.gfag) { gFag = t.dataset.gfag; gFil = "alle"; gCur = null; huskValg(); renderGenkald(); }
-  else if (t.dataset.fil) { gCur = { fil: t.dataset.fil, nr: +t.dataset.nr }; gVist = false; gFacit = null; renderGenkald(); window.scrollTo({ top: 0, behavior: "smooth" }); }
-  else if (t.dataset.sik && fane === "genkald") gVisFacit(t.dataset.sik);
-  else if (t.dataset.sik && fane === "idag") rVisSvar(t.dataset.sik);
+  if (t.dataset.gfag) { gFag = t.dataset.gfag; gFil = "alle"; gCur = null; slipUge(); huskValg(); renderGenkald(); }
+  else if (t.id === "alle-uger") { slipUge(); gCur = null; renderGenkald(); }
+  else if (t.dataset.fil) { gCur = { fil: t.dataset.fil, nr: +t.dataset.nr }; gVist = false; gFacit = null; gPct = null; renderGenkald(); window.scrollTo({ top: 0, behavior: "smooth" }); }
+  else if (t.hasAttribute("data-vis") || t.hasAttribute("data-kan-ikke")) {
+    const p = t.hasAttribute("data-kan-ikke") ? 0 : fane === "idag" ? rPct : gPct;
+    if (fane === "idag") rVisSvar(p); else gVisFacit(p);
+  }
   else if (t.dataset.rkar) rMarker(t.dataset.rkar);
   else if (t.id === "r-spring") { R.kort.push(R.kort.shift()); rNulstil(); renderIdag(); }
-  else if (t.id === "spring") { gCur = gNaeste(gCur); gVist = false; gFacit = null; renderGenkald(); }
+  else if (t.id === "spring") { gCur = gNaeste(gCur); gVist = false; gFacit = null; gPct = null; renderGenkald(); }
   else if (t.dataset.gkar) gMarker(t.dataset.gkar);
   else if (t.dataset.bfag) { bFag = t.dataset.bfag; bCur = null; huskValg(); renderBegreber(); }
   else if (t.dataset.btil) { bTilstand = t.dataset.btil; bCur = null; bRet = null; renderBegreber(); }
@@ -379,6 +431,9 @@ root().addEventListener("change", e => {
   if (e.target.id === "gfil") { gFil = e.target.value; gCur = null; renderGenkald(); }
   if (e.target.id === "kun-tomme") { dKunTomme = e.target.checked; renderDrills(); }
 });
+// Skyderen tæller som valgt, så snart du rører den, også hvis du lader den stå på 50 %
+root().addEventListener("input", e => { if (e.target.matches("[data-skyder]")) sætSik(e.target); });
+root().addEventListener("pointerup", e => { if (e.target.matches("[data-skyder]")) sætSik(e.target); });
 root().addEventListener("submit", e => { e.preventDefault(); dTjek(e.target); });
 root().addEventListener("keydown", e => {
 

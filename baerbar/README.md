@@ -23,7 +23,7 @@ så bærbaren altid har den nyeste udgave. Caddy på bærbaren læser sin fil ig
 | `opsaet.sh` | Installerer Caddy og starter tjenesten |
 
 **Med i kopien:** Kompas' forside, menu og Forbindelser, Studie med Genkald, fagsider og pensum, Form og fokus,
-ugereviewet, Skærmtid, Forbrug, Scenarier og SU-vagt og Sprog. **Ikke med:** Sures egne sider, fx
+ugereviewet, Skærmtid, Forbrug, SU-vagt og Sprog. **Ikke med:** Sures egne sider, fx
 Oversigt og Transaktioner, og kald med parametre som facit og eksamenssæt. De viser fejl eller "Kun på Mac'en".
 Kopien ligger på bærbarens disk, også økonomital, studienoter og helbredstal.
 

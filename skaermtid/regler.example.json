@@ -8,7 +8,7 @@
     {"navn": "Telefon", "vaert": ["telefon"], "slags": "telefon"},
     {"navn": "Bærbar", "vaert": ["baerbar", "00000000-0000-4000-8000-0000000000b2"], "slags": "computer"}
   ],
-  "browsere": "\\b(edge|msedge|chrome|chromium|safari|firefox|arc|brave|opera|vivaldi)\\b|com\\.android\\.chrome|com\\.microsoft\\.emmx|org\\.mozilla",
+  "browsere": "\\b(edge|msedge|chrome|chromium|safari|firefox|arc|brave|opera|vivaldi)\\b|com\\.android\\.chrome|com\\.microsoft\\.emmx|org\\.mozilla\\.(firefox|fenix|focus)",
   "ignorer": "^(loginwindow|usernotificationcenter|notificationcenter|dock|spotlight|screensaverengine|windowserver|lockapp\\.exe|searchhost\\.exe|startmenuexperiencehost\\.exe|shellexperiencehost\\.exe|com\\.android\\.systemui|com\\.android\\.launcher3?|com\\.google\\.android\\.apps\\.nexuslauncher)$",
   "grupper": [
     {"navn": "Produktiv", "kategorier": ["Studie", "Sprog", "Egne projekter", "Form & fokus", "Økonomi"]},

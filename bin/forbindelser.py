@@ -309,6 +309,7 @@ RUTINE_INFO = {
     "overblik-ugereview": ("ugereview", "I dag · Form & fokus"),
     "sprog-ugen": ("nye sprogkort og ugens tekst", "Sprog"),
     "skaermtid-ugen": ("ugens gennemgang og kategorierne", "Skærmtid"),
+    "okonomi-maaneden": ("månedens gennemgang", "Økonomi"),
 }
 UGEDAGE = ["mandag", "tirsdag", "onsdag", "torsdag", "fredag", "lørdag", "søndag"]
 
@@ -507,7 +508,7 @@ def drift(koersel, fejl):
 
     # backup-data.sh noterer dagens backup; backupmappen i skyen kan ikke listes, når launchd starter os
     t = mtime(STATE / "backup-sidst")
-    s, tekst = frisk(t, 2 * 24 * TIME, "coach.db, liv.db, Sprogs data og ActivityWatch, 14 dage tilbage", "ingen backup de sidste to dage")
+    s, tekst = frisk(t, 2 * 24 * TIME, "coach.db, liv.db, Sprogs data, ActivityWatch og koden, 14 dage tilbage", "ingen backup de sidste to dage")
     ud.append(punkt("Backup", "mappe i skyen", "Kompas", s, tekst, t,
                     hjaelp=None if s == "ok" else "`~/kompas/bin/backup-data.sh --tving`"))
     return ud

@@ -2,8 +2,9 @@
 
 Pr. uge: tilføjer kilder, kernebegreber, en ny 'Modeller'-sektion med billeder,
 forbindelser og uafklaret/[EKS]. Tomme pladsholder-punkter fjernes kun, hvis de er tomme.
-'I egne ord' røres aldrig. reset_week tømmer en udfyldt uge (fx efter din vurdering på Kompas → USB-noter),
-så den kan udfyldes igen; det, der står under 'I egne ord', flyttes med uændret.
+'I egne ord' røres aldrig. reset_week tømmer en udfyldt uge (fx efter din vurdering på Kompas → USB-noter, eller
+når en foreløbig uge rettes efter ugen), så den kan udfyldes igen; det, der står under 'I egne ord', flyttes med uændret.
+set_foreloebig mærker en uge som foreløbig (skrevet før ugen) eller fjerner mærket.
 """
 import copy
 import json
@@ -17,6 +18,10 @@ from docx.oxml.ns import qn
 # Label-afsnittene i skabelonen. Listen står i labels.json, som eksporten (Scripts/kompas-eksport.js) også læser
 with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "labels.json"), encoding="utf-8") as _f:
     LABELS = json.load(_f)["labels"]
+
+
+# Mærket sidst i overskriften på en uge, der er skrevet før ugen. Scripts/kompas-eksport.js læser det samme mærke
+FORELOEBIG = "(foreløbig)"
 
 
 def label_of(p):
@@ -239,6 +244,23 @@ class Filler:
                     new.remove(r)
                 for pe in new.findall(qn("w:proofErr")):
                     new.remove(pe)
+
+    # --- foreløbig/endelig ----------------------------------------------------
+    def set_foreloebig(self, prefix, on):
+        """Sætter eller fjerner ' (foreløbig)' sidst i ugens overskrift. En foreløbig uge er skrevet før ugen
+        (bog, lektionsplan og de slides, der var lagt op) og rettes søndagen efter, når slides og øvelser er kommet."""
+        ts = self.block(prefix)[0]._p.findall(".//" + qn("w:t"))
+        if not ts:
+            return
+        tekst = "".join(t.text or "" for t in ts)
+        er = tekst.rstrip().endswith(FORELOEBIG)
+        if on and not er:
+            ts[-1].text = (ts[-1].text or "").rstrip() + " " + FORELOEBIG
+        elif not on and er:
+            for t in reversed(ts):
+                if FORELOEBIG in (t.text or ""):
+                    t.text = t.text.replace(FORELOEBIG, "").rstrip()
+                    break
 
     def _heading_el(self, el, level=None):
         return el.tag == qn("w:p") and is_heading(self.P(el), level)

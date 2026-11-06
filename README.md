@@ -21,9 +21,9 @@ yourself with `python3 demo/serve.py` (see below).*
 | Area | What I see | Built from |
 |---|---|---|
 | **I dag** (Today) | My day across everything: calendar with free gaps and what I actually did in each block, deadlines, readiness from my watch, sleep, training, self-study and screen time at a glance, habits that have stalled, this week's focus, flashcards and language cards due | `public/` |
-| **Økonomi** (Money) | Spending by month or year (with a fix for a wrong category right on the page), "what if" scenarios, and a guard that warns before I earn too much to keep my student grant (SU) | `okonomi/` + [Sure](https://github.com/we-promise/sure) |
-| **Studie** (Study) | Week plan, courses, deadlines, spaced-repetition flashcards, exam practice, self-study time against the course workload, exam notes week by week, and an offline phone app | `studie/` |
-| **Sprog** (Languages) | A few minutes of spaced-repetition language cards a day, one active language at a time, a short weekly text to answer, and grammar rules picked from my own mistakes | `sprog/` |
+| **Økonomi** (Money) | Spending by month or year (with a fix for a wrong category right on the page), tags for trips and events, fixed payments, a monthly review against the budget, and a guard that warns before I earn too much to keep my student grant (SU) | `okonomi/` + [Sure](https://github.com/we-promise/sure) |
+| **Studie** (Study) | Week plan, courses, deadlines, spaced-repetition flashcards, exam practice, a timer in the menu with self-study sessions against the course workload, attendance, all semesters side by side, exam notes week by week, and a phone app that works offline | `studie/` |
+| **Sprog** (Languages) | A few minutes of spaced-repetition language cards a day, one active language at a time, a short weekly text to answer, grammar rules picked from my own mistakes, and time on languages suggested from my answers | `sprog/` |
 | **Form & fokus** (Health) | 14-day training periods, every day and night measure from my watch, a daily recommendation, and a weekly review with planned against actual | `coach/` + `overblik/` |
 | **Skærmtid** (Screen time) | Where the time goes on my Mac, desktop, laptop and phone, by category and hour of the day, with a weekly review | `skaermtid/` |
 | **Forbindelser** (Connections) | Whether every data source, device, Claude routine and background job works, with how to fix it when one doesn't | `bin/forbindelser.py` |
@@ -35,7 +35,7 @@ yourself with `python3 demo/serve.py` (see below).*
 | ![14-day training periods](docs/skaermbilleder/perioder.png) **Form & fokus:** the 14-day report, its goals and the trend over periods | ![Body in numbers](docs/skaermbilleder/kroppen.png) **Kroppen i tal:** every day and night measure from the watch, with the night's sleep phases and curves |
 | ![Planned against actual](docs/skaermbilleder/ugereview.png) **Ugereview:** planned against actual, calendar blocks against screen time per quarter hour and logged study | ![Screen time](docs/skaermbilleder/skaermtid.png) **Skærmtid:** all devices together, time on two devices at once counted once |
 | ![Language overview](docs/skaermbilleder/sprog.png) **Sprog:** today's cards, progress per language and the week's text | ![Spending](docs/skaermbilleder/forbrug.png) **Forbrug:** where the money went over 12 months |
-| ![Savings scenarios](docs/skaermbilleder/scenarier.png) **Scenarier:** 1,000 simulated futures for my savings | ![Student grant guard](docs/skaermbilleder/su.png) **SU-vagt:** income against the student grant limit |
+| ![Monthly review](docs/skaermbilleder/gennemgang.png) **Gennemgang:** the month against the budget, with a suggested new budget | ![Student grant guard](docs/skaermbilleder/su.png) **SU-vagt:** income against the student grant limit |
 
 <p align="center"><img src="docs/skaermbilleder/mobil.png" width="240" alt="Study flashcards on the phone, offline">
 <img src="docs/skaermbilleder/sprog-mobil.png" width="240" alt="Language cards on the phone, offline">
@@ -86,20 +86,22 @@ flowchart LR
   minutes, and backed up daily. Nothing is hosted anywhere.
 - **Read-only by default.** The pages only write what I type or click, and only through four servers:
   Studie's (flashcard answers and marks, definitions, drill guesses, weeks marked as read, "in my own words"
-  notes, practice exams, my rating of the exam notes, deadlines marked done), Sprog's (grades and answers on
-  language cards, answers to the week's text), Skærmtid's (my category for one app or site) and Sure's (the
-  inputs on Scenarier and SU-vagt and a transaction's category on Forbrug, behind Sure's login). Studie's, Sprog's
+  notes, practice exams, my rating of the exam notes, deadlines marked done, the timer and its sessions, my goals
+  and my attendance), Sprog's (grades and answers on language cards, answers to the week's text and time spent on
+  languages), Skærmtid's (my category for one app or site) and Sure's (the inputs on SU-vagt and a transaction's
+  category on Forbrug, behind Sure's login). Studie's, Sprog's
   and Skærmtid's servers bind to `127.0.0.1`, answer only to Kompas' own host names (against DNS rebinding), accept
   writes only from Kompas' own origin, and validate every field before anything is saved.
-- **Phone without a server.** The study and language pages work offline on my phone as small PWAs. They download
-  today's cards while my Mac is reachable over Tailscale, and sync the answers back later without duplicates.
+- **Phone without a server.** The study, language and screen-time pages work offline on my phone as small PWAs. They
+  keep the latest data while my Mac is reachable over Tailscale, and sync answers and marks back later without
+  duplicates.
 - **Laptop with or without the Mac.** My laptop gets all of Kompas over Tailscale on its own port. When the Mac is
   off, the laptop shows a read-only copy instead: `bin/kopi.py` writes the pages and their data to a folder every
   half hour, Syncthing carries it over, and a small Caddy on the laptop (`baerbar/`) serves it, marked
   "Kopi fra …" in the frame. Nothing can be saved in the copy.
 - **AI where judgement is needed.** Scheduled Claude routines do the parts that need judgement: the weekly
   study plan, the 14-day training review, the weekly life review, new language cards with feedback on the
-  week's text, and a weekly screen-time review. They only write files that the projects then show; they never send or submit anything.
+  week's text, a weekly screen-time review and a monthly money review. They only write files that the projects then show; they never send or submit anything.
 
 The full architecture is in [docs/arkitektur.md](docs/arkitektur.md) (Danish). On my Mac each project is its own git
 repository; this public repository gathers them as folders, cleaned of personal data, so its history starts at
@@ -115,7 +117,7 @@ python3 demo/serve.py
 
 Then open http://localhost:8000. The demo generates made-up data around today's date, so the calendar,
 deadlines and countdowns look alive whenever you run it. The demo server refuses every write, so nothing is
-saved on disk; only Scenarier and SU-vagt keep what you type in your own browser, as they do when Sure is closed.
+saved on disk; only SU-vagt keeps what you type in your own browser, as they do when Sure is closed.
 Sure itself is not part of the demo (its menu items show a short explanation instead).
 
 ## The projects
@@ -222,9 +224,10 @@ Sure itself is not part of the demo (its menu items show a short explanation ins
   transactions. The change goes through Sure and does what Sure's own form does (locks the category so rules and
   bank syncs leave it alone); the page shows it at once and the next extract has it. "Uge for uge" shows variable
   spending for the last 12 weeks, from the weekly review.
-- **Scenarier** is a Monte Carlo simulation (1,000 runs) that samples my own variable spending from history,
-  models returns as log-normal, shows everything in today's money, and uses binary search to find the smallest
-  extra monthly saving that reaches a goal with 80 % probability.
+- **Tags** put a trip or an event on the spending between two dates, so it can be seen as one. **Fast betaling**
+  finds recurring payments, including yearly ones, price changes and cancelled subscriptions.
+- **Gennemgang** is the month against the budget per category, with a suggested new budget. `gennemgang.py` calculates the numbers, and a monthly
+  Claude routine writes the review from them.
 - **SU-vagt** knows the 2026 rules for the Danish student grant: the monthly income limits, converting net pay
   to taxable income, what an overshoot costs to pay back, and which months it pays to opt out of the grant.
 - One app starts everything (Caddy, LaunchAgents, Docker, Sure, bank sync, export), and one closes it again,

@@ -27,6 +27,15 @@ def _plan(nu: datetime, dage: list[int], time: int, minut: int, retning: int) ->
     raise ValueError("ingen tid i planen")
 
 
+def _maaned(nu: datetime, time: int) -> tuple[datetime, datetime]:
+    """Seneste og næste gang den 1. i måneden kl. time."""
+    d = nu.date().replace(day=1)
+    if datetime(d.year, d.month, 1, time).astimezone() > nu:
+        d = (d - timedelta(days=1)).replace(day=1)
+    n = (d + timedelta(days=32)).replace(day=1)
+    return datetime(d.year, d.month, 1, time).astimezone(), datetime(n.year, n.month, 1, time).astimezone()
+
+
 def _punkt(navn, type_, projekt, status, tekst, sidst=None, naeste=None, hjaelp=None, link=None) -> dict:
     p = {"navn": navn, "type": type_, "projekt": projekt, "status": status, "tekst": tekst}
     p |= {k: v for k, v in (("sidst", sidst and _iso(sidst)), ("naeste", naeste and _iso(naeste)),
@@ -72,6 +81,9 @@ def lav(ud: Path, idag: date) -> None:
         hvornaar = (UGEDAGE[dage[0]] if len(dage) == 1 else " og ".join(UGEDAGE[d] for d in dage)) + f" kl. {t:02d}.{m:02d}"
         claude.append(_punkt(navn, "Claude-rutine", projekt, "ok", f"{skriver} · hver {hvornaar}",
                              _plan(nu, dage, t, m, -1) + timedelta(minutes=9), _plan(nu, dage, t, m, 1)))
+    forrige, naeste = _maaned(nu, 7)
+    claude.append(_punkt("Økonomi", "Claude-rutine", "Økonomi", "ok", "månedens gennemgang · den 1. i måneden kl. 07.00",
+                         forrige + timedelta(minutes=9), naeste))
 
     drift = [
         _punkt("Caddy", "webserver", "Kompas", "ok", "serverer kompas.localhost"),
@@ -84,7 +96,7 @@ def lav(ud: Path, idag: date) -> None:
         _punkt("Tailscale", "VPN", "Kompas", "ok", "På farten på telefonen og hele Kompas på bærbaren"),
         _punkt("Kopi til bærbaren", "Syncthing", "Kompas", "ok", "bygget den sidste halve time; Syncthing sender den til bærbaren",
                sidste_halve + timedelta(seconds=40)),
-        _punkt("Backup", "mappe i skyen", "Kompas", "ok", "coach.db, liv.db, Sprogs data og ActivityWatch, 14 dage tilbage",
+        _punkt("Backup", "mappe i skyen", "Kompas", "ok", "coach.db, liv.db, Sprogs data, ActivityWatch og koden, 14 dage tilbage",
                for_(hours=9, minutes=3)),
     ]
 

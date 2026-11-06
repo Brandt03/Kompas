@@ -298,14 +298,14 @@ function dagsplan() {
       </div>
       ${d.plan.length ? `<ul class="dp-blokke">${d.plan.map(p => `<li><b>${kl(p.start)}–${kl(p.slut)} ${esc(p.fag || p.titel)}</b>: ${dpFaktisk(p.faktisk)}</li>`).join("")}</ul>` : ""}
     </div>`;
-  const legend = `<div class="legend" style="margin-top:12px"><span><i style="background:var(--undervisning)"></i>Undervisning</span><span><i style="box-shadow:inset 0 0 0 1.5px var(--text-secondary)"></i>Egen blok</span><span><i style="background:var(--selvstudie)"></i>Selvstudie (CalTask)</span><span><i style="background:var(--text-primary)"></i>Træning</span></div>
+  const legend = `<div class="legend" style="margin-top:12px"><span><i style="background:var(--undervisning)"></i>Undervisning</span><span><i style="box-shadow:inset 0 0 0 1.5px var(--text-secondary)"></i>Egen blok</span><span><i style="background:var(--selvstudie)"></i>Selvstudie</span><span><i style="background:var(--text-primary)"></i>Træning</span></div>
     <div class="legend" style="margin-top:6px"><span>Skærm:</span>${Object.entries(GRUPPEFARVE).map(([g, c]) => `<span><i style="background:${c}"></i>${g}</span>`).join("")}</div>`;
   return `<section class="card panel" id="planlagt"><div class="panel-head"><h2>Planlagt mod faktisk</h2><span class="meta">de seneste ${D.length} døgn til i dag, kl. 6 til kl. 2 · ikke den valgte uge</span></div>
     <p class="meta" style="margin:0 0 12px">Gælder de seneste ${D.length} døgn til i dag, uanset hvilken uge der er valgt ovenfor. Dagens blokke med det faktiske står også på I dag.</p>
     ${D.slice(0, 7).map(dag).join("")}
     ${D.length > 7 ? `<details style="margin-top:14px"><summary class="meta">De 7 døgn før</summary><div style="margin-top:12px">${D.slice(7).map(dag).join("")}</div></details>` : ""}
     ${legend}
-    <p class="meta" style="margin:10px 0 0">Plan er undervisningen og dine egne blokke i kalenderen. Skærm er Skærmtids største kategori pr. kvarter; Logget er det, CalTask har logget som selvstudie, og Garmins pas. Minutterne under hver blok er regnet af overblik.</p></section>`;
+    <p class="meta" style="margin:10px 0 0">Plan er undervisningen og dine egne blokke i kalenderen. Skærm er Skærmtids største kategori pr. kvarter; Logget er dit selvstudie fra timeren i Kompas og Garmins pas. Minutterne under hver blok er regnet af overblik.</p></section>`;
 }
 
 function render() {

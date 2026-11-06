@@ -37,6 +37,11 @@
   textarea, input.gaet, select { width: 100%; font: inherit; font-size: 16px; line-height: 1.5; color: var(--text-primary); background: var(--container-inset); border: 0; box-shadow: inset 0 0 0 1px var(--divider); border-radius: 10px; padding: 11px 13px; }
   select { width: auto; max-width: 100%; font-size: 14px; padding: 8px 10px; background: var(--container); box-shadow: var(--shadow-border-xs); }
   textarea { min-height: 96px; resize: vertical; }
+  textarea.tanker { min-height: 88px; font-size: 15px; }
+  .sik { display: grid; grid-template-columns: minmax(0, 1fr) 52px; gap: 10px; align-items: center; }
+  .sik input[type=range] { width: 100%; margin: 0; height: 32px; }
+  .sik input.urort { opacity: .4; }
+  .sik .tal { font-variant-numeric: tabular-nums; text-align: right; }
   input.gaet { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 16px; }
   textarea:focus, input.gaet:focus { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
   .q { padding: 18px 16px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
@@ -99,7 +104,10 @@ const fagI = id => P?.fag?.find(f => f.id === id) || null;
 const fagKort = id => fagI(id)?.kort || id;
 const TYPENAVN = { genkald: "Genkald", begreb: "Begreb", drill: "Drill", eksamen: "Eksamen" };
 const FANENAVN = { idag: "Dagens kort", genkald: "Genkald", begreber: "Begreber", drills: "Drills", egne: "I egne ord", overblik: "Overblik" };
-const SIK = [["sikker", "Sikker"], ["usikker", "Usikker"], ["gaet", "Gætter"]];
+// Sikkerhed: hvor sandsynligt du tror, dit svar er rigtigt, 0-100 % i trin af 10, før svaret vises. Skyderen har ingen
+// startværdi, for en 50 %, du ikke har rørt, ville ligne en, du har valgt. Rød ved 0 %, grøn ved 100 % (som genkald.html).
+const sikFarve = p => `color-mix(in oklab, var(--success) ${p}%, var(--destructive))`;
+const sikTal = p => p == null ? "" : `<b style="color:${sikFarve(p)}">${p} %</b>`;
 const MK = { "✓": "sad", "~": "halvt", "✗": "blankt" };
 // Karakter efter et forsøg, som i FSRS: 4 let, 3 sad, 2 halvt, 1 blankt. Let og Sad står begge som [✓] i filen.
 const KAR = [[4, "sad", "✓ Let"], [3, "sad", "✓ Sad"], [2, "halvt", "~ Halvt"], [1, "blankt", "✗ Blankt"]];
@@ -194,7 +202,7 @@ async function synk(stille) {
 // næste uges forelæsninger og øvelser fra Fag; de hentes kun første gang, og andre uger, når de er åbnet én gang.
 function varm() {
   if (!navigator.serviceWorker?.controller) return;
-  for (const p of ["/studie/", "/studie/fag.html", "/studie/deadlines.html", "/studie/usb.html", "/studie/fagnoter.json", "/studie/kalender.json",
+  for (const p of ["/studie/", "/studie/fag.html", "/studie/deadlines.html", "/studie/usb.html", "/studie/fagnoter.json", "/studie/resumeer.json", "/studie/kalender.json",
     "/studie/api/laest", "/studie/api/genkald", "/studie/api/usb-vurdering"])
     fetch(p, { cache: "no-store" }).catch(() => {});
   const uger = [isoUgeNu(), isoUgeNu(new Date(Date.now() + 7 * 864e5))];
@@ -231,11 +239,11 @@ let senere = [];   // "Tag den senere": kort, der er skubbet bagud i denne omgan
 const sorter = ks => [...ks.filter(k => !senere.includes(k.id)), ...senere.map(id => ks.find(k => k.id === id)).filter(Boolean)];
 const kortTilbage = () => P ? sorter(P.kort.filter(k => !gjort[k.id])) : [];
 const ekstraTilbage = () => P ? sorter(P.ekstra.filter(k => !gjort[k.id])) : [];
-const st = { idag: { cur: null, vist: false, sik: null }, genkald: { cur: null, vist: false, sik: null } };
+const st = { idag: { cur: null, vist: false, pct: null }, genkald: { cur: null, vist: false, pct: null } };
 
 function renderKort(f) {
   const s = st[f], ks = f === "idag" ? kortTilbage() : ekstraTilbage(), k = ks[0];
-  if (!k || s.cur !== k.id) { s.cur = k?.id || null; s.vist = false; s.sik = null; }
+  if (!k || s.cur !== k.id) { s.cur = k?.id || null; s.vist = false; s.pct = null; }
   aaben = s.vist;
   const iDag = koe.filter(p => p.type === "repetition" && new Date(p.tid).toDateString() === new Date().toDateString()).length;
   const klaret = (new Date(P.genereret).toDateString() === new Date().toDateString() ? P.statistik?.klaret_i_dag || 0 : 0) + iDag, ialt = klaret + ks.length;
@@ -256,32 +264,43 @@ function renderKort(f) {
   }
   const kk = `${f}:${k.id}`, svar = k.facit;
   root().innerHTML = top + `<section class="card q">
-    <div class="kicker"><span class="mk">${TYPENAVN[k.type]}</span><span>${esc(k.kicker)}</span>${k.ny ? `<span class="mk">ny</span>` : ""}${k.mark ? `<span class="mk ${MK[k.mark]}">${k.mark}</span>` : ""}</div>
+    <div class="kicker"><span class="mk">${TYPENAVN[k.type]}</span><span>${esc(s.vist ? k.kicker : k.kicker.split(" · ")[0])}</span>${k.ny ? `<span class="mk">ny</span>` : ""}${k.mark ? `<span class="mk ${MK[k.mark]}">${k.mark}</span>` : ""}</div>
     ${k.type === "begreb" ? `<div class="begreb">${esc(k.titel)}</div>` : `<div class="titel">${esc(k.titel)}</div>`}
     <div class="spm md">${md(k.spoergsmaal)}</div>
     ${k.kontekst ? `<div class="lbl-sm">Fra filen</div><pre class="kode">${esc(k.kontekst)}</pre>` : ""}
     ${k.udtryk ? `${k.kontekst ? `<div class="lbl-sm">Udtrykket</div>` : ""}<pre class="kode">${esc(k.udtryk)}</pre>` : ""}
     <textarea id="k-svar" placeholder="${k.type === "drill" ? "Dit gæt …" : "Svar fra hukommelsen, eller sig det i hovedet …"}"${k.type === "drill" ? ' autocapitalize="off" autocorrect="off" spellcheck="false" style="min-height:52px"' : ""}>${esc(kladde.hent(kk))}</textarea>
+    <textarea id="k-tanker" class="tanker" placeholder="Tænk højt (valgfrit): hvordan kom du frem til det, og hvad er du i tvivl om? Mikrofonen på tastaturet dikterer.">${esc(kladde.hent(kk + ":t"))}</textarea>
     ${s.vist ? `<div class="facit"><div class="lbl">${k.type === "genkald" || k.type === "eksamen" ? "Facit" : k.type === "begreb" ? "Dine egne ord" : "JavaScript giver"}</div>
         ${!svar ? `<div>Facit kom ikke med i pakken.</div>` : svar.form === "md" ? `<div class="md">${md(svar.svar || "Der er ingen facit.")}</div>` : svar.form === "kode" ? `<pre class="kode" style="background:none;padding:0">${esc(svar.svar ?? "")}</pre>` : `<div>${esc(svar.svar || "")}</div>`}
         ${svar?.se ? `<div class="lbl" style="margin-top:10px">${esc(svar.se_navn || "Hvad det får dig til at se")}</div><div>${esc(svar.se)}</div>` : ""}
         ${svar?.forklaring ? `<div class="lbl" style="margin-top:10px">Hvorfor</div><div class="md">${md(svar.forklaring)}</div>` : ""}</div>
-      <div class="lbl-sm">Hvordan gik det? <span style="color:var(--text-subdued)">· du sagde ${esc(SIK.find(([x]) => x === s.sik)?.[1].toLowerCase() || "")}</span></div>
+      <div class="lbl-sm">Hvordan gik det? <span style="color:var(--text-subdued)">· du sagde ${sikTal(s.pct)}</span></div>
       ${k.type === "drill" ? `<div class="grid">${karKnapper(KAR_DRILL)}</div>` : `<div class="grid" style="grid-auto-flow:row;grid-template-columns:1fr 1fr">${karKnapper(KAR)}</div>`}`
-    : `<div class="lbl-sm">Hvor sikker er du? Så vises ${k.type === "begreb" ? "det, du skrev" : "svaret"}.</div>
-      <div class="grid">${SIK.map(([x, t], i) => `<button type="button" class="btn${i ? " ghost" : ""}" data-sik="${x}">${t}</button>`).join("")}</div>
+    : `<div class="lbl-sm">Hvor sikker er du på dit svar? Så vises ${k.type === "begreb" ? "det, du skrev" : "svaret"}.</div>
+      <div class="sik"><input type="range" min="0" max="100" step="10" value="${s.pct ?? 50}" data-skyder aria-label="Sikkerhed i procent"${s.pct == null ? ' class="urort"' : ` style="accent-color:${sikFarve(s.pct)}"`}>
+        <span class="tal" data-sik-tal>${s.pct == null ? "–" : sikTal(s.pct)}</span></div>
+      <div class="grid"><button type="button" class="btn" data-vis${s.pct == null ? " disabled" : ""}>Vis svar</button><button type="button" class="btn ghost" data-kan-ikke>Kan ikke</button></div>
       <div class="row"><span class="spacer"></span><button type="button" class="btn quiet" data-senere>Tag den senere</button></div>`}
   </section>`;
-  const ta = document.getElementById("k-svar");
+  const ta = document.getElementById("k-svar"), tk = document.getElementById("k-tanker");
   ta.oninput = () => kladde.gem(kk, ta.value);
+  tk.oninput = () => kladde.gem(kk + ":t", tk.value);
+}
+function sætSik(el) {
+  const f = fane === "idag" || fane === "genkald" ? fane : null; if (!f) return;
+  const p = st[f].pct = +el.value;
+  el.classList.remove("urort"); el.style.accentColor = sikFarve(p);
+  el.parentElement.querySelector("[data-sik-tal]").innerHTML = sikTal(p);
+  root().querySelectorAll("[data-vis]").forEach(b => b.disabled = false);
 }
 function kortMarker(f, karakter) {
   const s = st[f], k = (f === "idag" ? kortTilbage() : ekstraTilbage())[0]; if (!k) return;
-  const kk = `${f}:${k.id}`, svar = document.getElementById("k-svar")?.value || "";
-  iKoe("repetition", k.id, { noegle: k.id, karakter: +karakter, sikkerhed: s.sik, svar: k.type === "genkald" ? svar : undefined },
+  const kk = `${f}:${k.id}`, svar = document.getElementById("k-svar")?.value || "", tanker = document.getElementById("k-tanker")?.value || "";
+  iKoe("repetition", k.id, { noegle: k.id, karakter: +karakter, procent: s.pct, tanker, svar: k.type === "genkald" ? svar : undefined },
     { titel: k.titel, type: k.type });
   // Samme kort kan stå i begge lister (fx når pakken er gammel); det tæller som gjort begge steder
-  kladde.gem(kk, ""); senere = senere.filter(id => id !== k.id); s.cur = null; aaben = false;
+  kladde.gem(kk, ""); kladde.gem(kk + ":t", ""); senere = senere.filter(id => id !== k.id); s.cur = null; aaben = false;
   vis(); window.scrollTo({ top: 0 });
 }
 
@@ -445,19 +464,20 @@ const OVERBLIK = [
   ["Studie", [
     ["#egne", "pencil", "I egne ord", "Forklar ugens stof med dine egne ord. Virker uden net og sendes med de andre svar"],
     ["/studie/", "calendar", "Ugeoverblik", "Ugens undervisning dag for dag, det vigtigste i ugen og frister to uger frem"],
-    ["/studie/fag.html", "book-open", "Fag", "Køreplan, forelæsninger, øvelser og fagnoter pr. fag og uge, og Styr på (marker en uge som læst)"],
-    ["/studie/deadlines.html", "clipboard-check", "Frister", "Alle frister og eksamener; marker en frist som færdig"],
-    ["/studie/usb.html", "hard-drive", "USB-noter", "Fagnoterne til USB'en uge for uge; vurdér en uge (brugbar, for meget, mangler noget). Vurderingen kræver, at Mac'en er vågen"],
-    ["/studie/eksamen.html", "file-text", "Eksamen", "Prøveeksamener pr. fag. Kun mens Mac'en er vågen"],
-    ["/studie/selvstudie.html", "pie-chart", "Selvstudie", "Tiden pr. fag mod kursusbeskrivelsens timer. Kun mens Mac'en er vågen"],
+    ["/studie/fag.html", "book-open", "Fag", "Køreplan, forelæsninger, øvelser og fagnoter pr. fag og uge, og Styr på (marker en uge som læst, også uden net)"],
+    ["/studie/deadlines.html", "clipboard-check", "Frister", "Alle frister og eksamener; marker en frist som færdig, også uden net"],
+    ["/studie/usb.html", "hard-drive", "USB-noter", "Fagnoterne til USB'en uge for uge; vurdér en uge (brugbar, for meget, mangler noget). Uden net sendes vurderingen, når Mac'en svarer"],
+    ["/studie/eksamen.html", "file-text", "Eksamen", "Prøveeksamener pr. fag. Uden net kan du læse sættene, du har åbnet før; svar kræver Mac'en"],
+    ["/studie/selvstudie.html", "pie-chart", "Selvstudie", "Tiden pr. fag mod kursusbeskrivelsens timer. Uden net de sidst hentede tal"],
+    ["/studie/semestre.html", "calendar-range", "Semestre", "Alle semestre samlet: selvstudie pr. fag, saldo og medaljer. Uden net de sidst hentede tal"],
   ]],
   ["Sprog", [
     ["/sprog/mobil.html", "languages", "Sprog", "Dagens sprogkort og ugens tekst. Virker uden net og sender svarene bagefter"],
-    ["/sprog/", "chart-bar", "Sprogoversigt", "Niveau, lærte kort og ugens tekst pr. sprog. Kun mens Mac'en er vågen"],
-    ["/sprog/regler.html", "book-open", "Regler", "Grammatikken bag kortene. Kun mens Mac'en er vågen"],
+    ["/sprog/", "chart-bar", "Sprogoversigt", "Niveau, lærte kort og ugens tekst pr. sprog. Uden net de sidst hentede"],
+    ["/sprog/regler.html", "book-open", "Regler", "Grammatikken bag kortene, også uden net"],
   ]],
   ["Skærmtid", [
-    ["/skaermtid/", "clock", "Skærmtid", "Hvor tiden går hen på alle enheder, korte tjek, kategorier, og hvad du bruger hver enhed til. Kun mens Mac'en er vågen"],
+    ["/skaermtid/", "clock", "Skærmtid", "Hvor tiden går hen på alle enheder, korte tjek, kategorier, og hvad du bruger hver enhed til. Uden net de sidst byggede tal; kategorier vælges, mens Mac'en er vågen"],
   ]],
 ];
 function renderOverblik() {
@@ -489,10 +509,13 @@ document.getElementById("faner").addEventListener("click", e => {
   fane = b.dataset.fane; history.replaceState(null, "", "#" + fane); vis(); window.scrollTo({ top: 0 });
 });
 document.getElementById("synk").addEventListener("click", () => synk(false));
+// Skyderen tæller som valgt, så snart du rører den, også hvis du lader den stå på 50 %
+root().addEventListener("input", e => { if (e.target.matches("[data-skyder]")) sætSik(e.target); });
+root().addEventListener("pointerup", e => { if (e.target.matches("[data-skyder]")) sætSik(e.target); });
 root().addEventListener("click", e => {
   const t = e.target.closest("button"); if (!t) return;
   const f = fane === "idag" || fane === "genkald" ? fane : null;
-  if (t.dataset.sik && f) { st[f].sik = t.dataset.sik; st[f].vist = true; renderKort(f); }
+  if ((t.hasAttribute("data-vis") || t.hasAttribute("data-kan-ikke")) && f) { if (t.hasAttribute("data-kan-ikke")) st[f].pct = 0; st[f].vist = true; renderKort(f); }
   else if (t.dataset.kar && f) kortMarker(f, t.dataset.kar);
   else if (t.hasAttribute("data-senere") && f) { const k = (f === "idag" ? kortTilbage() : ekstraTilbage())[0]; if (k) { senere = [...senere.filter(id => id !== k.id), k.id]; renderKort(f); } }
   else if (t.dataset.bfag) { bFag = t.dataset.bfag; lager.gem("bfag", bFag); bCur = null; renderBegreber(); }

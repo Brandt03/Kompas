@@ -1,11 +1,13 @@
-"""Demodata for Økonomi (/forbrug/): Forbrug, Scenarier og SU-vagt for den opdigtede studerende Alex.
+"""Demodata for Økonomi (/forbrug/): Forbrug, SU-vagt og Gennemgang for den opdigtede studerende Alex.
 
 lav(ud, idag) skriver under ud/forbrug/:
   data.json            i samme form som okonomi/dashboard/export.sh trækker ud af Sure: konti, opsparingsmål,
-                       budgetter, kategorierne og posteringerne (med id) fra den 1. for 12 måneder siden til idag
+                       budgetter (også pr. kategori), faste betalinger, kategorierne og posteringerne (med id og
+                       tags) fra den 1. for 12 måneder siden til idag
   config.json          Forbrug-sidens personlige indstillinger (flyttemåned og banktekst -> modtager)
   state/su.json        SU-vagtens gemte forudsætninger (trækprocent, forventet løn og et par lønsedler)
-  state/scenarier.json Scenariers gemte valg (job efter studiet, sabbatår, engangsudgift, afkast osv.)
+  gennemgang/gennemgange.json  de seneste tre månedsgennemgange: tallene regnes af okonomi/dashboard/gennemgang.py,
+                       teksten skrives her ud fra de tal, som rutinen ellers ville skrive den
   kompas.json          menuen, kopieret fra okonomi/dashboard/public/kompas.json
 
 Alex studerer i København, får SU som udeboende, har et studiejob og er flyttet på et tidspunkt i løbet af året.
@@ -26,15 +28,18 @@ frisør er opdigtede. Som i Sure er udgifter positive og indtægter negative. Ku
 from __future__ import annotations
 
 import bisect
+import importlib.util
 import json
 import os
 import random
+import re
 import uuid
 from datetime import date, timedelta
 from pathlib import Path
 
 ROD = Path(__file__).resolve().parents[2]
 KOMPAS_JSON = ROD / "okonomi" / "dashboard" / "public" / "kompas.json"
+GENNEMGANG_PY = ROD / "okonomi" / "dashboard" / "gennemgang.py"
 _KOMPAS = Path(os.environ.get("KOMPAS_HOME", str(Path.home() / "kompas")))
 # Rigtige udtræk, demoen holder sig fra (kun læsning): FORBRUG_RIGTIG_DATA, ellers de sædvanlige steder
 RIGTIGE_DATA = [os.environ.get("FORBRUG_RIGTIG_DATA"),
@@ -59,6 +64,8 @@ ARBEJDSGIVERE = ["Kvadrat Data ApS", "Brobyg Consulting ApS", "Tidevand Studio A
                  "Saltværket Software ApS"]
 FORSIKRINGER = ["Lindholm Forsikring", "Fjordsikring", "Nordkap Forsikring"]
 BOLIGTYPER = ["kollegieværelse", "værelse", "lejlighed"]
+MAANEDER = ["januar", "februar", "marts", "april", "maj", "juni", "juli", "august", "september", "oktober",
+            "november", "december"]
 
 KÆDER = [
     ["NETTO", "Netto"], ["REMA ?1000", "Rema 1000"], ["LIDL", "Lidl"], ["F(OE|Ø)TEX", "Føtex"],
@@ -246,7 +253,13 @@ def profil(r: random.Random, vagt: Vagt, idag: date) -> dict:
     ungdomskort = r.random() < 0.7
     if ungdomskort:
         faste.append(("DOT Ungdomskort", traek(r, vagt, 320, 590), "Transport", LOENKONTO, r.randint(1, 4)))
+    # Til Faste betalinger: én tjeneste, der steg sidste måned, ét abonnement, der er opsagt, og én årlig betaling
+    steg = r.choice([i for i, f in enumerate(faste) if f[2] == "Streaming"])
     return {
+        "prisstigning": (steg, frit_opad(vagt, float(round(faste[steg][1] * r.uniform(1.08, 1.13))))),
+        "opsagt": (r.choice(["Deezer", "Storytel"]), traek(r, vagt, 79, 149), r.randint(1, 28), r.randint(3, 4)),
+        "aarlig": (f"BS {r.choice(FORSIKRINGER)} ulykke", traek(r, vagt, 420, 980), r.randint(1, 8)),
+        "weekend": (plus_maaneder(idag.year, idag.month, -r.randint(1, 4)), r.randint(4, 20)),
         "flyt": plus_maaneder(idag.year, idag.month, -r.randint(2, 11)),
         "fra": bolig(r, vagt, fra_type, fra_omr), "til": bolig(r, vagt, til_type, til_omr),
         "trk": r.choice(TRK),
@@ -300,10 +313,11 @@ def posteringer(r: random.Random, vagt: Vagt, p: dict, idag: date) -> tuple[list
     ud: list[dict] = []
     brutto: dict[str, float] = {}
 
-    def post(d: date, beloeb: float, navn: str, kategori: str, gruppe: str, konto: str = LOENKONTO) -> None:
+    def post(d: date, beloeb: float, navn: str, kategori: str, gruppe: str, konto: str = LOENKONTO,
+             tags: tuple = ()) -> None:
         if start <= d <= idag:
             ud.append({"date": d.isoformat(), "amount": round(beloeb, 2), "name": navn, "account": konto,
-                       "category": kategori, "group": gruppe, "merchant": None})
+                       "category": kategori, "group": gruppe, "merchant": None, "tags": list(tags)})
 
     def antal(snit: float) -> int:          # et antal omkring snit, aldrig negativt
         return max(0, int(round(r.gauss(snit, max(1.0, snit * 0.45)))))
@@ -368,8 +382,15 @@ def posteringer(r: random.Random, vagt: Vagt, p: dict, idag: date) -> tuple[list
         post(bankdag_efter(dag(1)), b["husleje"], b["tekst"], "Husleje", FAST, BUDGETKONTO)
         if b["internet"]:
             post(dag(3), b["internet"][1], b["internet"][0], "Mobil og internet", FAST, BUDGETKONTO)
-        for navn, beloeb, kat, konto, d in p["faste"]:
-            post(dag(d), beloeb, navn, kat, FAST, konto)
+        steget = (y, m) >= plus_maaneder(idag.year, idag.month, -1)
+        for i, (navn, beloeb, kat, konto, d) in enumerate(p["faste"]):
+            post(dag(d), p["prisstigning"][1] if steget and i == p["prisstigning"][0] else beloeb, navn, kat, FAST, konto)
+        navn, beloeb, d, stop = p["opsagt"]
+        if (y, m) <= plus_maaneder(idag.year, idag.month, -stop):
+            post(dag(d), beloeb, navn, "Streaming", FAST)
+        navn, beloeb, d = p["aarlig"]
+        if (y, m) in (plus_maaneder(idag.year, idag.month, -12), plus_maaneder(idag.year, idag.month, -1)):
+            post(dag(d), beloeb, navn, "Forsikringer", FAST, BUDGETKONTO)   # 11 måneder imellem, så den ses som årlig
         if not p["ungdomskort"]:
             for _ in range(r.randint(1, 4)):
                 post(en_dag(), traek(r, vagt, 90, 350), "REJSEKORT optankning", "Transport", FAST)
@@ -426,10 +447,19 @@ def posteringer(r: random.Random, vagt: Vagt, p: dict, idag: date) -> tuple[list
             rest = p["rejse"]
             for navn in ("Ryanair", "Hostelworld", "Supermercado Lisboa", "Uber"):
                 del_ = rest * r.uniform(0.25, 0.6) if navn != "Uber" else rest
-                post(dag(r.randint(1, 20)), del_, navn, "Ferie og rejser", VAR)
+                post(dag(r.randint(1, 20)), del_, navn, "Ferie og rejser", VAR, tags=(f"Lissabon {y}",))
                 rest -= del_
         elif r.random() < 0.15:
             post(en_dag(), round(r.uniform(180, 690)), "DSB", "Ferie og rejser", VAR)
+
+        # En weekend i Aarhus, tagget som begivenhed
+        if (y, m) == p["weekend"][0]:
+            d = p["weekend"][1]
+            tur = ("Weekend i Aarhus",)
+            post(dag(d), round(r.uniform(190, 340)), "DSB", "Ferie og rejser", VAR, tags=tur)
+            post(dag(d + 1), round(r.uniform(420, 890)), "Hostel Aaen", "Ferie og rejser", VAR, tags=tur)
+            post(dag(d + 1), round(r.uniform(180, 420)), "Restaurant Kajen", "Café og bar", VAR, tags=tur)
+            post(dag(d + 2), round(r.uniform(190, 340)), "DSB", "Ferie og rejser", VAR, tags=tur)
 
         # Indflytning: flyttebil og møbler i flyttemåneden, lidt mere måneden efter
         if (y, m) == p["flyt"]:
@@ -447,23 +477,164 @@ def posteringer(r: random.Random, vagt: Vagt, p: dict, idag: date) -> tuple[list
     return ud, brutto
 
 
-def scenarier(r: random.Random, idag: date) -> dict:
-    """Scenariers gemte valg i samme form, som siden gemmer dem (det, der afviger fra standarden). Tilfældige, men
-    inden for det, en studerende plausibelt ville taste: jobbet efter studiet giver overskud, og sabbatåret er kort."""
-    om = lambda lav, hoej: ym(*plus_maaneder(idag.year, idag.month, r.randint(lav, hoej)))  # noqa: E731
-    jobloen = r.randint(420, 640) * 50
-    return {
-        "years": r.randint(6, 20), "infl": r.choice([1.5, 2, 2.5, 3]), "incomeInfl": True,
-        "cashRate": r.choice([0.5, 0.75, 1, 1.25, 1.5, 2]), "investShare": r.choice([0, 10, 20, 30, 40, 50, 60]),
-        "ret": r.choice([4, 4.5, 5, 5.5, 6, 6.5, 7]), "vol": r.randint(10, 20), "overrun": r.choice([-10, -5, 0, 5, 10]),
-        "job": {"on": r.random() < 0.85, "from": om(26, 60), "income": jobloen,
-                "spend": jobloen - r.randint(110, 220) * 50},
-        "sabbat": {"on": r.random() < 0.3, "from": om(8, 30), "months": r.randint(3, 9),
-                   "income": r.randint(30, 90) * 100, "spend": r.randint(70, 115) * 100, "delays": r.random() < 0.6},
-        "oneoff": {"on": r.random() < 0.6, "date": om(3, 20), "amount": r.randint(8, 40) * 500,
-                   "label": r.choice(["Udveksling", "Ny computer", "Rejse", "Depositum", "Kørekort"])},
-        "saved_at": tidspunkt(r, idag - timedelta(days=r.randint(2, 40))) + "+02:00",
-    }
+# ---------- faste betalinger ----------
+def faste_betalinger(tx: list[dict], idag: date) -> dict:
+    """Det samme som `faste` i export.sh, bare på posteringerne her: samme modtager og kategori i mindst 3 af 6 måneder
+    (højst 1,5 gang om måneden) eller én gang om året, og omtrent samme beløb de sidste gange."""
+    pr_modtager: dict[tuple, list[dict]] = {}
+    for t in tx:
+        if t["amount"] > 0 and t["group"] != IND:
+            pr_modtager.setdefault((t["name"], t["category"]), []).append(t)
+
+    def median(v: list[float]) -> float:
+        v = sorted(v)
+        return (v[(len(v) - 1) // 2] + v[len(v) // 2]) / 2
+
+    betalinger = []
+    for ps in pr_modtager.values():
+        ps = sorted(ps, key=lambda t: t["date"], reverse=True)
+        senest = date.fromisoformat(ps[0]["date"])
+        fra = ym(*plus_maaneder(senest.year, senest.month, -5))
+        seks = [t for t in ps if t["date"][:7] >= fra]
+        maaneder = {t["date"][:7] for t in seks}
+        huller = [(date.fromisoformat(a["date"]) - date.fromisoformat(b["date"])).days for a, b in zip(ps, ps[1:])]
+        if len(maaneder) >= 3 and len(seks) <= 1.5 * len(maaneder):
+            interval, tidligere, frist, maaneder_frem = "måned", seks[1:], 45, 1
+        elif huller and min(huller) >= 300 and max(huller) <= 400:
+            interval, tidligere, frist, maaneder_frem = "år", ps[1:], 400, 12
+        else:
+            continue
+        sidste3 = [t["amount"] for t in ps[:3]]
+        m3 = median(sidste3)
+        if min(sidste3) < 0.85 * m3 or max(sidste3) > 1.15 * m3:
+            continue
+        beloeb = ps[0]["amount"]
+        foer = median([t["amount"] for t in tidligere]) if tidligere else None
+        aktiv = (idag - senest).days <= frist
+        if not aktiv and (idag - senest).days > 365:
+            continue
+        ny_y, ny_m = plus_maaneder(senest.year, senest.month, maaneder_frem)
+        naeste = date(ny_y, ny_m, min(senest.day, sidste_dag(ny_y, ny_m).day))
+        betalinger.append({
+            "navn": ps[0]["name"], "merchant": None, "kategori": ps[0]["category"], "gruppe": ps[0]["group"],
+            "interval": interval, "beloeb": beloeb,
+            "foer": foer if foer is not None and abs(beloeb - foer) > max(0.05 * foer, 1) else None,
+            "sidst": senest.isoformat(), "naeste": naeste.isoformat() if aktiv else None, "aktiv": aktiv,
+            "antal": len(ps), "foerste": ps[-1]["date"],
+            "sidste_aar": round(sum(t["amount"] for t in ps if (idag - date.fromisoformat(t["date"])).days < 365), 2),
+        })
+    betalinger.sort(key=lambda f: f["sidst"], reverse=True)
+    betalinger.sort(key=lambda f: (not f["aktiv"], -f["beloeb"] if f["aktiv"] else 0))
+    pr_maaned = sum(f["beloeb"] if f["interval"] == "måned" else f["beloeb"] / 12 for f in betalinger if f["aktiv"])
+    return {"pr_maaned": round(pr_maaned, 2), "betalinger": betalinger}
+
+
+# ---------- budget pr. kategori ----------
+def kategori_budgetter(r: random.Random, vagt: Vagt, tx: list[dict], p: dict, hele: set, variabel: float, fast: float,
+                       maaneder: list[str]) -> list[dict]:
+    """Budgettet pr. kategori, som i export.sh: underkategorierne lægger sig til gruppens budget. Faste følger
+    regningerne; de variable ligger omkring snittet, og nogle skævt nok til, at Gennemgang foreslår et nyt."""
+    til = p["til"]
+    fast_kat: dict[str, float] = {"Husleje": til["husleje"]}
+    if til["internet"]:
+        fast_kat["Mobil og internet"] = til["internet"][1]
+    for _, beloeb, kat, _, _ in p["faste"]:
+        fast_kat[kat] = fast_kat.get(kat, 0) + beloeb
+
+    snit: dict[str, float] = {}
+    for t in tx:
+        if t["group"] == VAR and t["date"][:7] in hele:
+            snit[t["category"]] = snit.get(t["category"], 0) + t["amount"] / max(len(hele), 1)
+    vaegt = {k: max(v, 1) * r.uniform(0.6, 1.3) for k, v in snit.items()}
+    i_alt = sum(vaegt.values()) or 1
+    stoerst = max(vaegt, key=vaegt.get, default=None)
+    var_kat = {k: vaek_fra_rigtige(vagt, round(v / i_alt * variabel / 25) * 25, r, 25) for k, v in vaegt.items() if k != stoerst}
+    if stoerst:
+        var_kat[stoerst] = vaek_fra_rigtige(vagt, variabel - sum(var_kat.values()), r, 25)
+
+    ud = []
+    for maaned in maaneder:
+        for gruppe, gruppe_budget, kat in ((FAST, fast, fast_kat), (VAR, variabel, var_kat)):
+            ud.append({"month": maaned, "category": gruppe, "group": gruppe, "budget": gruppe_budget})
+            ud += [{"month": maaned, "category": k, "group": gruppe, "budget": v} for k, v in sorted(kat.items())]
+    return ud
+
+
+# ---------- månedens gennemgang ----------
+def _gennemgang_py():
+    """okonomi/dashboard/gennemgang.py, så tallene regnes med præcis samme kode som på den rigtige side."""
+    spec = importlib.util.spec_from_file_location("okonomi_gennemgang", GENNEMGANG_PY)
+    modul = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(modul)
+    return modul
+
+
+def kr(x: float) -> str:
+    return f"{round(x):,} kr".replace(",", ".")
+
+
+def dato(s: str) -> str:
+    return f"{int(s[8:])}. {MAANEDER[int(s[5:7]) - 1]}"
+
+
+def paen(f: dict) -> str:
+    """Bankteksten skrevet pænt, som rutinen gør det."""
+    return next((navn for moenster, navn in KÆDER if re.search(moenster, f["navn"], re.I)), f["navn"].removeprefix("BS "))
+
+
+def gennemgang_tekst(tal: dict, r: random.Random) -> dict:
+    """Teksten, rutinen ellers skriver, ud fra de færdige tal. Den regner ikke selv."""
+    y, m = map(int, tal["maaned"].split("-"))
+    navn = MAANEDER[m - 1].capitalize()
+    f = tal["forbrug"]
+    over = [k for k in tal["kategorier"] if (k["afvigelse"] or 0) > 0 and k["gruppe"] == VAR]
+    if f["afvigelse"] is None:
+        saetning = f"{navn} kostede {kr(f['i_alt'])}., og der stod intet budget."
+    elif f["afvigelse"] > 0:
+        saetning = f"{navn} endte {kr(f['afvigelse'])}. over budgettet" + (f", mest på {over[0]['kategori'].lower()}." if over else ".")
+    else:
+        saetning = f"{navn} holdt sig {kr(-f['afvigelse'])}. under budgettet."
+
+    punkter = [f"Forbrug {kr(f['i_alt'])}." + (f" Budgettet var {kr(f['budget'])}." if f["budget"] is not None else "")
+               + (f" Snittet de tre måneder før var {kr(f['snit_3_mdr_foer'])}." if f["snit_3_mdr_foer"] is not None else ""),
+               f"Indtægter {kr(tal['indtaegter']['i_alt'])}., netto {kr(tal['netto'])}."]
+    if over:
+        k = over[0]
+        punkter.append(f"{k['kategori']} trak mest over: {kr(k['brugt'])}. mod {kr(k['budget'])}.")
+    if tal["tags"]:
+        t = tal["tags"][0]
+        punkter.append(f"{t['tag']} kostede {kr(t['brugt'])}. i måneden.")
+    for g in tal["maal"]:
+        punkter.append(f"{g['navn']}: {kr(g['saldo_nu'])}. nu, {kr(g['mangler'])}. fra målet.")
+
+    forslag = [k for k in tal["kategorier"] if k["forslag_budget"] is not None and k["naeste_budget"] != k["forslag_budget"]]
+    budget = [f"{k['kategori']}: budget {kr(k['budget'])}., snit {kr(k['snit_3_mdr'])}. de sidste tre måneder → {kr(k['forslag_budget'])}."
+              for k in forslag[:4]] or ["Budgettet passer til forbruget; ingen forslag denne gang."]
+
+    fb = tal["faste"]
+    faste = [f"{paen(b)} er ny: {kr(b['beloeb'])}." for b in fb["nye"]]
+    faste += [f"{paen(b)} {'steg' if b['beloeb'] > b['foer'] else 'faldt'} fra {kr(b['foer'])}. til {kr(b['beloeb'])}."
+              for b in fb["prisaendringer"]]
+    # rapporten ser dem fra i dag; den gamle husleje er væk med flytningen, og resten stoppede før denne måned
+    faste += [f"{paen(b)} er ikke betalt siden {dato(b['sidst'])}. Er den opsagt?" for b in fb["ikke_betalt_siden"]
+              if b["kategori"] != "Husleje" and b["sidst"][:7] < tal["maaned"]]
+
+    en_ting = (f"Ret budgettet for {r.choice(forslag)['kategori'].lower()} i Sure under Plan, så det passer til snittet." if forslag
+               else f"Læg overskuddet fra {MAANEDER[m - 1]} over på opsparingen, inden næste måned starter.")
+    return {"maaned": tal["maaned"], "saetning": saetning, "tal": punkter, "budget": budget,
+            "faste": faste or ["Ingen nye eller ændrede faste betalinger."], "en_ting": en_ting, "forbehold": [],
+            "genereret": f"{ym(*plus_maaneder(y, m, 1))}-01T07:{r.randint(1, 9):02d}"}
+
+
+def gennemgange(r: random.Random, data: dict, idag: date) -> dict:
+    """De seneste tre hele måneder, nyeste først, i samme form som `gennemgang.py byg` skriver."""
+    modul = _gennemgang_py()
+    ud = []
+    for n in (-1, -2, -3):
+        maaned = ym(*plus_maaneder(idag.year, idag.month, n))
+        tal = modul.rapport(data, maaned)
+        ud.append({"maaned": maaned, "gennemgang": gennemgang_tekst(tal, r), "tal": tal})
+    return {"bygget": tidspunkt(r, idag, 6, 9), "gennemgange": ud}
 
 
 # ---------- filer ----------
@@ -478,7 +649,7 @@ def lav(ud: Path, idag: date) -> None:
     vagt = Vagt.fra_disk()
     mappe = ud / "forbrug"
 
-    # En studerende, hvis budget løber rundt med et lille overskud, så Scenarier er værd at se på
+    # En studerende, hvis budget løber rundt med et lille overskud
     for _ in range(40):
         p = profil(r, vagt, idag)
         tx, brutto = posteringer(r, vagt, p, idag)
@@ -498,18 +669,23 @@ def lav(ud: Path, idag: date) -> None:
     saldi = {LOENKONTO: traek(r, vagt, 600, 14000, 2), BUDGETKONTO: traek(r, vagt, 150, 6500, 2),
              OPSPARING: traek(r, vagt, 1500, 28000, 2)}
     maal = vaek_fra_rigtige(vagt, round((sum(saldi.values()) + r.uniform(5000, 22000)) / 2500) * 2500, r, 2500)
-    skriv(mappe / "data.json", {
+    budget_maaneder = [ym(*plus_maaneder(idag.year, idag.month, n)) for n in range(-3, 3)]
+    data = {
         "generated_at": tidspunkt(r, idag, 6, 9),
         "last_sync": tidspunkt(r, idag, 5, 6),
         "accounts": [{"name": n, "balance": saldi[n], "classification": "asset"} for n in sorted(saldi)],
         "goals": [{"name": r.choice(["Nødbuffer", "Nødbuffer", "Buffer"]), "target": maal,
-                   "target_date": sidste_dag(*plus_maaneder(idag.year, idag.month, r.randint(5, 20))).isoformat()}],
-        "budgets": [{"month": ym(*plus_maaneder(idag.year, idag.month, n)), "spending": forbrug,
-                     "income": indkomst, "variable": variabel} for n in range(-3, 3)],
+                   "target_date": sidste_dag(*plus_maaneder(idag.year, idag.month, r.randint(5, 20))).isoformat(),
+                   "accounts": [OPSPARING]}],
+        "budgets": [{"month": k, "spending": forbrug, "income": indkomst, "variable": variabel} for k in budget_maaneder],
+        "budget_categories": kategori_budgetter(r, vagt, tx, p, hele, variabel, fast, budget_maaneder),
+        "faste": faste_betalinger(tx, idag),
         "categories": kategorier(tx),
         "transactions": [{"id": str(uuid.uuid5(uuid.NAMESPACE_URL, f"kompas-demo/{i}/{t['date']}/{t['name']}")), **t}
                          for i, t in enumerate(tx)],
-    })
+    }
+    skriv(mappe / "data.json", data)
+    skriv(mappe / "gennemgang" / "gennemgange.json", gennemgange(r, data, idag))
 
     modtagere = [b["modtager"] for b in (p["fra"], p["til"]) if b["modtager"]] + KÆDER
     skriv(mappe / "config.json", {"flytning": ym(*p["flyt"]), "modtagere": modtagere})
@@ -523,7 +699,6 @@ def lav(ud: Path, idag: date) -> None:
         "years": {aar: {"status": {}, "brutto": dict(loensedler)}},
         "saved_at": tidspunkt(r, idag - timedelta(days=r.randint(2, 30))) + "+02:00",
     })
-    skriv(mappe / "state" / "scenarier.json", scenarier(r, idag))
 
     (mappe / "kompas.json").write_text(KOMPAS_JSON.read_text(encoding="utf-8"), encoding="utf-8")
 

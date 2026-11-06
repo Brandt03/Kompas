@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gennemgang</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='5' y='4' width='22' height='24' rx='4' fill='%232a78d6'/%3E%3Cpath d='M10 12h12M10 17h12M10 22h7' stroke='%23fff' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="../common.css">
+<style>
+  .stepper { display: inline-flex; align-items: center; gap: 4px; background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 3px; }
+  .stepper button { border: 0; background: transparent; color: var(--ink-2); width: 28px; height: 28px; border-radius: 7px; cursor: pointer; font-size: 16px; }
+  .stepper button:hover:not(:disabled) { background: var(--wash); }
+  .stepper button:disabled { opacity: .3; cursor: default; }
+  .stepper span { min-width: 124px; text-align: center; font-weight: 600; font-size: 13.5px; }
+  [hidden] { display: none !important; }  /* .filters sets display: flex */
+  .lead { font-size: 17px; font-weight: 600; line-height: 1.45; margin: 0 0 4px; }
+  .review h3 { font-size: 13px; font-weight: 600; color: var(--ink-2); margin: 18px 0 6px; }
+  .review ul { margin: 0; padding-left: 20px; line-height: 1.6; }
+  .review p { margin: 0; line-height: 1.6; }
+  .warn { background: var(--wash); border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; color: var(--ink-2); font-size: 13px; }
+  .empty { color: var(--muted); padding: 32px 0; text-align: center; }
+  td.over { color: var(--s8); }
+  td .sub { color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Gennemgang</h1>
+    <div class="meta" id="meta"></div>
+  </header>
+
+  <div class="filters" id="filters" hidden>
+    <div class="stepper">
+      <button id="prev" aria-label="Forrige måned">‹</button>
+      <span id="label"></span>
+      <button id="next" aria-label="Næste måned">›</button>
+    </div>
+  </div>
+
+  <section class="tiles" id="tiles"></section>
+
+  <section class="card panel review" id="review">
+    <div class="empty">Henter …</div>
+  </section>
+
+  <section class="card panel" id="budgetPanel" hidden>
+    <div class="panel-head"><h2>Budget mod forbrug</h2><span class="hint" id="budgetMeta" style="margin:0"></span></div>
+    <p class="hint">Fra Sures budget for måneden. Snit er de tre måneder til og med denne. Forslag står, hvor snittet ligger mindst 50 kr. og 20 % fra budgettet, og ikke for faste udgifter eller når kun én af månederne havde forbrug (fx en rejse). Forslagene ændrer intet; du retter budgettet i Sure under Plan.</p>
+    <div style="overflow-x:auto">
+      <table>
+        <thead><tr><th>Kategori</th><th class="num">Brugt</th><th class="num">Budget</th><th class="num hide-sm">Snit 3 mdr.</th><th class="num">Forslag</th></tr></thead>
+        <tbody id="budget"></tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<script src="../common.js"></script>
+<script>
+(() => {
+  "use strict";
+  const { kr, el, $, monthName } = window.Dash;
+  let LIST = [], idx = 0;
+
+  // The routine Kompas · Økonomi writes the review (okonomi/gennemgang/<maaned>.json) from numbers gennemgang.py has
+  // worked out (<maaned>.tal.json); `gennemgang.py byg` puts them together here. The page only shows them.
+  function render() {
+    const g = LIST[idx];
+    $("filters").hidden = LIST.length < 2;
+    $("label").textContent = monthName(g.maaned, true);
+    $("prev").disabled = idx >= LIST.length - 1;
+    $("next").disabled = idx <= 0;
+    const r = g.gennemgang, tal = g.tal;
+    const at = r.genereret ? new Date(r.genereret).toLocaleString("da-DK", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "–";
+    $("meta").textContent = `${monthName(g.maaned, true)} · skrevet af Kompas · Økonomi ${at}`;
+
+    const tiles = $("tiles"); tiles.replaceChildren();
+    if (tal) {
+      const tile = (label, value, sub) => tiles.append(el("div", { class: "card tile" },
+        el("div", { class: "label", text: label }), el("div", { class: "value", title: value, text: value }), sub ? el("div", { class: "sub", text: sub }) : null));
+      const f = tal.forbrug;
+      tile("Forbrug", kr.format(f.i_alt), f.budget != null ? `budget ${kr.format(f.budget)}` : "intet budget");
+      tile("Indtægter", kr.format(tal.indtaegter.i_alt), "SU tæller for måneden, den er til");
+      tile("Netto", kr.format(tal.netto), "indtægter minus forbrug");
+      tile("Faste betalinger", kr.format(tal.faste.pr_maaned ?? 0), "pr. måned lige nu");
+    }
+
+    const box = $("review"); box.replaceChildren();
+    const list = (title, items) => items && items.length ? [el("h3", { text: title }), el("ul", {}, ...items.map((t) => el("li", { text: t })))] : [];
+    box.append(
+      ...(r.forbehold || []).map((t) => el("div", { class: "warn", text: t })),
+      el("p", { class: "lead", text: r.saetning || "" }),
+      ...list("Tallene", r.tal),
+      ...list("Budgettet", r.budget),
+      ...list("Faste betalinger", r.faste),
+      ...(r.en_ting ? [el("h3", { text: "Én ting til næste måned" }), el("p", { text: r.en_ting })] : []));
+
+    const rows = (tal && tal.kategorier || []).filter((k) => k.budget != null || k.brugt > 0);
+    $("budgetPanel").hidden = !rows.length;
+    $("budget").replaceChildren(...rows.map((k) => el("tr", {},
+      el("td", {}, k.kategori, el("div", { class: "sub", text: k.gruppe })),
+      el("td", { class: "num" + (k.afvigelse > 0 ? " over" : ""), text: kr.format(k.brugt) }),
+      el("td", { class: "num", text: k.budget != null ? kr.format(k.budget) : "–" }),
+      el("td", { class: "num hide-sm", text: kr.format(k.snit_3_mdr) }),
+      el("td", { class: "num", text: k.forslag_budget != null ? kr.format(k.forslag_budget) : "" }))));
+    $("budgetMeta").textContent = rows.length ? `${rows.length} kategorier` : "";
+  }
+
+  $("prev").addEventListener("click", () => { idx += 1; render(); });
+  $("next").addEventListener("click", () => { idx -= 1; render(); });
+
+  fetch("gennemgange.json", { cache: "no-store" }).then((r) => (r.ok ? r.json() : { gennemgange: [] })).then((d) => {
+    LIST = d.gennemgange || [];
+    if (!LIST.length) {
+      $("review").replaceChildren(el("div", { class: "empty", text: "Ingen gennemgang endnu. Rutinen Kompas · Økonomi skriver den første den 1. i næste måned." }));
+      return;
+    }
+    render();
+  }).catch((e) => $("review").replaceChildren(el("div", { class: "empty", text: `Kunne ikke hente gennemgangene: ${e}` })));
+})();
+</script>
+</body>
+</html>

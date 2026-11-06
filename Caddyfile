@@ -100,7 +100,7 @@
 			reverse_proxy 127.0.0.1:8769
 		}
 
-		# Forbrug, Scenarier, SU-vagt (fra okonomi/dashboard)
+		# Forbrug, SU-vagt, Gennemgang (fra okonomi/dashboard)
 		redir /forbrug /forbrug/
 		handle_path /forbrug/* {
 			root * {$HOME}/kompas/okonomi/dashboard/public

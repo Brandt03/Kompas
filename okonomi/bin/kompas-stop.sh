@@ -3,7 +3,7 @@
 # the Studie, Sprog and Skærmtid servers, Sure's export and Caddy. The jobs are disabled, so they stay off after
 # a restart until Kompas.app (kompas-start.sh) is opened again. Data stays in the Docker volumes,
 # ~/.garmin-coach and ~/.overblik. The scheduled Claude routines are not affected.
-# Used by /Applications/Luk Kompas.app.
+# Run it in a terminal when you want it all off (there is no app for it any more).
 set -eu
 export PATH=/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin
 cd "$(dirname "$0")/.."

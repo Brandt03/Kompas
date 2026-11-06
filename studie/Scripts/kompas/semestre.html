@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Studie · Semestre</title>
+<!-- Semestre, som Athenifys Term management: alle semestre samlet, det aktuelle øverst og de tidligere lukket, så de ikke
+     larmer. Pr. semester periode, fag, selvstudie pr. fag mod det forventede, undervisning, saldo og medaljer. Læser kun
+     semestre.json, som eksporten (Scripts/kompas-eksport.js, semestre()) regner ud fra hvert semesters egne filer med samme
+     kode som Selvstudie. Siden regner intet selv. Resten af Studie viser altid det aktuelle semester (~/kompas/studie). -->
+<link rel="stylesheet" href="/kompas/assets/tokens.css">
+<link rel="stylesheet" href="/kompas/assets/page.css">
+<style>
+  :root { --guld: #d4a017; --soelv: #9aa0a6; --bronze: #b0703c; }
+  .note { margin: 12px 0 0; font-size: 12.5px; color: var(--text-secondary); line-height: 1.5; }
+  details.semester > summary { list-style: none; cursor: pointer; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 4px 12px; align-items: center; }
+  details.semester > summary::-webkit-details-marker { display: none; }
+  details.semester > summary::before { content: ""; width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent;
+    border-top: 6px solid var(--text-secondary); transition: transform .15s; }
+  details.semester:not([open]) > summary::before { transform: rotate(-90deg); }
+  details.semester[open] > summary { margin-bottom: 14px; }
+  .navn { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+  .navn h2 { margin: 0; font-size: 16px; }
+  .kort { display: flex; gap: 6px 16px; flex-wrap: wrap; justify-content: flex-end; font-size: 13px; color: var(--text-secondary); }
+  .kort b { color: var(--text-primary); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .fagliste { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .fagliste th { text-align: left; font-size: 12px; font-weight: 600; color: var(--text-secondary); padding: 0 6px 6px; }
+  .fagliste td { padding: 8px 6px; border-top: 1px solid var(--divider); vertical-align: middle; }
+  .fagliste .t { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .fagliste tr.sum td { font-weight: 600; }
+  .fagliste .sw { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 6px; }
+  .fagliste .lille { display: block; font-size: 12px; color: var(--text-subdued); font-weight: 400; margin: 2px 0 0 15px; }
+  .meter { position: relative; height: 7px; border-radius: 4px; background: var(--surface-inset); min-width: 80px; }
+  .meter i { display: block; height: 100%; border-radius: 4px; max-width: 100%; }
+  /* Forventet til nu (kun det aktuelle semester): en streg i måleren */
+  .meter s { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--text-secondary); border-radius: 1px; }
+  .motiv { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+  .motiv > div { background: var(--surface-inset); border-radius: 10px; padding: 10px 12px; font-size: 12.5px; color: var(--text-secondary); min-width: 0; }
+  .motiv b { display: block; font-size: 16px; color: var(--text-primary); font-weight: 600; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .medaljer { display: inline-flex; gap: 10px; }
+  .medaljer span { display: inline-flex; align-items: center; gap: 3px; }
+  @media (max-width: 760px) {
+    details.semester > summary { grid-template-columns: auto minmax(0, 1fr); }
+    .kort { grid-column: 2; justify-content: flex-start; }
+    .motiv { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .fagliste .smal { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="page">
+    <div><h1>Semestre</h1><p class="sub" id="sub">Alle semestre samlet</p></div>
+  </header>
+  <div class="stack" id="root"><div class="card empty">Henter …</div></div>
+</div>
+
+<script src="/kompas/assets/icons.js"></script>
+<script src="/kompas/assets/liv.js"></script>
+<script src="/kompas/assets/chart.js"></script>
+<script src="studie.js"></script>
+<script>
+const t = x => `${fmt(x, 1)} t`;
+const dato = s => s ? `${dayMonth(parseDate(s)).replace(/\.$/, "")} ${s.slice(0, 4)}` : "–";
+const periode = p => p ? `${dato(p.fra)} – ${dato(p.til)}` : "periode ukendt";
+const MEDALJE = { guld: "Guld", soelv: "Sølv", bronze: "Bronze" };
+const medaljer = m => `<span class="medaljer">${["guld", "soelv", "bronze"].map(k =>
+  `<span title="${MEDALJE[k]}" style="color:var(--${k})">${icon("trophy", 14)}<b style="color:var(--text-primary)">${fmt(m?.[k] || 0)}</b></span>`).join("")}</span>`;
+// Saldoen som "+3 t 10 min" / "−35 t 14 min" (kun formatering)
+const saldo = h => { const m = Math.round(Math.abs(h) * 60); return `${h < 0 ? "−" : "+"}${Math.floor(m / 60)} t ${m % 60} min`; };
+
+// Fagene i ét semester: forventet selvstudie (semestrets del for et kursus over flere), det loggede og undervisningen
+function fagTabel(s) {
+  const række = f => {
+    const fv = f.forventet, tn = s.aktuel && f.forventet_til_nu;
+    return `<tr><td><span class="sw" style="background:${f.farve}"></span><b>${esc(f.navn || f.kort)}</b>
+        <span class="lille">${esc([f.kort, f.kursuskode].filter(Boolean).join(" · "))}${fv.dette_semester ? `<span class="smal"> · dette semesters del af ${t(fv.hele_kurset)}</span>` : ""}</span></td>
+      <td class="t">${t(f.brugt.selvstudie)}</td>
+      <td class="t">${t(fv.selvstudie)}</td>
+      <td class="smal" style="width:28%"><div class="meter" title="${f.pct ?? "–"} % af det forventede selvstudie${tn ? `; forventet til nu ${t(tn.selvstudie)}` : ""}">
+        <i style="width:${Math.min(100, f.pct || 0)}%;background:${f.farve}"></i>${tn && fv.selvstudie ? `<s style="left:${Math.min(100, 100 * tn.selvstudie / fv.selvstudie)}%"></s>` : ""}</div></td>
+      <td class="t">${f.pct == null ? "–" : `${f.pct} %`}</td>
+      <td class="t smal" title="Undervisning i kalenderen mod kursusbeskrivelsens skemalagte timer${fv.dette_semester ? " (dette semesters del)" : ""}${tn?.undervisning != null ? `; forventet til nu ${t(tn.undervisning)}` : ""}">${fmt(f.brugt.undervisning, 1)} / ${t(fv.undervisning)}</td></tr>`;
+  };
+  return `<table class="fagliste"><tr><th>Fag</th><th class="t">Selvstudie</th><th class="t">Forventet</th><th class="smal"></th><th class="t"></th><th class="t smal">Undervisning</th></tr>
+    ${s.fag.map(række).join("")}
+    <tr class="sum"><td>I alt</td><td class="t">${t(s.i_alt.selvstudie)}</td><td class="t">${t(s.forventet.selvstudie)}</td><td class="smal"></td><td class="t">${s.forventet.pct == null ? "–" : `${s.forventet.pct} %`}</td><td class="t smal">${s.forventet.undervisning == null ? t(s.i_alt.undervisning) : `${fmt(s.i_alt.undervisning, 1)} / ${t(s.forventet.undervisning)}`}</td></tr></table>`;
+}
+
+function semesterKort(s) {
+  if (!s.i_alt) return `<details class="card panel semester"${s.aktuel ? " open" : ""}><summary><div class="navn"><h2>${esc(s.navn)}</h2>${s.aktuel ? '<span class="badge good">Nu</span>' : ""}</div></summary>
+    <p class="note">${esc(s.mangler || "Semestret kunne ikke læses.")}</p></details>`;
+  const m = s.motivation;
+  return `<details class="card panel semester"${s.aktuel ? " open" : ""} data-navn="${esc(s.mappe)}">
+    <summary>
+      <div class="navn"><h2>${esc(s.navn)}</h2>${s.aktuel ? '<span class="badge good">Nu</span>' : ""}<span class="meta">${periode(s.periode)}</span></div>
+      <div class="kort"><span>Selvstudie <b>${t(s.i_alt.selvstudie)}</b></span>${m ? `<span>Saldo <b>${saldo(m.saldo)}</b></span><span>${medaljer(m.medaljer)}</span>` : ""}</div>
+    </summary>
+    ${s.fag.length ? fagTabel(s) : `<p class="note">Ingen fag med arbejdstimer i fag.json.</p>`}
+    ${s.ukendt?.length ? `<p class="note">Logget, men ikke knyttet til et fag med arbejdstimer: ${s.ukendt.map(u => `${esc(u.navn)} (${t(u.timer)})`).join(", ")}.</p>` : ""}
+    ${m ? `<div class="motiv">
+      <div>Saldo<b>${saldo(m.saldo)}</b>mod ${t(m.maal)} om dagen (${esc(m.gaelder)})</div>
+      <div>Medaljer<b>${medaljer(m.medaljer)}</b>${fmt(m.pct)} % af målet nået i alt</div>
+      <div>Dage med selvstudie<b>${fmt(m.dage_med_selvstudie)} af ${fmt(m.dage)}</b>${fmt(s.sessioner)} ${s.sessioner === 1 ? "session" : "sessioner"}</div>
+      <div>Længst i træk<b>${fmt(m.laengst_i_traek)} ${m.laengst_i_traek === 1 ? "dag" : "dage"}</b>med selvstudie</div></div>` : ""}
+    <p class="note">${s.aktuel ? `Det aktuelle semester, regnet til i dag; stregen i måleren er det forventede selvstudie til nu.
+        Dag for dag, rytme og stopuret står på <a href="selvstudie.html">Selvstudie</a>.`
+      : `Regnet til ${dato(s.regnet_til)} ud fra semestrets egne filer; tallene er dem, Selvstudie viste, da semestret sluttede.`}
+      Selvstudiet er logget fra ${dato(s.selvstudie_fra)}. Mappen: <code>${esc(s.mappe)}</code>.${s.mangler ? ` ${esc(s.mangler)}` : ""}</p>
+  </details>`;
+}
+
+function render(d) {
+  const r = document.getElementById("root"), ss = d.semestre || [];
+  document.getElementById("sub").textContent = !d.aktuelt ? "Alle semestre samlet" : ss.length > 1 ? `Studie viser ${d.aktuelt}; de tidligere semestre står her`
+    : `Studie viser ${d.aktuelt}. Tidligere semestre kommer til at stå her`;
+  if (!ss.length) { r.innerHTML = `<div class="card empty">Ingen semestermapper fundet (en mappe med <code>Scripts/fag.json</code>).</div>`; return; }
+  const a = d.i_alt, flere = ss.filter(s => s.i_alt).length > 1;
+  r.innerHTML = `${flere ? `<section class="card panel"><div class="panel-head"><h2>Alle semestre</h2><span class="meta">${a.semestre} semestre</span></div>
+      <div class="tiles">
+        <div class="card tile"><div class="label">Selvstudie</div><div class="value">${fmt(a.selvstudie, 1)}<small>t</small></div></div>
+        <div class="card tile"><div class="label">Undervisning</div><div class="value">${fmt(a.undervisning, 1)}<small>t</small></div></div>
+        <div class="card tile"><div class="label">Sessioner</div><div class="value">${fmt(a.sessioner)}</div></div>
+        <div class="card tile"><div class="label">Medaljer</div><div class="value" style="font-size:18px">${medaljer(a.medaljer)}</div></div>
+      </div><div id="graf" style="margin-top:14px"></div></section>` : ""}
+    ${ss.map(semesterKort).join("")}
+    <p class="note">Et semester er en mappe med <code>Scripts/fag.json</code> ved siden af det aktuelle. Nyt semester:
+      <code>node Scripts/nyt-semester.js "&lt;navn&gt;"</code> (se README i semestermappen, "Nyt semester").</p>`;
+  if (flere) barChart(document.getElementById("graf"), { fmt: x => t(x), height: 180,
+    points: [...ss].filter(s => s.i_alt).reverse().map(s => ({ label: s.navn, y: s.i_alt.selvstudie,
+      tip: `${s.navn}: ${t(s.i_alt.selvstudie)} selvstudie${s.fag.length ? ` (${s.fag.map(f => `${f.kort} ${t(f.brugt.selvstudie)}`).join(", ")})` : ""}` })) });
+}
+
+fetch("semestre.json", { cache: "no-store" }).then(r => { if (!r.ok) throw new Error(`semestre.json svarede ${r.status}`); return r.json(); })
+  .then(render)
+  .catch(e => { document.getElementById("root").innerHTML = `<div class="card empty">Semestre kunne ikke hentes: ${esc(e.message)}. Kør eksporten: <code>node Scripts/kompas-eksport.js</code></div>`; });
+</script>
+</body>
+</html>

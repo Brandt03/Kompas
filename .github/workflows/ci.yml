@@ -41,7 +41,7 @@ jobs:
           for u in / /kompas/ /kompas/forbindelser.json /form/coach.json /form/liv.json /form/belastning.json /form/kroppen.json /form/kroppen/index.json /studie/studie.json \
                    /studie/api/repetition /studie/selvstudie.json /sprog/ /sprog/kompas.json /sprog/api/pakke \
                    /skaermtid/ /skaermtid/skaermtid.json /skaermtid/kompas.json /kompas/kun-paa-mac.html \
-                   /forbrug/data.json /forbrug/su/ /transactions; do
+                   /forbrug/data.json /forbrug/su/ /forbrug/gennemgang/ /studie/semestre.html /studie/api/stopur /transactions; do
             kode=$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:8000$u")
             echo "$u $kode"
             test "$kode" = 200
@@ -100,6 +100,8 @@ jobs:
         run: node tests/test_studie_fag.js
       - name: Nye kort på skift mellem fagene, ældste uge først
         run: node tests/test_studie_nye_kort.js
+      - name: Nyt semester i ét trin
+        run: node tests/test_studie_nyt_semester.js
       - name: Samme uge i Fag og Ugeoverblik
         run: node tests/test_studie_sider.js
       - name: I dag viser resten, når én sektion fejler

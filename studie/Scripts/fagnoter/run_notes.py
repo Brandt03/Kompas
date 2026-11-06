@@ -2,7 +2,8 @@
 notes.py definerer WEEKS = {nr: dict(kilder, begreber, modeller_files=[(jpg, billedtekst, bredde_cm)],
 kode=[(titel, kode)], fejl=[...], forbindelser, uafklaret)}, valgfrit NEW_WEEKS = {nr: overskrift}
 og EKSAMEN = {label: [punkter]}. RESET_WEEKS = [nr, …] tømmer de uger først (Filler.reset_week), så de
-udfyldes forfra; det, der står under 'I egne ord', flyttes med."""
+udfyldes forfra; det, der står under 'I egne ord', flyttes med. FORELOEBIG = [nr, …] er uger, der skrives før ugen,
+og får mærket "(foreløbig)" i overskriften; alle andre uger i WEEKS er endelige, og et gammelt mærke fjernes."""
 import os, sys, importlib.util
 sys.dont_write_bytecode = True   # ingen __pycache__ i semestermappen (den kan ligge i en synkroniseret mappe)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))   # fill_fagnoter.py ligger ved siden af
@@ -16,6 +17,7 @@ for w, title in getattr(N, "NEW_WEEKS", {}).items():
 for w, d in N.WEEKS.items():
     d = dict(d); d.setdefault("modeller", bool(d.get("modeller_files")))
     F.fill_week(f"Uge {w}", d, None)
+    F.set_foreloebig(f"Uge {w}", w in getattr(N, "FORELOEBIG", []))
 for lab, texts in getattr(N, "EKSAMEN", {}).items():
     F.fill_h1_section("Eksamen", lab, texts)
 F.save(sys.argv[3]); print("saved", sys.argv[3])

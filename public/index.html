@@ -19,6 +19,7 @@
   /* hero */
   .stille { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 14px; font-size: 13px; color: var(--text-secondary); }
   .stille .badge { background: var(--warning-tint); color: var(--warning); text-decoration: none; }
+  .stille.selv .badge { background: var(--success-tint); color: var(--success); }
   .stille .badge.bad { background: var(--destructive-tint); color: var(--destructive); }
   .stille + .stille { margin-top: 8px; }
   .hero { position: relative; overflow: hidden; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px; align-items: center; padding: 30px 32px; }
@@ -262,6 +263,13 @@ function stille({ genkald, sprog, skaermtid, liv }) {
   return ud;
 }
 
+// Selvstudie: forslag ud fra dine svar, som Studie- og Sprog-serveren har regnet og venter på, at du gemmer eller afviser
+// dem på Selvstudie. Stopuret står i rammen (timeren øverst over siden), ikke her.
+function selvstudieNu({ stopur, sprogtid }) {
+  const n = (stopur?.forslag?.length || 0) + (sprogtid?.forslag?.length || 0);
+  return n ? [{ tekst: `${n} forslag venter`, titel: "Selvstudie ud fra dine svar; gem eller afvis det på Selvstudie" }] : [];
+}
+
 // Skal tjekkes: de forbindelser, bin/forbindelser.py har givet status fejl eller advarsel (datakilder, rutiner,
 // baggrundsjob og værktøjer). Siden regner ikke status selv; den viser kun, hvad Forbindelser allerede siger.
 function tjekkes(forbindelser) {
@@ -274,7 +282,7 @@ function tjekkes(forbindelser) {
 
 // Hver sektion bygges for sig: et felt, der mangler i ét projekts data (fx en frist uden `hvad`), skal kun koste
 // den sektion. prøv() fanger fejlen, noterer sektionen og giver `ellers`; øverst står, hvad der ikke kunne vises.
-function render({ coach, soevn, liv, studie, genkald, sprog, skaermtid, forbindelser, svarerIkke = [] }) {
+function render({ coach, soevn, liv, studie, genkald, sprog, skaermtid, forbindelser, stopur, sprogtid, svarerIkke = [] }) {
   const nu = new Date(), h = nuH(), idag = iso(nu);
   const fejlede = [];
   const prøv = (navn, byg, ellers = "") => {
@@ -285,6 +293,7 @@ function render({ coach, soevn, liv, studie, genkald, sprog, skaermtid, forbinde
   const review = prøv("Fokus", () => liv ? latestReview(liv) : null, null);
   const st = prøv("Står stille", () => stille({ genkald, sprog, skaermtid, liv }), []);
   const tj = prøv("Skal tjekkes", () => tjekkes(forbindelser), []);
+  const selv = prøv("Selvstudie", () => selvstudieNu({ stopur, sprogtid }), []);
   // Rådet gælder kun den dag, det er regnet for
   const raad = coach?.dagens_raad?.dato === idag ? coach.dagens_raad : null;
 
@@ -308,6 +317,7 @@ function render({ coach, soevn, liv, studie, genkald, sprog, skaermtid, forbinde
         <h1 class="hello">${hilsen(nu.getHours())}</h1>
         <p class="summary">${dele.length ? dele.join(" · ").replace(/^./, c => c.toUpperCase()) + "." : "Åbn Kompas-appen for at hente dagens tal."}</p>
         ${st.length ? `<div class="stille">${icon("clock", 14)}<span>Står stille:</span>${st.map(x => `<a class="badge" href="${x.href}" title="${esc(x.titel ?? (x.dage == null ? `${x.navn} ${x.hvad}` : `${x.dage} ${x.hvad}`))}">${esc(x.navn)} · ${esc(x.tekst ?? (x.dage == null ? "ingen data" : `${x.dage} d`))}</a>`).join("")}</div>` : ""}
+        ${selv.length ? `<div class="stille selv">${icon("timer", 14)}<span>Selvstudie:</span>${selv.map(x => `<a class="badge" href="/studie/selvstudie.html" title="${esc(x.titel)}">${esc(x.tekst)}</a>`).join("")}</div>` : ""}
         ${tj.length ? `<div class="stille">${icon("plug", 14)}<span>Skal tjekkes:</span>${tj.map(x => `<a class="badge${x.fejl ? " bad" : ""}" href="/kompas/forbindelser.html" title="${esc(x.titel)}">${esc(x.navn)}</a>`).join("")}</div>` : ""}
         ${raad?.niveau ? `<a class="raad ${raad.niveau}" href="/form/kroppen.html" style="text-decoration:none">${icon("activity", 16)}<span><b>${esc(raad.titel)}.</b> ${esc(raad.tekst)}<small>Fordi: ${esc(raad.grunde.join(", "))}.</small></span></a>` : ""}
       </div>
@@ -435,7 +445,7 @@ function tegnDagen(D) {
     const pill = nu ? `<span class="pill nu">Nu</span>` : om != null && om <= 90 ? `<span class="pill snart">om ${om < 60 ? om + " min" : `${Math.floor(om / 60)} t${om % 60 ? ` ${om % 60} min` : ""}`}</span>` : done ? `<span class="pill">Færdig</span>` : "";
     return `<div class="ev${done ? " done" : ""}${nu ? " nu" : ""}" style="--k:${e.farve}" title="${esc(e.titel)}">
       <span class="t">${e.hel ? "Hele dagen" : `${kl(e.a)}–${kl(e.b)}`}</span><span class="sw"></span>
-      <span class="n"><b>${esc(e.kort ? `${e.kort} · ${e.art}` : e.navn)}</b><small>${esc(e.kort ? e.navn + (e.form ? ` · ${e.form}` : "") : e.type === "undervisning" ? [e.art, e.form].filter(Boolean).join(" · ") : e.type === "andet" ? "i kalenderen" : "")}</small>${e.faktisk && e.a <= h ? `<small class="fakt" title="Fra Skærmtid, CalTask og Garmin; opdateres hver halve time">${nu ? "Indtil nu" : "Faktisk"}: ${esc(e.faktisk)}</small>` : ""}</span>${pill}</div>`;
+      <span class="n"><b>${esc(e.kort ? `${e.kort} · ${e.art}` : e.navn)}</b><small>${esc(e.kort ? e.navn + (e.form ? ` · ${e.form}` : "") : e.type === "undervisning" ? [e.art, e.form].filter(Boolean).join(" · ") : e.type === "andet" ? "i kalenderen" : "")}</small>${e.faktisk && e.a <= h ? `<small class="fakt" title="Fra Skærmtid, timeren og Garmin; opdateres hver halve time">${nu ? "Indtil nu" : "Faktisk"}: ${esc(e.faktisk)}</small>` : ""}</span>${pill}</div>`;
   }).join("") || `<p class="meta">Intet i kalenderen i dag.</p>`;
 }
 
@@ -451,7 +461,8 @@ function tegnDagenSikkert(D) {
 // Hvert kald med det projekt, der nævnes, når det ikke svarer (fejl i nettet eller en fejlkode)
 const KILDER = [["coach", "/form/coach.json", "Form & fokus"], ["soevn", "/form/soevn.json", "Form & fokus"], ["liv", "/form/liv.json", "Ugereview"],
   ["studie", "/studie/studie.json", "Studie"], ["genkald", "/studie/api/repetition", "Genkald"],
-  ["sprog", "/sprog/api/pakke", "Sprog"], ["skaermtid", "/skaermtid/skaermtid.json", "Skærmtid"], ["forbindelser", "/kompas/forbindelser.json", "Forbindelser"]];
+  ["sprog", "/sprog/api/pakke", "Sprog"], ["stopur", "/studie/api/stopur", "Studie"], ["sprogtid", "/sprog/api/tid", "Sprog"], ["skaermtid", "/skaermtid/skaermtid.json", "Skærmtid"], ["forbindelser", "/kompas/forbindelser.json", "Forbindelser"]];
+const VALGFRI = new Set(["stopur", "sprogtid"]);
 let DATA = null;
 async function hent() {
   // Et projekt på pause (`pause` i projekter.json) hentes ikke og står ikke på I dag; det er med vilje, ikke en fejl
@@ -460,7 +471,8 @@ async function hent() {
   const kilder = KILDER.filter(k => !pause.has(k[2]));
   const rs = await Promise.allSettled(kilder.map(([, url]) => get(url)));
   const d = Object.fromEntries(kilder.map(([navn], i) => [navn, rs[i].status === "fulfilled" ? rs[i].value : null]));
-  const svarerIkke = [...new Set(kilder.filter((k, i) => rs[i].status === "rejected").map(k => k[2]))];
+  // Forslagene findes kun live (ikke i bærbarens kopi); svarer de ikke, mangler linjen Selvstudie bare
+  const svarerIkke = [...new Set(kilder.filter((k, i) => rs[i].status === "rejected" && !VALGFRI.has(k[0])).map(k => k[2]))];
   DATA = { ...d, coach: d.coach?.fejl ? null : d.coach, soevn: d.soevn?.fejl ? null : d.soevn, svarerIkke };
   render(DATA);
 }

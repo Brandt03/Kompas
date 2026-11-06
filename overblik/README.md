@@ -13,12 +13,13 @@ ugetabel og fortolker den. Alt kører lokalt.
 |---|---|---|
 | garmin | `~/.garmin-coach/coach.db` (læses kun) | søvn, HRV, hvilepuls, stress, skridt, træning |
 | sure | `~/kompas/okonomi/dashboard/public/data.json` | take-away, café/bar, dagligvarer, variable køb |
-| kalender | garmin-coach's `calendar_events` | undervisning (begivenheder, garmin-coach har givet en `fag_kode`) og selvstudie (CalTask-begivenheder der starter med `Selvstudie ·`) |
+| kalender | garmin-coach's `calendar_events` | undervisning (begivenheder, garmin-coach har givet en `fag_kode`) |
+| selvstudie | `~/.kompas/studie/sessioner.json` (Studies eksport af stopurets sessioner, læses kun) | selvstudie i timer og dage |
 | skærmtid | `~/.kompas/skaermtid/skaermtid.json` (læses kun) | endnu ingen ugekolonner; sen skærmtid pr. aften i `naetter` og dagens forløb i `dagsplan` (se På Kompas) |
 | studie | `~/.kompas/studie/studie.json` (læses kun) | endnu ingen ugekolonner; svar pr. dag i Træning og På farten i `dagsplan` |
 
 **En tom celle (`–`) betyder at kilden ikke dækker ugen, ikke 0.** Selvstudie
-før `LIV_SELVSTUDIE_FRA`, dagen logningen i CalTask begyndte, er ukendt. Undervisning før kalendervinduet er ukendt.
+før `LIV_SELVSTUDIE_FRA`, dagen logningen begyndte, er ukendt. Undervisning før kalendervinduet er ukendt.
 
 Kalenderen i garmin-coach dækker kun ca. 14 dage bagud. Derfor overskriver en
 tom værdi aldrig et gemt tal: en uge beholder sin undervisning efter at være
@@ -54,9 +55,14 @@ liv status
 .venv/bin/pytest
 ```
 
-Selvstudie logges i CalTask, som lægger en begivenhed i kalenderen, fx
-"Selvstudie · Alfa" fra 08:00 til 09:30. Varigheden er de loggede timer. Kun
-begivenheder der er slut tæller, og de skal være synket ind i garmin-coach.
+Selvstudie logges med timeren i Kompas' menu (Studies stopur og Pomodoro). Studie-serveren skriver sessionerne i semestermappens
+`Scripts/sessioner.json`, og Studies eksport lægger de afsluttede i `~/.kompas/studie/sessioner.json`
+(`LIV_SESSIONER_JSON`), som overblik læser. En session har ét eller flere stykker; en pause er mellemrummet, og kun
+stykkerne tæller. En session tæller under den dag og uge, den begyndte. Kun uger fra loggens `fra` regnes: et nyt
+semester har en ny log, og de tidligere uger beholder deres gemte tal. Før timeren blev selvstudiet logget i CalTask
+som kalenderbegivenheder ("Selvstudie · Alfa"); de er flyttet ind i Studies log, så kalenderens "Selvstudie ·"-begivenheder tæller
+ikke længere nogen steder (`LIV_SELVSTUDIE_PRAEFIKS` finder dem, så de springes over). Ugens kalender i `liv.json` har
+sessionerne som begivenheder med `type` selvstudie, ét stykke pr. begivenhed med sessionens id i `session`.
 
 ## Definitioner
 
@@ -86,7 +92,8 @@ Stier, datoer og titelmønstre kan overstyres med miljøvariabler (se `overblik/
 | `LIV_STUDIE_JSON` | `~/.kompas/studie/studie.json` | Studies eksport (læses kun): svar pr. dag i Træning og På farten |
 | `LIV_SITE` | `~/.garmin-coach/site` | hvor `liv eksport` lægger `liv.json` |
 | `LIV_TZ` | `Europe/Copenhagen` | vægtiden, som dagsplanen regner i, uanset maskinens tidszone |
-| `LIV_SELVSTUDIE_PRAEFIKS` | `Selvstudie ·` | titlen, CalTask-begivenheder starter med |
+| `LIV_SESSIONER_JSON` | `~/.kompas/studie/sessioner.json` | Studies eksport af selvstudiets sessioner |
+| `LIV_SELVSTUDIE_PRAEFIKS` | `Selvstudie ·` | titlen, CalTasks gamle begivenheder starter med; de springes over |
 | `LIV_SELVSTUDIE_FRA` | `2026-09-28` | dagen logningen af selvstudie begyndte |
 | `LIV_FRA` | `2025-06-02` | første uge, der beregnes |
 
@@ -151,24 +158,26 @@ uge, kommer den med som tal uden tekst (og uden `genereret` og `metode`).
 
 `dagsplan` er planlagt mod faktisk for de seneste 14 døgn (kl. 6 til kl. 6, som Skærmtid) til Ugereview og til I dag, der
 viser `faktisk` under hver af dagens blokke, når den er begyndt (blokken findes på dato og starttid). Plan er
-undervisningen og dine egne blokke i kalenderen; faktisk er Skærmtids forløb i kvarterer, det, CalTask har logget som
-selvstudie, og Garmins pas. Hver planlagt blok får `faktisk`: minutterne pr. gruppe og kategori, der faldt i den, minutter
+undervisningen og dine egne blokke i kalenderen; faktisk er Skærmtids forløb i kvarterer, selvstudiet fra Studies
+sessioner (hvert stykke for sig) og Garmins pas. Hver planlagt blok får `faktisk`: minutterne pr. gruppe og kategori, der faldt i den, minutter
 uden skærm, logget selvstudie og træning. Uden forløb fra Skærmtid er `skaerm` null, ikke en dag uden skærm. En blok med
 `plan: true` er en studieblok: den har mærket `#kompas-plan` i kalenderens note (garmin-coach gemmer det som `plan_blok`).
 
 `glippede` er til I dag (Står stille): de seneste 3 afsluttede døgn i `dagsplan`, og hvilke af dem der havde studieblokke,
-men intet selvstudie logget i CalTask i hele døgnet. `vis` er sand fra 2 sådanne døgn (`GLIPPET_DAGE` og
-`GLIPPET_GRAENSE` i `side.py`). Er kalenderen ikke hentet siden i går, er `vis` falsk, og `status` siger hvorfor.
+men intet selvstudie logget i hele døgnet. `vis` er sand fra 2 sådanne døgn (`GLIPPET_DAGE` og
+`GLIPPET_GRAENSE` i `side.py`). Er kalenderen ikke hentet siden i går, eller mangler Studies sessioner, er `vis`
+falsk, og `status` siger hvorfor.
 
 `studieuge` er til I dag (Selvstudie i ugen): denne ISO-uges loggede selvstudie (`selvstudie_timer` og `selvstudie_dage` fra
 ugetabellen) mod ugens planlagte studieblokke (`planlagt_timer` og `planlagt_blokke`), dvs. alle blokke med planmærket fra
 mandag til søndag, også dem, der ikke er kommet endnu. En blok tæller under den dato, den starter. Er kalenderen ikke hentet
 siden i går, har `studieuge` en `status`, der siger hvorfor.
 
-`studietid` er til Studies side Selvstudie: undervisningen pr. kursuskode (`fag_kode`), det, CalTask har logget som
-selvstudie pr. titel ("Selvstudie · Beta🤖" bliver "Beta", også pr. dag i `dage` og antal logninger pr. dag i `sessioner`) og studieblokkene pr. det, der står før " · " i titlen, i alt og pr.
-ISO-uge, og undervisningen også pr. slags (`former`: garmin-coach's `art` og `form`, fx Forelæsning · forudindspillet).
-Undervisning og selvstudie tæller, når de er slut; studieblokkene både planlagt i alt og forbi. Navnene
+`studietid` er til Studies side Selvstudie: undervisningen pr. kursuskode (`fag_kode`) og studieblokkene pr. det, der
+står før " · " i titlen, i alt og pr. ISO-uge, og undervisningen også gang for gang (`gange`: dato, start, slut, art, form og
+timer, til fremmødet, du markerer i Studies Ugeoverblik) og pr. slags (`former`: garmin-coach's `art` og
+`form`, fx Forelæsning · forudindspillet). Undervisningen tæller, når den er slut; studieblokkene både planlagt i alt og
+forbi. Selvstudiet regner Studie selv ud fra sine sessioner. Navnene
 oversættes ikke her; Studies eksport knytter dem til fagene (`kursuskode`, `kort` og `alias` i fag.json) og stiller dem
 mod kursusbeskrivelsernes arbejdstimer.
 

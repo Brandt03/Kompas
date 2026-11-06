@@ -1,4 +1,4 @@
-// Shared helpers for the Scenarier and SU-vagt pages (plain script, exposes window.Dash).
+// Shared helpers for the SU-vagt and Gennemgang pages (plain script, exposes window.Dash).
 (() => {
   "use strict";
   const MONTHS = ["jan", "feb", "mar", "apr", "maj", "jun", "jul", "aug", "sep", "okt", "nov", "dec"];

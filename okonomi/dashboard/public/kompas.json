@@ -32,11 +32,6 @@
    ]
   },
   {
-   "titel": "Rapporter",
-   "ikon": "chart-bar",
-   "sti": "/reports"
-  },
-  {
    "titel": "Plan",
    "ikon": "compass",
    "sti": "/plan",
@@ -53,14 +48,14 @@
    "praecis": true
   },
   {
-   "titel": "Scenarier",
-   "ikon": "chart-spline",
-   "sti": "/forbrug/scenarier/"
-  },
-  {
    "titel": "SU-vagt",
    "ikon": "shield-check",
    "sti": "/forbrug/su/"
+  },
+  {
+   "titel": "Gennemgang",
+   "ikon": "file-text",
+   "sti": "/forbrug/gennemgang/"
   },
   {
    "titel": "Sure-indstillinger",

@@ -6,11 +6,19 @@
 //   lineChart(el, { points: [{ label, y, y2, tip }], band: { lo, hi, label }, ref: { y, label }, line2, fmt, height, fyld })
 //     fyld: true fills the area under the line, fading down (like a share price)
 //   scatterChart(el, { points: [{ x, y, tip }], fmt, xfmt, xlabel, height }): one point per pair; points without both are left out
-//   stackChart(el, { series: [{ label, color }], points: [{ label, ys: [..], tip }], ref, fmt, height }): a stacked bar per
-//     point, one segment per series in series order; negative values stack down from 0 (fx body battery drained)
+//   stackChart(el, { series: [{ label, color }], points: [{ label, ys: [..], colors: [..], tip }], ref, fmt, height }): a stacked
+//     bar per point, one segment per series in series order; negative values stack down from 0 (fx body battery drained).
+//     A point's own `colors` (one per series) colour its segments instead of the series (fx each subject in its colour)
 //   rangeChart(el, { points: [{ label, lo, hi, tip }], fmt, height }): a floating bar from lo to hi per point
 //   pieChart(el, { slices: [{ label, y, color, tip }], midte: { tal, tekst }, height }): a ring cut in slices by share of
 //     the total (fx time per subject), with the legend above and a number in the middle; slices with y 0 or null are left out
+//   maalChart(el, { points: [{ label, maal, vaerdi, punkt, color, tip }], maal: { label, color }, vaerdi: { label, color }, punkt: { label, color }, fmt, height }):
+//     a goal against a value per point (fx expected and used hours per subject): a filled curve through the goals and a
+//     curve through the values, each value with its number; a point's own `color` colours its value (fx the subject).
+//     `punkt` is an optional third mark per point, a lone ring with its number and no curve (fx expected so far against the
+//     whole expected)
+//   radarChart(el, { points: [{ label, y, tip }], midte: { tal, tekst }, fmt, height }): one spoke per point around a circle
+//     (fx hours per weekday), the values as a filled shape with the value at each corner ("–" for 0), rings at clean steps
 //   heatGrid(el, { cols: [label], rows: [{ label, cells: [{ niveau: 0–1, tip }] }] }): one row per measure, stronger = higher
 //     in that row's own span; a cell with niveau == null is left empty
 //   timelineChart(el, { rows: [{ label, color }], segs: [{ row, fra, til, tip }], fra, til, xfmt, height }): segments in lanes
@@ -191,6 +199,8 @@
   window.heatGrid = (el, opts) => tegn(el, w => heatGrid(el, w, opts));
   window.timelineChart = (el, opts) => tegn(el, w => timelineChart(el, w, opts));
   window.pieChart = (el, opts) => tegn(el, w => pieChart(el, w, opts));
+  window.radarChart = (el, opts) => tegn(el, w => radarChart(el, w, opts));
+  window.maalChart = (el, opts) => tegn(el, w => maalChart(el, w, opts));
 
   // The legend for charts with several series, as HTML above the plot so it wraps on a narrow chart
   function noegle(series) {
@@ -331,7 +341,7 @@
           // A 2px gap toward the next segment, away from 0
           if (!yderst) { if (s > 0) t += 2; else u -= 2; }
           if (u - t < 0.5) return;
-          const r = yderst ? Math.min(3, bw / 2, u - t) : 0, c = opts.series[k].color;
+          const r = yderst ? Math.min(3, bw / 2, u - t) : 0, c = p.colors?.[k] || opts.series[k].color;
           const d = s > 0
             ? `M${x0},${u} V${t + r} q0,-${r} ${r},-${r} H${x0 + bw - r} q${r},0 ${r},${r} V${u} Z`
             : `M${x0},${t} V${u - r} q0,${r} ${r},${r} H${x0 + bw - r} q${r},0 ${r},-${r} V${t} Z`;
@@ -402,6 +412,87 @@
     svg.addEventListener("pointerleave", () => { if (document.activeElement !== svg) hideTip(); });
     tastatur(svg, slices.length, i => { showTip(tipFor(i), vedMærke(svg, skiver[i])); oplæs(tipFor(i)); });
     el.replaceChildren(noegle(slices.map(s => ({ label: s.label, color: s.color || "var(--mark)" }))), svg);
+  }
+
+  // A smooth curve through the points (Catmull-Rom as cubic Béziers). The handles stay between their two points, so the
+  // curve never goes above or below them (a value it doesn't have)
+  function glat(ps) {
+    if (!ps.length) return "";
+    let d = `M${ps[0][0].toFixed(1)},${ps[0][1].toFixed(1)}`;
+    for (let i = 0; i < ps.length - 1; i++) {
+      const [a, b, c, e] = [ps[i - 1] || ps[i], ps[i], ps[i + 1], ps[i + 2] || ps[i + 1]];
+      const y = v => Math.min(Math.max(b[1], c[1]), Math.max(Math.min(b[1], c[1]), v)).toFixed(1);
+      d += ` C${(b[0] + (c[0] - a[0]) / 6).toFixed(1)},${y(b[1] + (c[1] - a[1]) / 6)} ${(c[0] - (e[0] - b[0]) / 6).toFixed(1)},${y(c[1] - (e[1] - b[1]) / 6)} ${c[0].toFixed(1)},${c[1].toFixed(1)}`;
+    }
+    return d;
+  }
+  function maalChart(el, width, opts) {
+    const pts = opts.points || [], fm = opts.fmt || String;
+    if (!pts.some(p => p.maal != null || p.vaerdi != null)) return ingenMaalinger(el);
+    const mf = opts.maal?.color || "var(--success)", vf = opts.vaerdi?.color || "var(--mark)";
+    // Room above the highest point for its number
+    const pf = opts.punkt?.color || "var(--text-secondary)", medPunkt = pts.some(p => p.punkt != null);
+    const top = Math.max(0, ...pts.flatMap(p => [p.maal ?? 0, p.vaerdi ?? 0, p.punkt ?? 0]));
+    const f = frame(el, width, pts.map(p => ({ label: p.label, y: p.maal })), { ...opts, min: 0 }, [top * 1.14]);
+    const bund = f.H - f.B, mp = pts.map((p, i) => p.maal == null ? null : [f.x(i), f.y(p.maal)]).filter(Boolean);
+    const vp = pts.map((p, i) => p.vaerdi == null ? null : [f.x(i), f.y(p.vaerdi)]).filter(Boolean);
+    const id = `fyld${++fyldNr}`;
+    f.g += `<defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:${mf};stop-opacity:.45"/>`
+      + `<stop offset="1" style="stop-color:${mf};stop-opacity:.03"/></linearGradient></defs>`;
+    if (mp.length > 1) f.g += `<path d="${glat(mp)} L${mp.at(-1)[0].toFixed(1)},${bund} L${mp[0][0].toFixed(1)},${bund} Z" style="fill:url(#${id});stroke:none"/>`;
+    f.g += `<path d="${glat(mp)}" style="fill:none;stroke:${mf};stroke-width:2.5"/><path d="${glat(vp)}" style="fill:none;stroke:${vf};stroke-width:2.5"/>`;
+    pts.forEach((p, i) => {
+      // The lone mark first, so the value's dot lies on top when they meet; its number to the left
+      if (p.punkt != null) f.g += `<circle cx="${f.x(i).toFixed(1)}" cy="${f.y(p.punkt).toFixed(1)}" r="5" style="fill:var(--container);stroke:${pf};stroke-width:2;stroke-dasharray:2 2"/>`
+        + `<text x="${(f.x(i) - 10).toFixed(1)}" y="${(f.y(p.punkt) + 4).toFixed(1)}" text-anchor="end" style="fill:${pf};font-weight:600;font-size:12px">${esc(fm(p.punkt))}</text>`;
+      if (p.maal != null) f.g += `<circle cx="${f.x(i).toFixed(1)}" cy="${f.y(p.maal).toFixed(1)}" r="4.5" style="fill:var(--container);stroke:${mf};stroke-width:2.5"/>`
+        + `<text x="${f.x(i).toFixed(1)}" y="${(f.y(p.maal) - 10).toFixed(1)}" text-anchor="middle" style="fill:${mf};font-weight:600;font-size:12px">${esc(fm(p.maal))}</text>`;
+      if (p.vaerdi != null) {
+        const c = p.color || vf, under = f.y(p.vaerdi) + 18 <= bund - 2;
+        f.g += `<circle cx="${f.x(i).toFixed(1)}" cy="${f.y(p.vaerdi).toFixed(1)}" r="5" style="fill:${c};stroke:var(--container);stroke-width:2"/>`
+          + `<text x="${(f.x(i) + (under ? 0 : 10)).toFixed(1)}" y="${(under ? f.y(p.vaerdi) + 18 : f.y(p.vaerdi) - 8).toFixed(1)}" text-anchor="${under ? "middle" : "start"}" style="fill:${c};font-weight:600;font-size:12px">${esc(fm(p.vaerdi))}</text>`;
+      }
+    });
+    f.foran = [noegle([{ label: opts.maal?.label || "Mål", color: mf }, ...(medPunkt ? [{ label: opts.punkt?.label || "Punkt", color: pf }] : []),
+      { label: opts.vaerdi?.label || "Værdi", color: vf }])];
+    hover(f, pts.map(p => ({ ...p, y: p.maal ?? p.vaerdi })), el);
+  }
+
+  function radarChart(el, width, opts) {
+    const pts = opts.points || [], n = pts.length, fm = opts.fmt || String, farve = opts.color || "var(--mark)";
+    const H = opts.height || 260, cx = width / 2, cy = H / 2 + 2, R = Math.max(30, Math.min(width / 2 - 40, H / 2 - 30));
+    const max = Math.max(0, ...pts.map(p => p.y || 0)), trin = pæntTrin((max || 1) / 4), top = Math.max(trin, Math.ceil(max / trin) * trin);
+    // With a number in the middle the spokes start on a small inner ring, so 0 sits there and never covers the number
+    const R0 = opts.midte ? Math.max(30, R * 0.3) : 0, rv = v => R0 + (R - R0) * (v || 0) / top;
+    const vinkel = i => -Math.PI / 2 + i * 2 * Math.PI / n, pkt = (i, r) => [cx + r * Math.cos(vinkel(i)), cy + r * Math.sin(vinkel(i))];
+    const svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("viewBox", `0 0 ${width} ${H}`); svg.setAttribute("class", "chart");
+    svg.setAttribute("role", "group"); svg.setAttribute("aria-roledescription", "graf");
+    if (opts.label) svg.setAttribute("aria-label", opts.label);
+    let g = "";
+    // Rings as polygons (the shape of the axes), spokes from the centre and the names outside
+    for (let v = trin; v <= top + 1e-9; v += trin) g += `<polygon class="grid" fill="none" points="${pts.map((_, i) => pkt(i, rv(v)).map(z => z.toFixed(1)).join(",")).join(" ")}"/>`;
+    pts.forEach((p, i) => {
+      const [x0, y0] = pkt(i, R0), [x, y] = pkt(i, R), [lx, ly] = pkt(i, R + 18);
+      g += `<line class="grid" x1="${x0.toFixed(1)}" y1="${y0.toFixed(1)}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}"/>`;
+      g += `<text x="${lx.toFixed(1)}" y="${(ly + 4).toFixed(1)}" text-anchor="middle" class="noegle">${esc(p.label)}</text>`;
+    });
+    const form = pts.map((p, i) => pkt(i, rv(p.y)).map(z => z.toFixed(1)).join(",")).join(" ");
+    g += `<polygon points="${form}" style="fill:color-mix(in srgb, ${farve} 22%, transparent);stroke:${farve};stroke-width:2;stroke-linejoin:round"/>`;
+    if (opts.midte) g += `<circle class="grid" cx="${cx}" cy="${cy}" r="${R0.toFixed(1)}" style="fill:var(--container)"/>`
+      + `<text x="${cx}" y="${cy - 3}" text-anchor="middle" style="font-size:9.5px;letter-spacing:.04em">${esc(opts.midte.tekst || "")}</text>`
+      + `<text x="${cx}" y="${cy + 12}" text-anchor="middle" style="font-size:13px;font-weight:600;fill:var(--text-primary)">${esc(opts.midte.tal)}</text>`;
+    pts.forEach((p, i) => {
+      const [x, y] = pkt(i, rv(p.y)), t = p.y ? fm(p.y) : "–", w = Math.max(18, String(t).length * 6.5 + 10);
+      g += `<g class="hjoerne" data-i="${i}"><rect x="${(x - w / 2).toFixed(1)}" y="${(y - 9).toFixed(1)}" width="${w.toFixed(1)}" height="18" rx="9" style="fill:${farve};stroke:var(--container);stroke-width:1.5"/>`
+        + `<text x="${x.toFixed(1)}" y="${(y + 4).toFixed(1)}" text-anchor="middle" style="fill:#fff;font-weight:600">${esc(t)}</text></g>`;
+    });
+    svg.innerHTML = g;
+    const hjørner = svg.querySelectorAll(".hjoerne"), tipFor = i => pts[i].tip || `${esc(pts[i].label)}: <b>${esc(fm(pts[i].y || 0))}</b>`;
+    svg.addEventListener("pointermove", ev => { const h = ev.target.closest(".hjoerne"); if (h) showTip(tipFor(+h.dataset.i), ev); else hideTip(); });
+    svg.addEventListener("pointerleave", () => { if (document.activeElement !== svg) hideTip(); });
+    tastatur(svg, n, i => { showTip(tipFor(i), vedMærke(svg, hjørner[i])); oplæs(tipFor(i)); });
+    el.replaceChildren(svg);
   }
 
   const vedMærke = (svg, m) => { const r = m.getBoundingClientRect(); return { clientX: r.left + r.width / 2, clientY: r.top }; };

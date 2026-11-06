@@ -13,10 +13,10 @@ I dette repo ligger projekterne som undermapper. I brug har hvert sit eget git-r
 I dag           dagen på tværs: kalender med det faktiske, frister, form, selvstudie,  public/index.html
                 skærmtid, står stille, fokus, Genkald og sprogkort
 Forbindelser    om datakilder, Claude, baggrundsjob og værktøjer virker              bin/forbindelser.py
-Økonomi         Oversigt, Transaktioner, Rapporter, Plan (Sure)                       Sure (ikke i repoet)
-                Forbrug, Scenarier, SU-vagt                                           okonomi/
-Studie          Ugeoverblik, Fag, Træning, Eksamen, Selvstudie, USB-noter, Frister,  studie/
-                På farten (telefon)
+Økonomi         Oversigt, Transaktioner, Plan (Sure)                                  Sure (ikke i repoet)
+                Forbrug, SU-vagt, Gennemgang                                          okonomi/
+Studie          Ugeoverblik, Fag, Træning, Eksamen, Selvstudie, Semestre, USB-noter, studie/
+                Frister, På farten (telefon)
 Sprog           Oversigt, Dagens kort og Ugens tekst (også telefon), Regler          sprog/
 Form & fokus    Perioder, Ugereview, Kroppen i tal                                    coach/ + overblik/
 Skærmtid        Skærmtid (alle enheder, også på telefonen)                           skaermtid/
@@ -64,7 +64,7 @@ Projekternes sider linker til `/kompas/assets/`. Så ser de ens ud og følger ly
 | `tokens.css` | Sures farver, flader og skrift (Geist) som CSS-variabler |
 | `page.css` | kort, fliser, lister, badges, segmenter, grafer og markdown |
 | `icons.js` | `icon(navn)` |
-| `chart.js` | `barChart` og `lineChart` med hover. Én serie pr. graf |
+| `chart.js` | `barChart`, `lineChart`, `stackChart`, `maalChart` og `radarChart` med hover |
 | `liv.js` | fælles hjælpere: `esc`, tal- og datoformater, `nedtaelling`, `parseEvent` (fag-felterne fra garmin-coach), `loadLiv()` til overbliks `liv.json`, `latestReview` (det nyeste ugereview med tekst) og `reviewKilde` ("Skrevet <dato> · metode <metode>") |
 | `md.js` | `md(tekst)`: markdown til HTML, escapet (køreplaner, fagnoter, sprogregler) |
 
@@ -80,7 +80,7 @@ Rammen (`public/shell.html`) har menuen til venstre og en iframe til højre. Alt
 | `/kompas/…` | I dag, designkittet og `projekter.json` | `public/` |
 | `/studie/…` | Studie | `~/.kompas/studie` (skrevet af eksporten) |
 | `/studie/api/…` | Genkald, færdig-markering og telefonens synk | `127.0.0.1:8767` |
-| `/forbrug/…` | Forbrug, Scenarier, SU-vagt | `okonomi/dashboard/public` |
+| `/forbrug/…` | Forbrug, SU-vagt, Gennemgang | `okonomi/dashboard/public` |
 | `/form/…` | Perioder, Ugereview, Kroppen i tal, `liv.json` | `~/.garmin-coach/site` |
 | `/sprog/…` | Sprog (sider og API) | `127.0.0.1:8769` |
 | `/skaermtid/…` | Skærmtid | `~/.kompas/skaermtid` (skrevet af `skaermtid.py byg`) |
@@ -96,9 +96,10 @@ markup, dukker ikonmenuen bare op igen.
 
 Siderne skriver kun det, brugeren selv taster eller klikker, og kun gennem fire servere: Studie-serveren
 (Genkald-svar og -markeringer, begreber, drill-gæt, læste uger, I egne ord, prøveeksamener, din vurdering af
-USB-noterne, telefonens sync og færdig-markering af frister), Sprog-serveren (karakter og svar på sprogkort, svar på
-ugens tekst og telefonens sync), Skærmtid-serveren (dit kategorivalg for ét program eller én side, i `valg.json`; den
-bygger siden igen bagefter) og Sure (input på Scenarier og SU-vagt gennem `PUT /dashboard-state/<navn>` og kategorien på en postering under
+USB-noterne, telefonens sync, færdig-markering af frister, timeren i menuen, sessionerne, de forslag, du gemmer eller
+afviser, dine mål og dit fremmøde), Sprog-serveren (karakter og svar på sprogkort, svar på ugens tekst, telefonens sync
+og tid på sprog: forslag, du gemmer eller afviser, og sessioner, du sletter), Skærmtid-serveren (dit kategorivalg for ét program eller én side, i `valg.json`; den
+bygger siden igen bagefter) og Sure (input på SU-vagt gennem `PUT /dashboard-state/<navn>` og kategorien på en postering under
 Forbrug gennem `PUT /dashboard-category/<id>`, begge bag Sures login). Resten er læsning, og siderne regner ikke
 selv videre på tal; de viser det, projekterne har beregnet. Sprogkort, ugens tekst og niveau skriver Sprog-rutinen
 kun gennem `sprog.js`.

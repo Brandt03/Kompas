@@ -1,4 +1,4 @@
-"""Læser de tre kilder og giver ugetal tilbage. Hver funktion returnerer
+"""Læser kilderne og giver ugetal tilbage. Hver funktion returnerer
 {mandag: {kolonne: værdi}} og udelader uger kilden ikke dækker."""
 
 from __future__ import annotations
@@ -8,6 +8,7 @@ import json
 import sqlite3
 from collections import defaultdict
 from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from . import config
 
@@ -138,13 +139,9 @@ def oekonomi(fra: date) -> tuple[dict, str | None]:
 # --- Studie -----------------------------------------------------------------
 
 def kalender(fra: date) -> tuple[dict, str | None]:
-    """Undervisning og selvstudie fra kalenderen i garmin-coach.
-
-    Undervisning er undervisning fra skemaet, som garmin-coach har givet en fag_kode. Selvstudie er
-    CalTask-begivenheder ("Selvstudie · Alfa"), og varigheden er den tid der blev
-    logget. Kun uger som kalendervinduet dækker fra mandag af tæller med —
-    ellers ville ugen tælle for lavt. Selvstudie før logningen begyndte er
-    ukendt, ikke 0."""
+    """Undervisning fra kalenderen i garmin-coach: undervisning fra skemaet, som garmin-coach har givet en fag_kode. Kun uger
+    som kalendervinduet dækker fra mandag af tæller med — ellers ville ugen tælle for lavt. Selvstudiet kommer fra
+    Studies sessioner (selvstudie)."""
     if not config.GARMIN_DB.exists():
         return {}, None
     conn = sqlite3.connect(f"{config.GARMIN_DB.resolve().as_uri()}?mode=ro", uri=True)
@@ -162,34 +159,69 @@ def kalender(fra: date) -> tuple[dict, str | None]:
 
     start = max(fra, date.fromisoformat(foerste))
     m = mandag(start) if start.weekday() == 0 else mandag(start) + timedelta(days=7)
-    studie_fra = mandag(date.fromisoformat(config.SELVSTUDIE_FRA))
     # Kun uger der er begyndt; fremtidige uger har intet at sammenligne med.
     nu = datetime.now()
     ud: dict[str, dict] = {}
     while m <= min(mandag(nu.date()), date.fromisoformat(sidste)):
         ud[m.isoformat()] = {"undervisning_timer": 0.0}
-        if m >= studie_fra:
-            ud[m.isoformat()] |= {"selvstudie_timer": 0.0, "_dage": set()}
         m += timedelta(days=7)
 
-    for start_s, slut_s, titel, fag_kode in rows:
+    for start_s, slut_s, _titel, fag_kode in rows:
         s, e = datetime.fromisoformat(start_s), datetime.fromisoformat(slut_s)
         uge = ud.get(mandag(s.date()).isoformat())
-        if uge is None:
-            continue
-        timer = (e - s).total_seconds() / 3600
-        if fag_kode:  # undervisning fra skemaet, som garmin-coach har genkendt
-            uge["undervisning_timer"] += timer
-        elif (titel or "").startswith(config.SELVSTUDIE_PRAEFIKS) and "_dage" in uge and e <= nu and timer > 0:
-            uge["selvstudie_timer"] += timer
-            uge["_dage"].add(s.date())
+        if uge is not None and fag_kode:  # undervisning fra skemaet, som garmin-coach har genkendt
+            uge["undervisning_timer"] += (e - s).total_seconds() / 3600
 
     for uge in ud.values():
         uge["undervisning_timer"] = round(uge["undervisning_timer"], 1)
-        if "_dage" in uge:
-            uge["selvstudie_timer"] = round(uge["selvstudie_timer"], 2)
-            uge["selvstudie_dage"] = len(uge.pop("_dage"))
     return ud, sidste
+
+
+def sessioner() -> dict | None:
+    """Studies sessioner (Scripts/sessioner.json gennem Studies eksport): dagen, loggen begyndte (`fra`), hvornår
+    eksporten skrev filen, og hver afsluttet session med fagets kortnavn og stykkerne som vægtid uden zone (som
+    kalenderen). En pause er mellemrummet mellem to stykker. None, når filen mangler eller ikke kan læses: så er
+    selvstudiet ukendt, ikke 0."""
+    try:
+        d = json.loads(config.SESSIONER_JSON.read_text())
+    except (OSError, ValueError):
+        return None
+    tz = ZoneInfo(config.TZ)
+    vaeg = lambda t: datetime.fromisoformat(t).astimezone(tz).replace(tzinfo=None)  # noqa: E731
+    return {"fra": d.get("fra"), "genereret": d.get("genereret"),
+            "sessioner": [{"id": s["id"], "kort": s.get("kort") or s["fag"], "stykker": [(vaeg(a), vaeg(b)) for a, b in s["stykker"]]}
+                          for s in d.get("sessioner") or [] if s.get("stykker")]}
+
+
+def selvstudie(fra: date) -> tuple[dict, str | None]:
+    """Selvstudiet pr. uge fra Studies sessioner: timerne (stykkerne, uden pauser) og dagene med selvstudie, under den
+    dag og uge, sessionen begyndte. Fra ugen, logningen begyndte (SELVSTUDIE_FRA, eller loggens fra, når den er senere:
+    et nyt semester har en ny log, og ugerne før beholder deres gemte tal), til denne uge. Uden filen er der ingen tal,
+    så de gemte bliver stående."""
+    log = sessioner()
+    if log is None:
+        return {}, None
+    start = max(fra, date.fromisoformat(config.SELVSTUDIE_FRA), date.fromisoformat(log["fra"]) if log["fra"] else date.min)
+    m, ud = mandag(start), {}
+    while m <= mandag(date.today()):
+        ud[m.isoformat()] = {"selvstudie_timer": 0.0, "_dage": set()}
+        m += timedelta(days=7)
+    for s in log["sessioner"]:
+        a = s["stykker"][0][0]
+        if (uge := ud.get(mandag(a.date()).isoformat())) is not None:
+            uge["selvstudie_timer"] += sum((z - b).total_seconds() for b, z in s["stykker"]) / 3600
+            uge["_dage"].add(a.date())
+    for uge in ud.values():
+        uge["selvstudie_timer"] = round(uge["selvstudie_timer"], 2)
+        uge["selvstudie_dage"] = len(uge.pop("_dage"))
+    slut = max((s["stykker"][-1][1] for s in log["sessioner"]), default=None)
+    return ud, slut.isoformat(timespec="minutes") if slut else None
+
+
+def selvstudie_friskhed() -> dict:
+    """Hvornår Studies eksport sidst skrev sessionerne. Seneste session (data_til) siger kun, hvornår du sidst studerede."""
+    log = sessioner()
+    return {"opdateret": log["genereret"][:19]} if log and log["genereret"] else {}
 
 
 def kalender_friskhed() -> dict:
@@ -222,10 +254,12 @@ KILDER = {
     "garmin": garmin,
     "sure": oekonomi,
     "kalender": kalender,
+    "selvstudie": selvstudie,
 }
 # Friskhed ud over data_til, for kilder hvor data_til ikke er en hentetid.
 FRISKHED = {
     "kalender": kalender_friskhed,
+    "selvstudie": selvstudie_friskhed,
 }
 # En kilde, der ikke er hentet eller ændret i flere dage end dette, står som gammel.
 GAMMEL_EFTER_DAGE = 3

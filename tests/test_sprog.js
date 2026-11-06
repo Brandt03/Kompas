@@ -176,6 +176,32 @@ async function test(navn, fn) { await fn(); ok++; console.log(`ok  ${navn}`); }
   });
 
   // ── serveren ──
+  await test("tid: forslag ud fra svarene, pr. sprog, minus det gemte; gem, afvis og slet", () => {
+    // 100 dage frem, så de andre tests' svar ligger uden for de 14 dage
+    const nu = Date.now() + 100 * 864e5, m = 6e4, t0 = nu - 120 * m, svar = (min, id) => ({ tid: new Date(t0 + min * m).toISOString(), type: "svar", id, karakter: 3 });
+    fs.appendFileSync(K.FIL.log, [svar(0, "es-0001"), svar(2, "es-0002"), svar(4, "es-0003"), svar(6, "de-0001"), svar(8, "de-0001"),
+      svar(40, "es-0001"),                                            // alene: intet forslag
+      svar(60, "es-0001"), svar(61, "es-0002"),                       // under 5 minutter: intet forslag
+      { tid: new Date(t0 + 62 * m).toISOString(), type: "tekst-svar", uge: "2020-W01", tekst: "x" },  // ugens tekst tæller ikke
+      svar(115, "es-0001"), svar(117, "es-0002")].map(x => JSON.stringify(x) + "\n").join(""));  // for nyt: venter på pausen
+    let t = K.tid(nu);
+    assert.strictEqual(t.forslag.length, 1, JSON.stringify(t.forslag));
+    const f = t.forslag[0];
+    assert.deepStrictEqual([f.svar, f.dele.map(x => [x.navn, Math.round(x.timer * 60)])], [5, [["Spansk", 6], ["Tysk", 4]]], "første svar får mediantiden (2 min)");
+    t = K.gemForslag({ id: f.id, handling: "gem" }, nu);
+    assert.deepStrictEqual([t.forslag.length, t.sessioner.length, Math.round(t.sessioner.reduce((a, x) => a + x.timer, 0) * 60)], [0, 2, 10], "gemt: ingen forslag tilbage");
+    assert.throws(() => K.gemForslag({ id: f.id, handling: "gem" }, nu), /findes ikke længere/);
+    // Et nyt forslag, der overlapper det gemte, får kun tiden uden for det
+    fs.appendFileSync(K.FIL.log, [svar(9, "es-0001"), svar(14, "es-0002")].map(x => JSON.stringify(x) + "\n").join(""));
+    t = K.tid(nu);
+    assert.deepStrictEqual(t.forslag.map(x => x.dele.map(d => Math.round(d.timer * 60))), [[6]], JSON.stringify(t.forslag));
+    t = K.gemForslag({ id: t.forslag[0].id, handling: "afvis" }, nu);
+    assert.deepStrictEqual([t.forslag.length, JSON.parse(fs.readFileSync(K.FIL.sessioner, "utf8")).afviste.length], [0, 1], "afvist kommer ikke igen");
+    t = K.sletSession({ id: t.sessioner[0].id }, nu);
+    assert.strictEqual(t.sessioner.length, 1);
+    assert.throws(() => K.sletSession({ id: "s-findes-ikke" }, nu), /findes ikke/);
+  });
+
   const srv = spawn(process.execPath, [path.join(ROD, "server.js")], { env, stdio: ["ignore", "pipe", "pipe"] });
   let srvLog = ""; srv.stdout.on("data", d => srvLog += d); srv.stderr.on("data", d => srvLog += d);
   try {

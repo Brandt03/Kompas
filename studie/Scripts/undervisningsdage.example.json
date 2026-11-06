@@ -1,5 +1,5 @@
 {
- "_forklaring": "Eksempel. Kopiér til undervisningsdage.json og skriv dit eget skema. Bruges af canvas-sortering.js: forelæsning n = n'te dato i listen. Et emne gør filnavnet pænere (20260907_FL1_Lorem ipsum.pdf); uden emne beholder filen Canvas-navnet. Datoer kan også stå alene, som under Beta.",
+ "_forklaring": "Eksempel. Kopiér til undervisningsdage.json og skriv dit eget skema. Bruges af canvas-sortering.js: forelæsning n = n'te dato i listen. Et emne gør filnavnet pænere (20260907_FL1_Lorem ipsum.pdf); uden emne beholder filen Canvas-navnet. Datoer kan også stå alene, som under Beta. kapitler: de kapitler i fagets bog, forelæsningen er mappet til; Fag-siden bruger dem til at finde ugens opgaver i de gamle sæt (Til eksamen).",
  "Alfa": {
   "Forelæsninger": [
    { "dato": "2026-09-07", "emne": "Lorem ipsum" },
@@ -16,10 +16,10 @@
  },
  "Gamma": {
   "Forelæsninger": [
-   { "dato": "2026-09-08", "emne": "Magna aliqua" },
-   { "dato": "2026-09-15", "emne": "Ut enim" },
-   { "dato": "2026-09-22", "emne": "Minim veniam" },
-   { "dato": "2026-09-29", "emne": "Quis nostrud" }
+   { "dato": "2026-09-08", "emne": "Magna aliqua", "kapitler": [1] },
+   { "dato": "2026-09-15", "emne": "Ut enim", "kapitler": [2] },
+   { "dato": "2026-09-22", "emne": "Minim veniam", "kapitler": [3, 4] },
+   { "dato": "2026-09-29", "emne": "Quis nostrud", "kapitler": [5] }
   ],
   "Øvelser": [
    { "dato": "2026-09-10", "emne": "Exercitation" },

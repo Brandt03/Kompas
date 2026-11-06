@@ -6,8 +6,9 @@
 //   log.jsonl    dine svar: karakteren 1-4 og det, du skrev. Repetitionen regnes herfra; der er ingen anden tilstand
 //   tekster/     ugens tekst (<uge>.json, fx 2026-W43.json) med rutinens feedback på dit svar
 //   regler.json  sprogreglerne (Regler), som kort kan pege på med `regel`; kun rutinen skriver dem (sprog.js regel)
+//   sessioner.json  tiden på sprog: de forslag ud fra dine svar, du har godkendt, og dem, du har afvist (se Tid nedenfor)
 // Eksamensdatoerne læses fra Studies eksport (~/.kompas/studie/studie.json, eller SPROG_STUDIE_JSON); kun læsning.
-// Serveren skriver kun det, du selv taster eller klikker (log.jsonl). Alt andet skriver rutinen gennem sprog.js.
+// Serveren skriver kun det, du selv taster eller klikker (log.jsonl og sessioner.json). Alt andet skriver rutinen gennem sprog.js.
 // CommonJS, ingen afhængigheder, som Studie-serveren.
 "use strict";
 const fs = require("fs");
@@ -17,7 +18,7 @@ const crypto = require("crypto");
 
 const DATA = path.resolve(process.env.SPROG_DATA || path.join(__dirname, "data"));
 const FIL = { sprog: path.join(DATA, "sprog.json"), kort: path.join(DATA, "kort.json"), log: path.join(DATA, "log.jsonl"), tekster: path.join(DATA, "tekster"),
-  regler: path.join(DATA, "regler.json") };
+  regler: path.join(DATA, "regler.json"), sessioner: path.join(DATA, "sessioner.json") };
 
 // Rollerne: aktiv (bygges op: flest nye kort og ugens tekst), vedligehold (holdes ved lige: få nye kort),
 // pause (ingen nye kort; kortene bliver liggende), studie (dansk og engelsk: kort af dine egne fejl og fagsprog).
@@ -288,8 +289,84 @@ function sync({ poster }, nu = Date.now()) {
   return { resultater: ud };
 }
 
+// ── Tid ──────────────────────────────────────────────────────────────
+// Tiden på sprog, foreslået ud fra tidspunkterne på dine svar på sprogkort (også fra telefonen) og gemt, når du godkender
+// forslaget (på Studie → Selvstudie). Den tæller for sig, ikke i Studies dagsmål. Reglerne er de samme som Studies
+// forslag (studie/Scripts/sessioner.js, kopieret, ikke delt; se README, Kendt dublering): svar med højst
+// pause_min minutter imellem hører sammen, hvert svar får tiden siden det forrige og det første den mediane tid mellem
+// svarene; tid, der allerede er gemt, trækkes fra; et forslag kommer, når der er gået pause_min minutter efter det sidste
+// svar, og kun med mindst mindst_min minutter. Ugens tekst tæller ikke: ét svar siger intet om, hvor længe du skrev.
+const FORSLAG = { pause_min: 10, mindst_min: 5, dage: 14 };
+const sessionerLæs = () => { const d = læsJson(FIL.sessioner, {}); return { sessioner: d.sessioner || [], afviste: d.afviste || [] }; };
+function forslag(svar, d, nu = Date.now()) {
+  const pause = FORSLAG.pause_min * 6e4, afviste = new Set(d.afviste), fra = nu - FORSLAG.dage * DAG;
+  const logget = d.sessioner.flatMap(s => s.stykker.map(([a, b]) => [Date.parse(a), Date.parse(b)]));
+  const grupper = [];
+  for (const x of svar.filter(x => x.t >= fra && x.t <= nu).sort((a, b) => a.t - b.t)) {
+    const g = grupper.at(-1);
+    if (g && x.t - g.at(-1).t <= pause) g.push(x); else grupper.push([x]);
+  }
+  const ud = [];
+  for (const g of grupper) {
+    const id = `f-${new Date(g[0].t).toISOString()}`;
+    if (g.length < 2 || nu - g.at(-1).t <= pause || afviste.has(id)) continue;
+    const huller = g.slice(1).map((x, i) => x.t - g[i].t).sort((a, b) => a - b), median = huller[Math.floor((huller.length - 1) / 2)];
+    const dele = new Map();
+    g.forEach((x, i) => {
+      let stykker = [[i ? g[i - 1].t : x.t - median, x.t]];
+      for (const [a, b] of logget) stykker = stykker.flatMap(([c, e]) => b <= c || a >= e ? [[c, e]] : [[c, a], [b, e]].filter(([y, z]) => z > y));
+      const del = dele.get(x.sprog) || dele.set(x.sprog, []).get(x.sprog);
+      for (const st of stykker) if (del.length && del.at(-1)[1] === st[0]) del.at(-1)[1] = st[1]; else del.push([...st]);
+    });
+    const timer = st => st.reduce((a, [c, e]) => a + e - c, 0) / 36e5;
+    const ds = [...dele].map(([sprog, st]) => ({ sprog, stykker: st, timer: timer(st) })).filter(x => x.stykker.length);
+    if (ds.reduce((a, x) => a + x.timer, 0) * 60 < FORSLAG.mindst_min) continue;
+    ud.push({ id, start: Math.min(...ds.map(x => x.stykker[0][0])), slut: Math.max(...ds.map(x => x.stykker.at(-1)[1])), svar: g.length, dele: ds });
+  }
+  return ud;
+}
+// Dine svar på sprogkort, med kortets sprog
+function svarTider() {
+  const sprog = new Map(kortListe().map(k => [k.id, k.sprog]));
+  return logPoster().filter(p => p.type === "svar" && Date.parse(p.tid) > 0 && sprog.get(p.id)).map(p => ({ t: Date.parse(p.tid), sprog: sprog.get(p.id) }));
+}
+const r2 = x => Math.round(x * 100) / 100;
+const iso = t => new Date(t).toISOString();
+// Til Selvstudie og Oversigt: forslagene, denne uges tid (mandag til nu) og sessionerne de seneste 14 dage (nyeste først)
+function tid(nu = Date.now()) {
+  const d = sessionerLæs(), S = sprogTilstand(), navn = k => S.sprog[k]?.navn || k;
+  const varighed = s => s.stykker.reduce((a, [x, y]) => a + Date.parse(y) - Date.parse(x), 0) / 36e5;
+  const mandag = (() => { const x = new Date(nu); x.setHours(0, 0, 0, 0); x.setDate(x.getDate() - (x.getDay() + 6) % 7); return x.getTime(); })();
+  const uge = d.sessioner.filter(s => Date.parse(s.stykker[0][0]) >= mandag);
+  return { forslag_regler: FORSLAG,
+    forslag: forslag(svarTider(), d, nu).map(f => ({ ...f, start: iso(f.start), slut: iso(f.slut),
+      dele: f.dele.map(x => ({ sprog: x.sprog, navn: navn(x.sprog), timer: r2(x.timer), stykker: x.stykker.map(st => st.map(iso)) })) })),
+    uge: { mandag: isoDato(new Date(mandag)), timer: r2(uge.reduce((a, s) => a + varighed(s), 0)), sessioner: uge.length },
+    sessioner: d.sessioner.filter(s => Date.parse(s.stykker[0][0]) >= nu - FORSLAG.dage * DAG).sort((a, b) => Date.parse(b.stykker[0][0]) - Date.parse(a.stykker[0][0]))
+      .map(s => ({ id: s.id, sprog: s.sprog, navn: navn(s.sprog), start: s.stykker[0][0], slut: s.stykker.at(-1)[1], timer: r2(varighed(s)) })) };
+}
+const gemSessioner = d => skrivJson(FIL.sessioner, { afviste: d.afviste.slice(-200), sessioner: d.sessioner });
+// Et forslag godkendt (gem: én session pr. sprog) eller afvist (kommer ikke igen); forslaget regnes igen her
+function gemForslag({ id, handling } = {}, nu = Date.now()) {
+  const d = sessionerLæs(), f = forslag(svarTider(), d, nu).find(x => x.id === id);
+  if (!f) throw new Error("forslaget findes ikke længere");
+  if (handling === "gem") for (const x of f.dele) d.sessioner.push({ id: `s-${crypto.randomBytes(6).toString("hex")}`, sprog: x.sprog, stykker: x.stykker.map(st => st.map(iso)), kilde: "forslag" });
+  else if (handling === "afvis") d.afviste.push(id);
+  else throw new Error("ukendt handling");
+  d.sessioner.sort((a, b) => Date.parse(a.stykker[0][0]) - Date.parse(b.stykker[0][0]));
+  gemSessioner(d);
+  return tid(nu);
+}
+function sletSession({ id } = {}, nu = Date.now()) {
+  const d = sessionerLæs(), i = d.sessioner.findIndex(s => s.id === id);
+  if (i < 0) throw new Error("sessionen findes ikke");
+  d.sessioner.splice(i, 1);
+  gemSessioner(d);
+  return tid(nu);
+}
+
 module.exports = {
   DATA, FIL, STANDARD, TYPER, NIVEAUER, ROLLER, LÆRT, DAG, UGE, EKSAMEN_DAGE_FØR, eksamener, eksamensperiode, læs, skriv, læsJson, skrivJson, isoDato, isoUge, næsteMandag, dagStart,
   sprogTilstand, gemSprog, kortListe, gemKort, reglerListe, gemRegler, logPoster, hændelser, planlæg, standardOpgave, repetition, tekster, tekstFil, nyFeedback,
-  gemSvar, gemTekstSvar, pakke, sync,
+  gemSvar, gemTekstSvar, pakke, sync, FORSLAG, forslag, tid, gemForslag, sletSession,
 };

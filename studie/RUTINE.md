@@ -15,7 +15,7 @@ a) Læs `CLAUDE.md` i roden. Dens regler gælder også for denne kørsel, og den
    `Scripts/fag.json` (semestrets fag) og tabellen "… trænes forskelligt" i `README.md`
    (eksamensform pr. fag). Rutinen går fagene igennem i fag.json's rækkefølge, og `<mappe>`
    nedenfor er fagets `mappe`. Felterne siger, hvad faget har: `genkald`, `begreber`,
-   `kode` (mappen med drills og øvelser), `afleveringer` (mappe og præfiks som G i G1)
+   `kode` (mappen med drills og øvelser), `afleveringer` (mappe og præfiks som Opgave i Opgave 3)
    og `eksamenstraening.form` (skriftlig, kode eller mundtlig). Vigtigst i CLAUDE.md:
    - **Mine arbejdsfiler** (`*/Genkald/begreber.md`, `*/egne-ord.md`, `Scripts/usb-vurdering.json`, eksisterende `genkald-*.md`,
      alt i `<mappe>/<kode>/` for et kodefag) læser du kun. Du redigerer ALDRIG i dem.
@@ -25,7 +25,7 @@ a) Læs `CLAUDE.md` i roden. Dens regler gælder også for denne kørsel, og den
      udvides: Fagnoter-dokumenterne (KUN efter afsnit 6) og
      `<mappe>/<kode>/Drills/forklaringer/*.md` (KUN efter afsnit 6b).
 
-a2) SORTÉR CANVAS-DOWNLOADS. Kør altid, også når køreplanen springes over i c):
+a1) SORTÉR CANVAS-DOWNLOADS. Kør altid, også når køreplanen springes over i c):
    `node Scripts/canvas-sortering.js --kør` (fra semestermappen).
    Scriptet flytter Canvas-filer fra ~/Downloads ind i `<mappe>/Pensum/...` og
    `<mappe>/Afleveringer/`, konverterer PPTX til PDF og lægger dubletter i
@@ -76,12 +76,13 @@ filen mangler i mappen. Opfind aldrig datoer.
 ## 2. FREMGANGSMÅDE
 
 1. Slå ugen op i lektionsplanerne og kursusplanerne. Et fag kan have flere
-   selvstudier eller øvelsesgange i samme uge. Tag dem alle.
+   selvstudier eller øvelsesgange i samme uge. Tag dem alle. En skemaændring under
+   "Vigtige datoer" i CLAUDE.md har forrang for planerne.
 
 2. SLIDES OG ØVELSESSÆT. Se efter filer i `<mappe>/Pensum/Forelæsninger/` og
    `<mappe>/Pensum/Øvelser/`, der hører til den planlagte uge (se "Hvilken uge en
    fil hører til" i afsnit 1). Findes de, så
-   læs dem, og byg noteafsnittet på slides + bog (slides viser, hvad underviseren
+   læs dem, og byg ugens foreløbige fagnoter (afsnit 6) på slides + bog (slides viser, hvad underviseren
    vægter). Findes de ikke, så skriv "slides til uge NN ikke uploadet endnu" i
    Hurtigt overblik, og byg på bog + lektionsplan. Læs også den seneste uges
    slides, hvis de ikke var med i forrige køreplan.
@@ -107,10 +108,20 @@ filen mangler i mappen. Opfind aldrig datoer.
      `$LIV_SITE/liv.json` (standard `~/.garmin-coach/site/liv.json`; listen `uger`, ISO-ugen i `uge`), og hvor mange af de
      sidste 14 dage der har svar i `Scripts/genkald-log.jsonl`. `null` betyder ukendt, ikke 0.
      Bruges til omfanget i afsnit 4b.
+   - Sikkerhed og Tænk højt: mine svar i `Scripts/genkald-log.jsonl` fra de sidste 14 dage. Et svar er
+     **sikkert, men forkert**, når `procent` er 70 eller mere (i ældre svar uden `procent`: `"sikkerhed": "sikker"`),
+     og `mark` er `"halvt"` eller `"blankt"`. Et første gæt på Drills-fanen (`"type": "drill"`, ingen skyder) er også
+     sikkert, men forkert, når `"rigtig": false`, og der ikke står `"sikkerhed": "gaet"` (så satte jeg ikke flueben i
+     *gættede*). `tanker` er det, jeg skrev eller dikterede under Tænk højt om,
+     hvordan jeg tænkte. `noegle` viser kortet: `<fag>/genkald-ugeNN-NN.md#<nr>` (facit i `-svar.md`, mit svar
+     under spørgsmålet som `> **Mit svar**`), `<fag>/begreb/<begreb>` under `"type": "overhoer"`,
+     `<fag>/<sæt>#<nr>` under `"type": "eksamen"` og `drill/<fil>#<tjek>` under `"type": "drill"` og `"drill-rep"`
+     (filen er kodefagets `<mappe>/<kode>/Drills/<fil>`, forklaringen ligger i `Drills/forklaringer/`).
+     Bruges til Dine huller i studieguiden (afsnit 4c).
    Brug status til at målrette rådene: fx er en drill ikke begyndt, og en
    aflevering er denne uge, så sig det. Er noget umuligt at aflæse, så skriv det.
 
-4. Læs ugens pensum i lærebøgerne, før du skriver noteafsnittet. Skriv ud fra
+4. Læs ugens pensum i lærebøgerne, før du skriver ugens foreløbige fagnoter og træning. Skriv ud fra
    bogen, ikke ud fra hvad du husker om emnet.
 
 5. Læs de tidligere køreplaner i `Uge_Overblik/`, så du ikke gentager dig selv
@@ -120,7 +131,7 @@ filen mangler i mappen. Opfind aldrig datoer.
 
 - Bøgerne, deres udgaver, filnavne og hvordan de læses (sidetal, OCR, omregning
   mellem udgaver) står i CLAUDE.md under "Konventioner". Følg dem, og angiv altid
-  sidetal i min udgave.
+  sidetal i min udgave. Skriv kun de omregnede sidetal, ikke lektionsplanens.
 - Står noget fra "Materiale der mangler" i CLAUDE.md på pensum, og finder du det
   ikke i mappen: skriv afsnittet som forberedelsesnote, marker det tydeligt, og
   opfind aldrig sidetal eller struktur.
@@ -140,36 +151,60 @@ som overskrift (Kompas finder fagets afsnit ud fra den). Hvert afsnit har:
 - Min status fra mappen, med dato
 - Huller eller uoverensstemmelser i planen
 
+Under Hurtigt overblik viser Kompas selv **Til eksamen**: hvad de gamle sæt i `<mappe>/Eksamenstræning/`
+har spurgt om fra ugens stof, med de hyppigste temaer først. Skriv det ikke ind i køreplanen, men brug det til
+at prioritere Træning og Video. Det tælles ud fra opgavernes `*Emne: Tema — detalje · uge N*` (samme Tema for
+samme emne på tværs af sættene) eller `· kap. N` (første kapitel er hovedemnet). Kodefagets uger kobles til
+kapitlerne med `kapitler` ved forelæsningen i `Scripts/undervisningsdage.json`, så mapper du et emne til andre
+kapitler end der står dér, så ret dem også dér.
+
 **Kilder** — ét punkt per kilde med præcis henvisning: lektionsplan (uge og
 række), bog (kapitel, afsnitsoverskrift, sider i min udgave), slides
 (filnavn, slidenummer), status-filer (sti og dato).
 
-**Noter til pensum** — 400-600 ord. FORMEN AFHÆNGER AF FAGETS EKSAMEN: formen står i
+Ugens noter står IKKE i køreplanen. De står i fagnoterne i Word, som du skriver foreløbigt for
+ugen i afsnit 6, og Kompas viser dem under køreplanen. Køreplanen har kun planen og træningen.
+Undtagelse: kan du ikke skrive i fagets Word-dokument (låsefil, afsnit 6 punkt 2), så skriv
+ugens noter her under **Noter til pensum** (400-600 ord prosa med bogens termer), så
+forberedelsen ikke mangler.
+
+**Træning** — FORMEN AFHÆNGER AF FAGETS EKSAMEN: formen står i
 `eksamenstraening.form` i fag.json, og eksamenens detaljer (varighed, hjælpemidler,
-opgavetyper) i fagets række i README's "… trænes forskelligt".
+opgavetyper) i fagets række i README's "… trænes forskelligt". Kompas viser spørgsmålene
+med svaret skjult, så behold de kursive markeringer præcis.
 
-  · **kode** — skriftlig prøve i kode. En ugegennemgang i prosa som de andre fag,
-    ikke et opslagsværk: hvad ugens begreber er, hvilket problem hvert af dem løser,
-    og hvordan de hænger sammen med hinanden og med de tidligere uger. Tag
-    begreberne i den rækkefølge, de bygger på hinanden. Kode kun, hvor teksten ikke
-    kan stå alene: højst tre korte eksempler (højst seks linjer, kørt i node,
-    resultatet efter `// →`), som teksten forklarer. Opslagsværket med syntaks og
-    kodeblokke til USB'en er fagnoterne i Word (afsnit 6). Slut med **Typiske fejl**:
-    to-tre fejl, formuleret så jeg kan genkende dem i en fejlmeddelelse, og hvad der
-    får dem til at ske. Brug egne eksempler, aldrig facit til mine opgaver.
+  · **kode** — kun eksamensopgaverne herunder. Typiske fejl står i fagnoterne, og drills og
+    LeetCode træner koden.
 
-  · **skriftlig** — prosa, der forklarer sammenhængen. Slut ALTID med 5-8
-    øvelsesspørgsmål i eksamensformatet fra README: fx multiple choice med plausible
-    distraktorer, en model eller tabel fra faget at udfylde, mindst ét essayspørgsmål.
-    Svarene til sidst, adskilt. Findes der eksamenssæt i mappen, så kalibrér formatet
-    efter dem.
+  · **skriftlig** — `*Øvelsesspørgsmål*` og 5-8 spørgsmål i eksamensformatet fra README:
+    fx multiple choice med plausible distraktorer, en model eller tabel fra faget at
+    udfylde, mindst ét essayspørgsmål. Derefter `*Svar*` og svarene. Findes der
+    eksamenssæt i mappen, så kalibrér formatet efter dem.
 
-  · **mundtlig** — prosa med bogens fagtermer. Slut med ét realistisk
-    pensumspørgsmål og et disponeret svar på fem minutter: tre-fire hovedpunkter
-    i rækkefølge med de begreber, der skal nævnes i hvert.
+  · **mundtlig** — `*Pensumspørgsmål:*` og ét realistisk pensumspørgsmål, derefter
+    `*Disponeret svar (5 min.)*` og et disponeret svar: tre-fire hovedpunkter i
+    rækkefølge med de begreber, der skal nævnes i hvert.
+
+  · **Eksamensopgaver** — i et fag med gamle eksamenssæt i `<mappe>/Eksamenstræning/` og en
+    eksamen dette semester ("Vigtige datoer" i CLAUDE.md) står øverst i Træning, før
+    `*Øvelsesspørgsmål*` (Kompas skjuler alt efter `*Svar*`), linjen `*Eksamensopgaver:*` og én til
+    to opgaver fra sættene, der kan løses med det, der er gennemgået til og med ugen:
+    `- [<sættets titel>, opgave <N>: <emne>](/studie/eksamen.html#<fag-id>/<sæt>/<N>) — <hvorfor den passer nu>`
+    hvor `<sæt>` er filnavnet uden `.md` (fx `2024-ordinaer`) og `<N>` opgavens nummer i sættet
+    (`## Opgave N` eller `**N.**`). Linket åbner opgaven under "øv enkeltopgaver" på Kompas.
+    - Kode: vælg fra lærerens lister i `<mappe>/Eksamenstræning/niveauer.json`; en liste gælder fra
+      forelæsning `efter`. Tag det niveau, der passer til min status, og gå et niveau op ad gangen.
+    - Skriftlig uden sådan en liste: vælg spørgsmål i sættene, hvis emne er gennemgået; flere
+      spørgsmål fra samme sæt må stå på én linje som `opgave 3, 7 og 12`, med linket til den første.
+    - Aldrig en opgave, jeg har svaret på (`Scripts/genkald-log.jsonl`, `"type": "eksamen"`,
+      `"noegle": "<fag-id>/<sæt>#<N>"`). Hold mindst to hele sæt urørte til prøveeksamenerne under
+      "Egen plan" i CLAUDE.md (står det dér, hvilke sæt, så følg det; ellers de nyeste).
+    - De hører til omfanget i afsnit 4b, ikke oveni: højst 30-45 minutter i alt pr. fag. I en uge med
+      en prøveeksamen i faget under "Egen plan" erstatter prøven dem.
+    - Aldrig facit, løsning eller hints til opgaven; dem viser Kompas, når jeg har svaret.
 
   Fælles: bogens egne termer på bogens sprog. Knyt stoffet til læringsmålet i
-  kursusbeskrivelsen.
+  kursusbeskrivelsen. Aldrig facit til mine opgaver.
 
 **Til rapporten** — én til tre linjer. Hvilke begreber kan operationaliseres i
 fagets rapport, projekt eller obligatoriske opgave (se `<mappe>/Afleveringer/` og
@@ -273,6 +308,49 @@ indhentningsplan uden for rutinen. Så gælder også:
   findes og erstattes. Slet eller ret kun blokke med mærket, aldrig andre aftaler. Find dem på
   `description contains "#kompas-plan"`, ikke på uid: Kalender-appen og Googles feed har forskellige id'er.
 
+## 4c. STUDIEGUIDE — HVORDAN UGEN LÆRES HURTIGST
+
+Hvert fag med `studieguide` i `Scripts/fag.json` har en fil i fagets mappe (fx `Alfa/studieguide.md`), og
+Kompas viser ugens afsnit udfoldeligt over køreplanen under Fag. Tilføj afsnittet for den nye uge
+nederst i hvert fags fil, når køreplanen er skrevet (ikke for en ferieuge). Kom slides eller øvelser efter
+sidste uges afsnit, og ændrer de rækkefølgen eller hvad der kan springes over, så ret sidste uges afsnit.
+
+Guiden er en strategi og en rækkefølge, ikke et resumé: den tager stilling til forelæsningen/slides, øvelsen,
+bogen og videoerne, og siger, hvad der kan skimmes eller springes over. Jeg lærer mest af YouTube, især CS50, så en
+god video er gerne indgangen til ugen; men sig ærligt, hvad eksamen kræver ud over den (fagets form i README).
+Følg formen i filen (overskriften præcis `## Uge N — emne`, en linje med tid og hvad der vejer til eksamen,
+nummererede trin med "ca."-tider, **Spring over:** og **Kun én time?**), og hold ugen på ca. 120-220 ord.
+Videoerne følger reglerne under **Video** ovenfor (verificeret med curl, CS50-tidsstempler fra kapitlerne), men
+guiden må have 1-3 pr. uge og genbruge køreplanens. Guiden løser aldrig en opgave.
+
+**Dine huller.** Har jeg svar i faget, der var sikre, men forkerte (afsnit 2 punkt 3), så er guidens første trin
+`**Dine huller (ca. 10 min):**` med højst tre af dem, de nyeste først. For hvert: kortet (uge og spørgsmål), hvad
+der gik galt i én sætning og hvor i bogen eller resuméet, jeg læser det igen (sidetal fra facit). Hvad der gik galt,
+tager du fra mine tanker, når jeg har skrevet nogen (gengiv dem kort med dine ord), ellers fra mit svar mod facit.
+Er der hverken tanker eller svar, så nævn kun kortet og kilden; gæt aldrig på, hvad jeg tænkte. Ved et forkert
+drill-gæt er mit svar gættet, det sidste argument i drillens `tjek(...)` (har jeg rettet det siden, så står det rettede dér), og
+hvad der gik galt, tager du fra drillens forklaring; kilden er kapitlet i kodefagets bog. Tanker, der viser
+tvivl eller en forveksling, må også bruges, selvom svaret var rigtigt. Ved eksamensopgaver peger du kun på stoffet,
+aldrig på løsningen. Trinnet tæller ikke med i ordgrænsen, og uden huller er der intet trin.
+Fag med genkald har en knap, **Tjek ugen først**, over guiden på Kompas, så skriv ikke et trin om at tage ugens
+genkald før læsningen.
+
+**Resuméer.** Fag med `resumeer` i fag.json har et resumé pr. kapitel eller tekst i `<mappe>/Resumeer/`,
+og Kompas viser ugens resuméer udfoldeligt mellem guiden og køreplanen. Skriv resuméet til hver ny tekst i næste
+uges pensum, når du skriver guiden. Forbilledet er fagets nyeste resumé: første linje
+`# <Forfatter> kap. N — <titel> (uge N)` (Kompas kobler ugen ud fra parentesen), ★ og ○ ved afsnittene (★: har
+været til eksamen eller står i et pensumspørgsmål; ○: står på slides eller er nyttigt på en case),
+hvad der har været til eksamen eller bruges til, afsnit efter bogen med sidetal, "Kan springes over" og "Tjek dig
+selv" uden svar. Ca. 1.500-3.000 ord. Resuméet er et kort over kapitlet før bogens ★-afsnit, ikke i stedet for dem,
+så guidens læsetrin siger: resuméet først, så kun bogens ★-afsnit med sidetal. Opfind aldrig sider eller
+eksamensforekomster, og løs ingen opgaver.
+
+Modeller (figurer, tabeller, diagrammer) kommer med som billeder, hvor et billede gør dem lettere at huske
+eller tegne: helst slides (`pdftoppm -png -r 110 -f N -l N`), ellers figuren beskåret fra bogen. Gem dem i
+`<mappe>/Resumeer/billeder/` som `<resuméets navn>-<model>.png` (under ca. 250 KB, `sips -Z 1400`), og indsæt dem
+lige efter afsnittet som `![Figur …](billeder/<fil>.png)` med en kildelinje i kursiv under. Aldrig billeder af
+løsninger på øvelser eller eksamensopgaver.
+
 ## 5. FRISTER OG KOMPAS
 
 Kompas (https://kompas.localhost) er overblikket over frister; de føres kun i køreplanen og dér.
@@ -285,12 +363,19 @@ Kompas (https://kompas.localhost) er overblikket over frister; de føres kun i k
    Bemærkning, og den nævnes ikke i Vigtigst i ugen eller som noget, der skal nås.
 3. Ret aldrig i `deadlines-status.json` eller i README-tabellen. Det gør jeg selv på Kompas.
 
-## 6. FAGNOTER — UDFYLD UGEN, DER NETOP ER SLUT
+## 6. FAGNOTER — FORELØBIGT FØR UGEN, RETTET EFTER
 
-Ud over køreplanen for den kommende uge skal du udfylde fagnoterne for den uge,
-der netop er slut (den uge, hvis søndag er i dag, eller ved en forsinket kørsel
-den seneste afsluttede uge). Det gælder alle fag i fag.json. Er et fag uden
-undervisning den uge (fx efterårsferie), så spring det over.
+Ugens noter i et fag står ét sted: fagets Word-dokument. Hver kørsel gør to ting for
+hvert fag i fag.json:
+- RET den uge, der netop er slut (den uge, hvis søndag er i dag, eller ved en
+  forsinket kørsel den seneste afsluttede uge), og tidligere uger, der stadig er
+  foreløbige eller ikke udfyldt. Nu er slides og øvelsessæt typisk lagt op.
+- SKRIV den kommende uge (den, køreplanen gælder) som foreløbig, så jeg kan forberede
+  mig ud fra den. Den bygger på bog, lektionsplan og de slides og øvelsessæt, der
+  allerede er lagt op (afsnit 2, punkt 2).
+Er et fag uden undervisning i en uge (fx efterårsferie), så spring ugen over.
+En foreløbig uge har "(foreløbig)" sidst i overskriften; `run_notes.py` sætter og
+fjerner mærket (`FORELOEBIG` nedenfor). Ret aldrig mærket i hånden.
 
 Dokumenter: fagets Word-dokument `<mappe>/Fagnoter - *.docx`.
 
@@ -307,30 +392,46 @@ Kør scriptene med et Python-miljø med python-docx, PIL og lxml (`pip install -
   gennem node. Kør den altid for fag med `kode`, og ret alle fejl.
 
 Fremgangsmåde per fag:
-1. Hvilke uger: den netop afsluttede uge PLUS tidligere uger, der endnu ikke er
-   udfyldt (indhentning). En uge er udfyldt, hvis dens blok har en "Modeller"-label.
-   Findes ugens blok ikke, så brug `NEW_WEEKS = {nr: "Uge nr — tema"}` i notes-filen.
-   Slides-reglen: mangler forelæsningsslides for en uge (ingen fil i
-   `<mappe>/Pensum/Forelæsninger/`, der hører til ugen efter reglen i afsnit 1), så vent. Spring ugen over nu, så
-   den tages ved en senere kørsel, og skriv det i rapporten. Er ugen mere end 14
-   dage gammel og mangler slides stadig, så udfyld den ud fra bog og lektionsplan
-   og skriv under Uafklaret: "[?] Slides til uge NN var ikke uploadet — noterne
-   bygger kun på bogen." Uger uden undervisning i faget springes altid over.
+1. Hvilke uger:
+   - **Rettes:** den netop afsluttede uge og tidligere uger, hvis overskrift slutter
+     med "(foreløbig)", eller som ikke er udfyldt (indhentning). En uge er udfyldt, hvis
+     dens blok har en "Modeller"-label og ikke er foreløbig. Ret med `RESET_WEEKS = [NN]`
+     og ugen i `WEEKS`, skrevet forfra ud fra slides, øvelsessæt og bog. Læs først den
+     foreløbige blok: behold det, der stadig holder, ret det, slides siger anderledes, og
+     tilføj det, der mangler. "I egne ord" flyttes med af `reset_week`. Skriv i slutsvaret
+     kort, hvad der blev rettet (fx "Beta uge 12: to begreber fra slides, Modeller tilføjet").
+   - Slides-reglen: mangler forelæsningsslides for en uge, der skal rettes (ingen fil i
+     `<mappe>/Pensum/Forelæsninger/`, der hører til ugen efter reglen i afsnit 1), så vent.
+     Lad ugen stå, som den er (foreløbig eller tom), så den tages ved en senere kørsel, og
+     skriv det i rapporten. Er ugen mere end 14 dage gammel og mangler slides stadig, så ret
+     den ud fra bog og lektionsplan og skriv under Uafklaret: "[?] Slides til uge NN var ikke
+     uploadet — noterne bygger kun på bogen." Uger uden undervisning i faget springes altid over.
+   - **Foreløbig:** den kommende uge, med `FORELOEBIG = [NN]` og ugen i `WEEKS` (og
+     `NEW_WEEKS = {NN: "Uge NN — tema"}`, når blokken ikke findes). Samme felter og form som
+     eksemplet. "Modeller" kun med figurer, du faktisk har (slides eller bogens figurer);
+     ellers udelades feltet. Findes ugen allerede som foreløbig (fx efter en forsinket
+     kørsel), så skriv den forfra med `RESET_WEEKS`, hvis der er kommet nyt materiale, og
+     lad den ellers stå.
+   Én notes-fil pr. fag kan have begge dele. Alle uger i `WEEKS`, der ikke står i
+   `FORELOEBIG`, bliver endelige, og et gammelt mærke fjernes.
 2. Findes der en Word-låsefil (`~$*.docx`) i fagmappen, er dokumentet åbent. Så
-   spring faget over og skriv det i rapporten.
-3. Læs ugens slides og øvelsessæt først (de er forelæserens sammenfatning), og slå
+   spring faget over og skriv det i rapporten. Den kommende uges noter skriver du så i
+   køreplanen under **Noter til pensum** (afsnit 4), og ugen skrives foreløbigt i Word
+   ved næste kørsel.
+3. Læs ugens slides og øvelsessæt først, når de findes (de er forelæserens sammenfatning), og slå
    derefter definitioner og sidetal op i bogen med målrettede `pdftotext`-opslag.
    Læs ikke hele kapitler, når slides dækker indholdet. Verificér hvert sidetal.
    Brug ikke subagenter.
-4. Skriv `<scratch>/notes_<id>_ugeNN.py` med `WEEKS = {NN: dict(...)}` i samme
+4. Skriv `<scratch>/notes_<id>.py` med `WEEKS = {NN: dict(...)}` (og `RESET_WEEKS`, `FORELOEBIG`) i samme
    form som eksemplet. Tag IKKE `EKSAMEN` med (den står der allerede). Billeder:
    render slides med `pdftoppm -r 110 -singlefile`, gem som JPEG i scratch, kig på
    dem før brug, og gentag ikke figurer, som brugeren eller tidligere uger allerede har.
 5. Tag backup: kopiér dokumentet til
    `Scripts/fagnoter/backup/<filnavn>_<ÅÅÅÅMMDD>.docx` (opret mappen, hvis den mangler).
 6. Prøvekør mod en kopi i scratch, og tjek bagefter, at alle ikke-tomme afsnit fra
-   backuppen findes i samme rækkefølge i kopien. Først derefter kører du mod det
-   rigtige dokument og tjekker det samme igen.
+   backuppen findes i samme rækkefølge i kopien. Undtaget er indholdet af uger i
+   `RESET_WEEKS`, som skrives forfra; deres "I egne ord" skal stadig være der. Først
+   derefter kører du mod det rigtige dokument og tjekker det samme igen.
 
 Regler: "I egne ord" og alt, brugeren selv har skrevet, røres aldrig. Ingen facit til
 mine opgaver. Mangler en kilde, så skriv at den mangler, og opfind aldrig indhold eller sidetal.
@@ -424,9 +525,12 @@ Afslut med et kort svar, én linje pr. punkt (udelad et punkt uden indhold):
 - Canvas: antal flyttede filer, hvad der ligger i `_Indbakke/`, og gættede datoer ("(tjek)")
 - Køreplanens filnavn, eller at den fandtes i forvejen (0c)
 - Andre oprettede filer, inkl. genkaldsfiler
-- Fagnoter- og genkald-uger udfyldt eller sprunget over, og hvorfor
+- Fagnoter: uger rettet (og hvad der blev rettet), uger skrevet foreløbigt, og uger sprunget over med grunden
+- Genkald-uger lavet eller sprunget over, og hvorfor
 - USB-noter: uger rettet efter min vurdering, og vurderinger du ikke tog, med grunden
 - Antal drill-forklaringer (afsnit 6b), og tjek hvis resultat så forkert ud
 - Fag med video og CS50-forelæsning
+- Studieguide og resuméer: uger skrevet eller rettet, og resuméernes filnavne (afsnit 4c)
+- Dine huller: antal sikre, men forkerte svar pr. fag, og hvor mange der kom med i guiden
 - Slides til ugen uploadet eller ej, og de vigtigste huller
 - Filer hvis datopræfiks ikke passer til ugenummeret i navnet (afsnit 1)

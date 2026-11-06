@@ -7,7 +7,7 @@ Du skriver brugerens ugereview på dansk. Formålet er information de kan handle
 
 ## 1. Hent friske data (i denne rækkefølge)
 
-1. Kald garmin-coach-værktøjet `sync` med `dage: 10`. Svarer det "kører", så kald det igen med samme argumenter indtil det er færdigt. Det henter både Garmin og kalenderen (inkl. selvstudie logget i CalTask).
+1. Kald garmin-coach-værktøjet `sync` med `dage: 10`. Svarer det "kører", så kald det igen med samme argumenter indtil det er færdigt. Det henter både Garmin og kalenderen. Selvstudiet kommer fra stopuret på Studies side Selvstudie og er med i ugetabellen, når `liv opdater` har kørt.
 2. Kør i Bash: `~/kompas/overblik/.venv/bin/liv rapport --opdater`
    Det giver JSON for sidste hele uge (mandag–søndag): `uge` og `mandag` for ugen, der reviewes, `afvigelser` fra de 8 foregående uger, `sammenhaenge` (faste hypoteser testet statistisk), `seneste_uger`, `kommende_uge` og `kilder` (hvor friske data er).
    Rapportens `mandag` er referencepunktet for resten: **den kommende uge er altid `kommende_uge`** (mandag–søndag efter ugen, der reviewes), også når rutinen kører senere end mandag. Regn ikke selv uger ud fra dags dato.

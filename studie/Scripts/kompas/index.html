@@ -6,7 +6,9 @@
 <title>Studie · Ugeoverblik</title>
 <!-- Studieprojektets side i Kompas (https://kompas.localhost/studie/). Kilde: Scripts/kompas/ i semestermappen,
      kopieres af Scripts/kompas-eksport.js. Kalenderen kommer fra /form/liv.json (garmin-coach via overblik),
-     køreplanen og fristerne fra studie.json (Studie-rutinen). -->
+     køreplanen og fristerne fra studie.json (Studie-rutinen). Fremmøde: klik på en undervisningsgang, du ikke var til
+     (Studie-serveren gemmer det i Scripts/fremmoede.json; Selvstudie tæller den så ikke som brugt tid). Ældre uger, som
+     kalenderen ikke rækker til, viser undervisningen fra selvstudie.json, så fremmødet også kan rettes bagud. -->
 <link rel="stylesheet" href="/kompas/assets/tokens.css">
 <link rel="stylesheet" href="/kompas/assets/page.css">
 <style>
@@ -21,8 +23,18 @@
   .blk .n { font-size: 13px; font-weight: 500; line-height: 1.3; margin-top: 1px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .blk .a { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
   .blk.other { --c: var(--gray-300); }
-  .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: auto; }
-  .chip { font-size: 11.5px; padding: 3px 7px; border-radius: 999px; background: var(--surface-inset); color: var(--text-secondary); }
+  /* Selvstudie, du har logget med timeren: fagets farve som en svag flade, så det skiller sig ud fra skemaet */
+  .blk.selv { background: color-mix(in srgb, var(--c) 16%, var(--container-inset)); }
+  .blk[data-gang] { cursor: pointer; }
+  .blk[data-gang]:hover { box-shadow: inset 0 0 0 1px var(--border-subdued); }
+  .blk[data-gang]:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+  .blk.fravaer { opacity: .55; border-left-style: dashed; }
+  .blk.fravaer .n { text-decoration: line-through; }
+  .blk .fm { display: flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--destructive); margin-top: 3px; }
+  .ugevalg { display: flex; align-items: center; gap: 4px; }
+  .ugevalg .trin { border: 0; background: none; color: var(--text-secondary); cursor: pointer; width: 32px; height: 32px; border-radius: 8px; display: inline-grid; place-items: center; }
+  .ugevalg .trin:hover:not(:disabled) { background: var(--surface-hover); color: var(--text-primary); }
+  .ugevalg .trin:disabled { color: var(--text-subdued); cursor: default; }
   .none { color: var(--text-subdued); font-size: 12.5px; }
 
   table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
@@ -62,11 +74,12 @@
       <h1>Ugeoverblik</h1>
       <p class="sub" id="sub">Studie</p>
     </div>
+    <div class="ugevalg"><button type="button" class="trin" id="uge-tilbage" aria-label="En uge tilbage"></button>
     <div class="seg" role="group" aria-label="Vælg uge">
       <button type="button" data-w="forrige" aria-pressed="false">Ugen før</button>
       <button type="button" data-w="denne" aria-pressed="true">Denne uge</button>
       <button type="button" data-w="naeste" aria-pressed="false">Næste uge</button>
-    </div>
+    </div><button type="button" class="trin" id="uge-frem" aria-label="En uge frem"></button></div>
   </header>
   <div class="stack" id="root"><div class="card empty">Henter …</div></div>
 </div>
@@ -76,9 +89,15 @@
 <script src="studie.js"></script>
 <script>
 const COLORS = ["var(--c1)", "var(--c2)", "var(--c3)", "var(--c4)", "var(--c5)", "var(--c6)", "var(--c7)", "var(--c8)"];
-// Weekenden hører til næste uge (visUge i studie.js, samme regel som Fag)
-const OFFSET = { forrige: -7, denne: 0, naeste: 7 };
-let liv = null, studie = null, which = visUge().naeste ? "naeste" : "denne", visForbi = false;
+// Weekenden hører til næste uge (visUge i studie.js, samme regel som Fag). off er ugen i forhold til denne (-1 = ugen før);
+// med pilene kan du gå længere tilbage, til semestrets første undervisning
+const OFFSET = { forrige: -1, denne: 0, naeste: 1 };
+let liv = null, studie = null, off = visUge().naeste ? 1 : 0, visForbi = false;
+// Fremmøde: de gange, du har markeret (ikke), og de slags, du aldrig bruger (/studie/api/fremmoede), og semestrets
+// undervisning gang for gang fra selvstudie.json, til de uger, kalenderen ikke rækker til
+let FM = null, GANGE = [];
+const gangId = e => e.kode && e.start ? `${e.kode}|${e.dato}T${e.start}` : null;
+const brugesIkke = e => (FM?.bruges_ikke || []).some(x => x.kode === e.kode && (x.art == null || x.art === (e.art || "")) && (x.form == null || x.form === (e.form || "")));
 
 // Kalendere, der er slået fra. Huskes kun i denne browser; en ny kalender er slået til.
 const SKJULTE_NØGLE = "ugeoverblik-skjulte-kalendere";
@@ -88,21 +107,29 @@ const gemSkjulte = () => { try { localStorage.setItem(SKJULTE_NØGLE, JSON.strin
 // Begivenheder fra før kalendernavnet blev gemt, står samlet under ét punkt
 const kalenderNavn = e => e.kalender || "Uden kalendernavn";
 
-// Kalenderen, som den ser ud nu (liv eksport, hvert 30. min). Mangler den, bruges reviewets øjebliksbillede fra mandag.
+// Kalenderen, som den ser ud nu (liv eksport, hvert 30. min; hele semestret). Mangler ugen, bruges et ugereviews
+// øjebliksbillede: først det, der er taget efter ugen, og kun ellers "den kommende uge" fra reviewet før, som er planen
+// fra før ugen.
 function kalenderFor(monday) {
   if (liv.kalender?.[monday]) return liv.kalender[monday];
-  for (const r of liv.reviews || []) {
-    if (r.mandag === monday && r.kalender) return r.kalender;
-    if (iso(addDays(parseDate(r.mandag), 7)) === monday && r.kommende) return r.kommende;
-  }
-  return null;
+  const efter = (liv.reviews || []).find(r => r.mandag === monday && r.kalender);
+  if (efter) return efter.kalender;
+  const før = (liv.reviews || []).find(r => iso(addDays(parseDate(r.mandag), 7)) === monday && r.kommende);
+  if (før) return før.kommende;
+  // Kun undervisningen fra selvstudie.json (de slags, du bruger), så fremmødet kan rettes i ældre uger
+  const søndag = iso(addDays(parseDate(monday), 6)), uge = GANGE.filter(g => g.dato >= monday && g.dato <= søndag);
+  return uge.length ? Object.assign(uge.map(g => ({ dato: g.dato, start: g.start, slut: g.slut, type: "undervisning", titel: g.navn,
+    fag: { navn: g.navn, kode: g.kode, art: g.art, form: g.form } })), { kunUndervisning: true }) : null;
 }
 
 function render() {
   const root = document.getElementById("root");
-  document.querySelectorAll(".seg button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.w === which)));
+  document.querySelectorAll(".seg button").forEach(b => b.setAttribute("aria-pressed", String(OFFSET[b.dataset.w] === off)));
   const thisMon = iso(addDays(new Date(new Date().toDateString()), -((new Date().getDay() + 6) % 7)));
-  const monday = iso(addDays(parseDate(thisMon), OFFSET[which]));
+  const monday = iso(addDays(parseDate(thisMon), 7 * off)), which = off === 0 ? "denne" : null;
+  const første = GANGE[0]?.dato;
+  document.getElementById("uge-tilbage").disabled = !første || monday <= første;
+  document.getElementById("uge-frem").disabled = off >= 1;
   document.querySelector('.seg button[data-w="forrige"]').textContent = `Uge ${isoWeek(addDays(parseDate(thisMon), -7))}`;
   document.getElementById("sub").textContent = `Uge ${isoWeek(parseDate(monday))} · ${range(monday)}`;
   const kal = kalenderFor(monday);
@@ -116,7 +143,8 @@ function render() {
   const color = f => fagInfo(fagId(f))?.farve || COLORS[allFag.indexOf(f) % COLORS.length];
 
   const teach = events.filter(e => e.type === "undervisning");
-  const self = events.filter(e => e.type === "selvstudie");
+  // Selvstudiet står som ét stykke pr. begivenhed (en pause deler en session); en session tæller én gang
+  const self = events.filter(e => e.type === "selvstudie"), sessioner = arr => [...new Map(arr.map(e => [e.session || `${e.dato}${e.start}`, e])).values()];
   const other = events.filter(e => e.type === "andet");
   const teachH = teach.reduce((s, e) => s + hours(e), 0);
   const fagRows = allFag.map(f => {
@@ -130,18 +158,26 @@ function render() {
   const todayIso = iso(new Date());
   const days = Array.from({ length: 7 }, (_, i) => {
     const d = addDays(parseDate(monday), i), key = iso(d);
-    const evs = events.filter(e => e.dato === key && e.type !== "selvstudie")
+    // Selvstudiet står mellem de andre begivenheder efter tidspunktet, ét stykke ad gangen (en pause deler en session)
+    const evs = events.filter(e => e.dato === key)
       .sort((a, b) => (a.heldag ? -1 : 0) - (b.heldag ? -1 : 0) || String(a.start).localeCompare(String(b.start)));
-    const logs = self.filter(e => e.dato === key);
-    const blocks = evs.map(e => e.type === "undervisning"
-      ? `<div class="blk" style="--c:${color(e.fag)}"><div class="t">${esc(e.start)}–${esc(e.slut)}</div>
+    const blocks = evs.map(e => {
+      if (e.type === "selvstudie") {
+        const f = fagFraKort(e.titel.replace(/^Selvstudie · /, ""));
+        return `<div class="blk selv" style="--c:${f?.farve || "var(--gray-400)"}" title="Selvstudie logget med timeren"><div class="t">${esc(e.start)}–${esc(e.slut)}</div>
+          <div class="n">${esc(f?.navn || e.titel)}</div><div class="a">Selvstudie</div></div>`;
+      }
+      if (e.type !== "undervisning") return `<div class="blk other"><div class="t">${e.heldag ? "hele dagen" : `${esc(e.start)}–${esc(e.slut)}`}</div><div class="n">${esc(e.titel)}</div></div>`;
+      // En gang, der kan markeres: en knap, der skifter mellem til stede og ikke til stede
+      const id = FM && !brugesIkke(e) ? gangId(e) : null, væk = id && FM.ikke.includes(id);
+      return `<div class="blk${væk ? " fravaer" : ""}" style="--c:${color(e.fag)}"${id ? ` data-gang="${esc(id)}" role="button" tabindex="0" aria-pressed="${!!væk}"
+          title="${væk ? "Du var ikke til stede. Klik for at fortryde." : "Klik, hvis du ikke var til stede"}"` : ""}><div class="t">${esc(e.start)}–${esc(e.slut)}</div>
            <div class="n" title="${esc(e.fag)}">${esc(e.fag)}</div>
-           <div class="a">${esc([e.art, e.form].filter(Boolean).join(" · "))}</div></div>`
-      : `<div class="blk other"><div class="t">${e.heldag ? "hele dagen" : `${esc(e.start)}–${esc(e.slut)}`}</div><div class="n">${esc(e.titel)}</div></div>`).join("");
-    const chips = logs.length ? `<div class="chips" title="Selvstudie logget i CalTask">${logs.map(e => `<span class="chip">${esc(e.titel.replace(/^Selvstudie · /, ""))}</span>`).join("")}</div>` : "";
-    const empty = !evs.length && !logs.length;
+           <div class="a">${esc([e.art, e.form].filter(Boolean).join(" · "))}</div>${væk ? `<div class="fm">${icon("x", 12)}ikke til stede</div>` : ""}</div>`;
+    }).join("");
+    const empty = !evs.length;
     return `<section class="card day${key === todayIso ? " today" : ""}${key < todayIso ? " forbi" : ""}${empty ? " empty-day" : ""}" aria-label="${weekday(d)} ${dayMonth(d)}">
-      <h3>${weekday(d)} <small>${dayMonth(d)}</small></h3>${blocks || `<span class="none">Fri</span>`}${chips}</section>`;
+      <h3>${weekday(d)} <small>${dayMonth(d)}</small></h3>${blocks || `<span class="none">Fri</span>`}</section>`;
   }).join("");
 
   const valg = kalendere.length > 1 ? `<fieldset class="kalendere"><legend>Kalendere</legend>${kalendere.map(k => {
@@ -153,17 +189,19 @@ function render() {
     ${valg}
     <section class="tiles" aria-label="Ugen i tal">
       <div class="card tile"><div class="label">Undervisning</div><div class="value">${fmt(teachH, 1)}<small>t</small></div>
-        <div class="foot">${teach.length} moduler</div></div>
+        <div class="foot">${teach.length} moduler${(n => n ? ` · ${n} uden dig` : "")(teach.filter(e => FM?.ikke.includes(gangId(e))).length)}</div></div>
       <div class="card tile"><div class="label">Fag med undervisning</div><div class="value">${fagRows.filter(x => x.h > 0).length}</div>
         <div class="foot">af ${allFag.length} i kalenderen</div></div>
-      <div class="card tile"><div class="label">Selvstudie logget</div><div class="value">${self.length}</div>
-        <div class="foot">${liv.selvstudie_fra ? `logges i CalTask fra ${dayMonth(parseDate(liv.selvstudie_fra))}` : "logges i CalTask"}</div></div>
+      <div class="card tile"><div class="label">Selvstudie logget</div><div class="value">${sessioner(self).length}</div>
+        <div class="foot">${liv.selvstudie_fra ? `sessioner, logget fra ${dayMonth(parseDate(liv.selvstudie_fra))}` : "sessioner"}</div></div>
       <div class="card tile"><div class="label">Andet i kalenderen</div><div class="value">${other.length}</div>
         <div class="foot">${other.length ? esc(other.map(e => e.titel).slice(0, 2).join(", ")) : "ingenting"}</div></div>
     </section>
 
     ${which === "denne" && monday < todayIso ? `<button type="button" class="vis-forbi" id="vis-forbi">${visForbi ? "Skjul" : "Vis"} de dage, der er gået</button>` : ""}
     <div class="week${visForbi ? "" : " skjul-forbi"}">${days}</div>
+    ${FM ? `<p class="meta" style="margin:-4px 0 0">Fremmøde: klik på en undervisningsgang, du ikke var til; så tæller den ikke som brugt tid på Selvstudie. Klik igen for at fortryde.${kal.kunUndervisning
+      ? " Kalenderen rækker ikke så langt tilbage, så ugen viser kun undervisningen." : ""}</p>` : ""}
     ${ugensPlan(isoWeek(parseDate(monday)), monday)}
 
     <section class="card panel">
@@ -175,7 +213,7 @@ function render() {
           <td class="num">${fmt(x.h, 1)}</td><td class="num hide-sm">${x.fl}</td><td class="num hide-sm">${x.ov}</td><td class="num hide-sm">${x.andet}</td></tr>`).join("")}</tbody>
       </table>
     </section>
-    <p class="meta">Fra kalenderen via garmin-coach, opdateret ${stamp(liv.genereret)}. Kalenderen rækker kun ca. 14 dage tilbage, så ældre uger findes kun i ugereviewene.</p>
+    <p class="meta">Fra kalenderen via garmin-coach, opdateret ${stamp(liv.genereret)}.</p>
   `;
   const vf = document.getElementById("vis-forbi");
   if (vf) vf.onclick = () => { visForbi = !visForbi; render(); };
@@ -186,7 +224,32 @@ function render() {
   });
 }
 
-document.querySelectorAll(".seg button").forEach(b => b.onclick = () => { which = b.dataset.w; if (liv) render(); });
+document.querySelectorAll(".seg button").forEach(b => b.onclick = () => { off = OFFSET[b.dataset.w]; if (liv) render(); });
+document.getElementById("uge-tilbage").innerHTML = icon("chevron-right", 18).replace('class="ic"', 'class="ic" style="transform:rotate(180deg)"');
+document.getElementById("uge-frem").innerHTML = icon("chevron-right", 18);
+document.getElementById("uge-tilbage").onclick = () => { off--; if (liv) render(); };
+document.getElementById("uge-frem").onclick = () => { off++; if (liv) render(); };
+// Fremmøde: et klik (eller Enter/mellemrum) på en gang skifter den; siden viser det med det samme og gemmer i baggrunden
+async function skiftFremmoede(el) {
+  const id = el.dataset.gang, væk = FM.ikke.includes(id);
+  FM.ikke = væk ? FM.ikke.filter(x => x !== id) : [...FM.ikke, id];
+  render();
+  try {
+    const r = await fetch("/studie/api/fremmoede", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, til_stede: væk }) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.fejl || `Studie-serveren svarede ${r.status}`);
+    FM = { ikke: d.ikke, bruges_ikke: d.bruges_ikke };
+  } catch (e) {
+    FM.ikke = væk ? [...FM.ikke, id] : FM.ikke.filter(x => x !== id);
+    alert(`Fremmødet blev ikke gemt: ${e.message}`);
+  }
+  render();
+}
+document.getElementById("root").addEventListener("click", e => { const b = e.target.closest("[data-gang]"); if (b) skiftFremmoede(b); });
+document.getElementById("root").addEventListener("keydown", e => {
+  const b = e.target.closest("[data-gang]");
+  if (b && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); skiftFremmoede(b).then(() => document.querySelector(`[data-gang="${CSS.escape(b.dataset.gang)}"]`)?.focus()); }
+});
 // Kalenderen er livsnerven; køreplanen er et tillæg, så en manglende studie.json vælter ikke siden
 function ugensPlan(uge, monday) {
   if (!studie) return "";
@@ -209,7 +272,14 @@ function ugensPlan(uge, monday) {
   </div>`;
 }
 
-Promise.all([loadKalender(), loadStudie().catch(() => null)]).then(([d, s]) => { liv = d; studie = s; render(); }, e => {
+// Fremmødet og semestrets undervisning gang for gang; uden dem (fx bærbarens kopi) er siden, som den var, uden markering
+const hentFremmoede = Promise.all([
+  fetch("/studie/api/fremmoede", { cache: "no-store" }).then(r => r.ok ? r.json() : null).catch(() => null),
+  fetch("selvstudie.json", { cache: "no-store" }).then(r => r.ok ? r.json() : null).catch(() => null)]).then(([fm, ss]) => {
+  FM = fm;
+  GANGE = (ss?.fag || []).flatMap(f => (f.gange || []).map(g => ({ ...g, navn: f.navn, kode: f.kursuskode }))).sort((a, b) => (a.dato + a.start).localeCompare(b.dato + b.start));
+});
+Promise.all([loadKalender(), loadStudie().catch(() => null), hentFremmoede]).then(([d, s]) => { liv = d; studie = s; render(); }, e => {
   document.getElementById("root").innerHTML = `<div class="card empty">Kunne ikke hente kalenderdata (${esc(e.message)}).</div>`;
 });
 </script>

@@ -7,13 +7,14 @@ import json
 import os
 import sqlite3
 import tempfile
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 from pathlib import Path
 
 _TMP = Path(tempfile.mkdtemp(prefix="liv-test-"))
 for _env, _navn in {"LIV_DB": "liv.db", "LIV_GARMIN_DB": "coach.db", "LIV_BELASTNING_JSON": "belastning.json",
                     "LIV_SURE_JSON": "data.json", "LIV_SKAERMTID_JSON": "skaermtid.json", "LIV_STUDIE_JSON": "studie.json",
-                    "LIV_SITE": "site"}.items():
+                    "LIV_SESSIONER_JSON": "sessioner.json", "LIV_SITE": "site"}.items():
     os.environ[_env] = str(_TMP / _navn)
 
 import pytest  # noqa: E402
@@ -56,6 +57,18 @@ def lav_garmin(path: Path, dage: list[date], begivenheder: list[tuple], state: d
     g.close()
 
 
+def med_zone(t: str) -> str:
+    """Vægtid uden zone ("2026-01-05T13:30") med dagens offset i config.TZ, som Studie og Skærmtid skriver den."""
+    return datetime.fromisoformat(t).replace(tzinfo=ZoneInfo(config.TZ)).isoformat()
+
+
+def lav_sessioner(path: Path, fra: date, sessioner: list[tuple]) -> None:
+    """Studies sessioner.json: (kort, [(start, slut), …]) pr. session, tiderne som vægtid uden zone."""
+    path.write_text(json.dumps({"genereret": med_zone(f"{date.today().isoformat()}T08:00"), "fra": fra.isoformat(), "sessioner": [
+        {"id": f"s-{i}", "fag": kort.lower(), "kort": kort, "stykker": [[med_zone(a), med_zone(b)] for a, b in stykker]}
+        for i, (kort, stykker) in enumerate(sessioner)]}))
+
+
 def lav_sure(path: Path, transaktioner: list[dict], last_sync: str) -> None:
     path.write_text(json.dumps({"generated_at": last_sync, "last_sync": last_sync, "transactions": transaktioner}))
 
@@ -68,6 +81,7 @@ def miljoe(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "SURE_JSON", tmp_path / "data.json")
     monkeypatch.setattr(config, "SKAERMTID_JSON", tmp_path / "skaermtid.json")
     monkeypatch.setattr(config, "STUDIE_JSON", tmp_path / "studie.json")
+    monkeypatch.setattr(config, "SESSIONER_JSON", tmp_path / "sessioner.json")
     monkeypatch.setattr(config, "SITE_DIR", tmp_path / "site")
     monkeypatch.setattr(db, "DB_PATH", tmp_path / "liv.db")
     m = kilder.mandag(idag()) - timedelta(days=14)
@@ -77,6 +91,7 @@ def miljoe(tmp_path, monkeypatch):
     begivenheder = [(f"u{i}", f"{(m + timedelta(days=7 * i + 1)).isoformat()}T10:00",
                      f"{(m + timedelta(days=7 * i + 1)).isoformat()}T12:00", "Forelæsning", "KURS102") for i in range(5)]
     lav_garmin(config.GARMIN_DB, dage, begivenheder)
+    lav_sessioner(config.SESSIONER_JSON, m, [])
     lav_sure(config.SURE_JSON, [
         {"date": (m + timedelta(days=2)).isoformat(), "amount": 120, "group": "Variable udgifter",
          "category": "Take-away og mad ude"},

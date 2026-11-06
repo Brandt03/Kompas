@@ -1,4 +1,4 @@
-/* Shared look for the Scenarier and SU-vagt pages – same tokens and components as the Forbrug page (index.html). */
+/* Shared look for the SU-vagt and Gennemgang pages – same tokens and components as the Forbrug page (index.html). */
 :root {
   color-scheme: light;
   --page: #f9f9f7; --surface: #fcfcfb; --card: #ffffff;

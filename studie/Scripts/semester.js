@@ -4,48 +4,19 @@
 //   CLAUDE.md "Vigtige datoer"   frister og eksamensdatoer
 //   README.md "… trænes forskelligt"   eksamens- og arbejdsform pr. fag
 // fag.json ligger i semestermappens Scripts/ (se fag.example.json).
+// Det hele gælder det aktuelle semester; forMappe(<mappe>) giver det samme for en anden semestermappe, og
+// semestermapper() finder dem (siden Semestre).
 // CommonJS, ingen afhængigheder, som resten af Scripts/.
 
 const fs = require("fs");
-const path = require("path");
 const os = require("os");
+const path = require("path");
 
 // Semestermappen er KOMPAS_SEMESTER, ellers mappen over Scripts/. Semestrets egne filer (fag.json, logs,
 // læst-markeringer, færdige frister) ligger i dens Scripts/, også når koden ligger et andet sted.
 const hjem = s => s.replace(/^~(?=$|\/)/, os.homedir());
-const ROD = path.resolve(hjem(process.env.KOMPAS_SEMESTER || path.join(__dirname, "..")));
-const DATA = path.join(ROD, "Scripts");
+const ROD = (d => { try { return fs.realpathSync(d); } catch { return d; } })(path.resolve(hjem(process.env.KOMPAS_SEMESTER || path.join(__dirname, ".."))));
 const læs = f => { try { return fs.readFileSync(f, "utf8"); } catch { return null; } };
-
-// ── fagene ───────────────────────────────────────────────────────────
-
-let cache = null;
-function indhold() {
-  if (!cache) cache = JSON.parse(læs(path.join(DATA, "fag.json")) || '{"fag": []}');
-  return cache;
-}
-// Alle fag i fag.json's rækkefølge. Farven er --c1, --c2 … efter rækkefølgen, medmindre faget har sin egen.
-function fag() {
-  return indhold().fag.map((f, i) => ({ genkald: false, begreber: null, kode: null, afleveringer: null, leetcode: null, usb_noter: false,
-    eksamenstraening: null, forudsaetning: null, canvas: [], oevelse_navn: null, ...f, farve: f.farve || `var(--c${i + 1})` }));
-}
-const fagMed = egenskab => fag().filter(f => f[egenskab]);
-const find = id => fag().find(f => f.id === id) || null;
-// Fag-kolonnen i køreplaner og CLAUDE.md skriver kortnavnet ("Alfa"). Ældre filer kan have et tidligere kortnavn,
-// som står under "alias" i fag.json (fx "A").
-const fraKort = kort => {
-  const k = String(kort || "").trim().toLowerCase();
-  return fag().find(f => [f.kort, ...(f.alias || [])].some(n => n.toLowerCase() === k)) || null;
-};
-// En færdig-nøgle ("Alfa|andet|41") og de samme nøgler med fagets tidligere kortnavne ("A|andet|41"), så en
-// markering fra før et navneskift stadig gælder
-function noegleVarianter(noegle) {
-  const [kort, rest] = String(noegle).split(/\|(.*)/s), f = fraKort(kort);
-  return f && rest != null ? [noegle, ...[f.kort, ...(f.alias || [])].filter(n => n !== kort).map(n => `${n}|${rest}`)] : [noegle];
-}
-const semester = () => indhold().semester || path.basename(ROD);
-// Dine egne mål til siden Selvstudie (dagsmål og medaljer), eller null
-const studiemaal = () => indhold().studiemaal || null;
 
 // ── markdown-tabeller og afsnit ──────────────────────────────────────
 
@@ -56,8 +27,6 @@ function tabel(src) {
   const hoved = celler(rækker[0]);
   return rækker.slice(2).map(r => Object.fromEntries(celler(r).map((c, i) => [hoved[i] || `k${i}`, c])));
 }
-// Teksten under "## <titel>" i en markdown-fil i semestermappen
-const afsnit = (fil, titel) => (læs(path.join(ROD, fil)) || "").split(/^## /m).find(a => titel.test(a)) || "";
 
 // ── datoer ───────────────────────────────────────────────────────────
 
@@ -79,75 +48,148 @@ function mandagIUge(aar, uge) {
 }
 const plusDage = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
 
-// En frist fra en tabelrække (køreplanens Deadlines-tabel eller CLAUDE.md). hvad og note er rå tekst; eksporten laver html.
-// aar er planens år og planUge dens uge: en frist i uge 1-25 i en efterårsplan (fx en januar-eksamen)
-// ligger i det følgende år
-function deadline(r, aar, planUge = 40) {
-  const uger = (r.Uge || "").match(/\d+/g)?.map(Number) || [];
-  if (uger.length && uger[0] < 26 && planUge >= 26) aar += 1;
-  const hvad = r.Aktivitet || r.Hvad || "";
-  const ren = hvad.replace(/\*\*|`/g, "");
-  let type = "andet";
-  // Rækkefølgen betyder noget: "Præsentationen afleveres" er en aflevering, og
-  // "præsentation … forudsætning for eksamen" er en præsentation, ikke en eksamen
-  if (/prøveeksamen/i.test(ren)) type = "proeve";
-  else if (afleveringsNr(ren) || /aflever/i.test(ren)) type = "aflevering";
-  else if (/præsentation/i.test(ren)) type = "praesentation";
-  else if (/stedprøve|eksamen|prøve\b/i.test(ren)) type = "eksamen";
-  else if (/ferie/i.test(ren)) type = "ferie";
-  let fra = uger.length ? mandagIUge(aar, uger[0]) : null;
-  let til = uger.length ? plusDage(mandagIUge(aar, uger[uger.length - 1]), 6) : null;
-  // En præcis dato (dd.mm) i Dato-kolonnen vinder over ugen, når den ligger i ugen.
-  // Et interval ("28.09-04.10", "12.-18.10") er ingen frist, bare ugen igen.
-  // Uden Dato-kolonne (CLAUDE.md's "Vigtige datoer") står datoen i teksten, fx "torsdag 10.12.2026 kl. 09:00-11:00"
-  const kilde = r.Dato != null ? r.Dato : ren;
-  const interval = r.Dato != null && /\d\.?\s*[-–]\s*\d/.test(r.Dato);
-  const præcis = interval ? null : kilde.match(/(\d{1,2})\.(\d{1,2})(?:\.(\d{4}))?(?!\d)/);
-  let dato = null;
-  if (præcis && fra) {
-    const d = new Date(præcis[3] ? +præcis[3] : aar, +præcis[2] - 1, +præcis[1]);
-    if (d >= plusDage(fra, -1) && d <= plusDage(til, 1)) dato = isoDato(d);
+// ── ét semester ──────────────────────────────────────────────────────
+
+// Alt, der læses fra en semestermappe. Scripts bruger det aktuelle semester (ROD, module.exports nedenfor);
+// siden Semestre læser også tidligere semestre gennem forMappe(<mappe>). Kun læsning.
+function forMappe(rod) {
+  const SCRIPTS = path.join(rod, "Scripts");
+
+  // ── fagene
+
+  let cache = null;
+  function indhold() {
+    if (!cache) cache = JSON.parse(læs(path.join(SCRIPTS, "fag.json")) || '{"fag": []}');
+    return cache;
   }
-  // Klokkeslættet står i Dato-kolonnen ("06.10 kl. 08:00") eller i teksten; Dato-kolonnen vinder, hvis begge har et
-  const kl = /kl\.\s*(\d{1,2})[:.](\d{2})(?:\s*[-–]\s*(\d{1,2})[:.](\d{2}))?/;
-  const t = (r.Dato || "").match(kl) || ren.match(kl);
-  const tid = t ? `${t[1].padStart(2, "0")}.${t[2]}${t[3] ? `–${t[3].padStart(2, "0")}.${t[4]}` : ""}` : null;
-  return {
-    uger: r.Uge || "", dato_tekst: r.Dato || null, hvad, note: r.Bemærkning || null,
-    // Fagets nuværende kortnavn, også når tabellen bruger et tidligere
-    fag: /^(—|–|-|alle)?$/i.test((r.Fag || "").trim()) ? "Alle" : fraKort(r.Fag)?.kort || r.Fag.trim(),
-    type, fra: fra && isoDato(fra), til: til && isoDato(til), dato, tid,
+  // Alle fag i fag.json's rækkefølge. Farven er --c1, --c2 … efter rækkefølgen, medmindre faget har sin egen.
+  function fag() {
+    return indhold().fag.map((f, i) => ({ genkald: false, begreber: null, kode: null, afleveringer: null, leetcode: null, studieguide: null, resumeer: null, usb_noter: false,
+      eksamenstraening: null, forudsaetning: null, canvas: [], oevelse_navn: null, ...f, farve: f.farve || `var(--c${i + 1})` }));
+  }
+  const fagMed = egenskab => fag().filter(f => f[egenskab]);
+  const find = id => fag().find(f => f.id === id) || null;
+  // Fag-kolonnen i køreplaner og CLAUDE.md skriver kortnavnet ("Alfa"). Ældre filer kan have et tidligere kortnavn,
+  // som står under "alias" i fag.json (fx "A").
+  const fraKort = kort => {
+    const k = String(kort || "").trim().toLowerCase();
+    return fag().find(f => [f.kort, ...(f.alias || [])].some(n => n.toLowerCase() === k)) || null;
   };
-}
-
-// Mønstret for en nummereret aflevering ud fra præfikserne i fag.json: "G" finder G1, "Opgave" finder Opgave 3
-// (nummeret står lige efter præfikset eller efter ét mellemrum). null, når intet fag har afleveringer.
-function afleveringsMoenster() {
-  const p = fagMed("afleveringer").map(f => f.afleveringer.praefiks.trim()).filter(Boolean);
-  return p.length ? `\\b(?:${p.map(x => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})\\s?\\d+\\b` : null;
-}
-// Afleveringen i en tekst ("G1", "Opgave 3"), eller null
-function afleveringsNr(tekst) {
-  const m = afleveringsMoenster();
-  return m ? (String(tekst).match(new RegExp(m)) || [])[0] || null : null;
-}
-
-const vigtigeDatoer = () => tabel(afsnit("CLAUDE.md", /^Vigtige datoer/));
-const egenPlan = () => tabel(afsnit("CLAUDE.md", /^Egen plan/));
-const eksamensformer = () => tabel(afsnit("README.md", /trænes forskelligt/i));
-
-// Eksamensdagen pr. fag-id (ms, lokal midnat) fra "Vigtige datoer". Et fag uden eksamen med dato er ikke med.
-function eksamensdatoer(nu = new Date()) {
-  const ud = {};
-  for (const r of vigtigeDatoer()) {
-    const d = deadline(r, nu.getFullYear(), isoUge(nu)), f = fraKort(d.fag);
-    if (f && d.type === "eksamen" && d.dato && !(f.id in ud)) {
-      const [y, m, dag] = d.dato.split("-").map(Number);
-      ud[f.id] = new Date(y, m - 1, dag).getTime();
-    }
+  // En færdig-nøgle ("Alfa|andet|41") og de samme nøgler med fagets tidligere kortnavne ("A|andet|41"), så en
+  // markering fra før et navneskift stadig gælder
+  function noegleVarianter(noegle) {
+    const [kort, rest] = String(noegle).split(/\|(.*)/s), f = fraKort(kort);
+    return f && rest != null ? [noegle, ...[f.kort, ...(f.alias || [])].filter(n => n !== kort).map(n => `${n}|${rest}`)] : [noegle];
   }
-  return ud;
+  const semester = () => indhold().semester || path.basename(rod);
+  // Dine egne mål til siden Selvstudie: dagsmålet, de ugedage det gælder (dage: 0 = mandag … 6 = søndag; uden dage alle) og
+  // medaljernes grænser. Det, du har sat under Indstillinger på siden (Scripts/studiemaal.json, som Studie-serveren skriver),
+  // går forud for studiemaal i fag.json. null, når ingen af dem findes.
+  const MAAL_FIL = path.join(SCRIPTS, "studiemaal.json");
+  function studiemaal() {
+    let egen = null;
+    try { egen = JSON.parse(læs(MAAL_FIL) || "null"); } catch { egen = null; }
+    const std = indhold().studiemaal || null;
+    return std || egen ? { ...(std || {}), ...(egen || {}) } : null;
+  }
+
+  // Teksten under "## <titel>" i en markdown-fil i semestermappen
+  const afsnit = (fil, titel) => (læs(path.join(rod, fil)) || "").split(/^## /m).find(a => titel.test(a)) || "";
+
+  // En frist fra en tabelrække (køreplanens Deadlines-tabel eller CLAUDE.md). hvad og note er rå tekst; eksporten laver html.
+  // aar er planens år og planUge dens uge: en frist i uge 1-25 i en efterårsplan (fx en januar-eksamen)
+  // ligger i det følgende år
+  function deadline(r, aar, planUge = 40) {
+    const uger = (r.Uge || "").match(/\d+/g)?.map(Number) || [];
+    if (uger.length && uger[0] < 26 && planUge >= 26) aar += 1;
+    const hvad = r.Aktivitet || r.Hvad || "";
+    const ren = hvad.replace(/\*\*|`/g, "");
+    let type = "andet";
+    // Rækkefølgen betyder noget: "Præsentationen afleveres" er en aflevering, og
+    // "præsentation … forudsætning for eksamen" er en præsentation, ikke en eksamen
+    if (/prøveeksamen/i.test(ren)) type = "proeve";
+    else if (afleveringsNr(ren) || /aflever/i.test(ren)) type = "aflevering";
+    else if (/præsentation/i.test(ren)) type = "praesentation";
+    else if (/stedprøve|eksamen|prøve\b/i.test(ren)) type = "eksamen";
+    else if (/ferie/i.test(ren)) type = "ferie";
+    let fra = uger.length ? mandagIUge(aar, uger[0]) : null;
+    let til = uger.length ? plusDage(mandagIUge(aar, uger[uger.length - 1]), 6) : null;
+    // En præcis dato (dd.mm) i Dato-kolonnen vinder over ugen, når den ligger i ugen.
+    // Et interval ("28.09-04.10", "12.-18.10") er ingen frist, bare ugen igen.
+    // Uden Dato-kolonne (CLAUDE.md's "Vigtige datoer") står datoen i teksten, fx "mandag 14.12.2026 kl. 13:00-16:00"
+    const kilde = r.Dato != null ? r.Dato : ren;
+    const interval = r.Dato != null && /\d\.?\s*[-–]\s*\d/.test(r.Dato);
+    const præcis = interval ? null : kilde.match(/(\d{1,2})\.(\d{1,2})(?:\.(\d{4}))?(?!\d)/);
+    let dato = null;
+    if (præcis && fra) {
+      const d = new Date(præcis[3] ? +præcis[3] : aar, +præcis[2] - 1, +præcis[1]);
+      if (d >= plusDage(fra, -1) && d <= plusDage(til, 1)) dato = isoDato(d);
+    }
+    // Klokkeslættet står i Dato-kolonnen ("06.10 kl. 08:00") eller i teksten; Dato-kolonnen vinder, hvis begge har et
+    const kl = /kl\.\s*(\d{1,2})[:.](\d{2})(?:\s*[-–]\s*(\d{1,2})[:.](\d{2}))?/;
+    const t = (r.Dato || "").match(kl) || ren.match(kl);
+    const tid = t ? `${t[1].padStart(2, "0")}.${t[2]}${t[3] ? `–${t[3].padStart(2, "0")}.${t[4]}` : ""}` : null;
+    return {
+      uger: r.Uge || "", dato_tekst: r.Dato || null, hvad, note: r.Bemærkning || null,
+      // Fagets nuværende kortnavn, også når tabellen bruger et tidligere
+      fag: /^(—|–|-|alle)?$/i.test((r.Fag || "").trim()) ? "Alle" : fraKort(r.Fag)?.kort || r.Fag.trim(),
+      type, fra: fra && isoDato(fra), til: til && isoDato(til), dato, tid,
+    };
+  }
+
+  // Mønstret for en nummereret aflevering ud fra præfikserne i fag.json: "G" finder G1, "Opgave" finder Opgave 3
+  // (nummeret står lige efter præfikset eller efter ét mellemrum). null, når intet fag har afleveringer.
+  function afleveringsMoenster() {
+    const p = fagMed("afleveringer").map(f => f.afleveringer.praefiks.trim()).filter(Boolean);
+    return p.length ? `\\b(?:${p.map(x => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})\\s?\\d+\\b` : null;
+  }
+  // Afleveringen i en tekst ("G1", "Opgave 3"), eller null
+  function afleveringsNr(tekst) {
+    const m = afleveringsMoenster();
+    return m ? (String(tekst).match(new RegExp(m)) || [])[0] || null : null;
+  }
+
+  const vigtigeDatoer = () => tabel(afsnit("CLAUDE.md", /^Vigtige datoer/));
+  const egenPlan = () => tabel(afsnit("CLAUDE.md", /^Egen plan/));
+  const eksamensformer = () => tabel(afsnit("README.md", /trænes forskelligt/i));
+
+  // Eksamensdagen pr. fag-id (ms, lokal midnat) fra "Vigtige datoer". Et fag uden eksamen med dato er ikke med.
+  function eksamensdatoer(nu = new Date()) {
+    const ud = {};
+    for (const r of vigtigeDatoer()) {
+      const d = deadline(r, nu.getFullYear(), isoUge(nu)), f = fraKort(d.fag);
+      if (f && d.type === "eksamen" && d.dato && !(f.id in ud)) {
+        const [y, m, dag] = d.dato.split("-").map(Number);
+        ud[f.id] = new Date(y, m - 1, dag).getTime();
+      }
+    }
+    return ud;
+  }
+
+  // Semestrets periode: fra første undervisningsdag til den sidste af sidste undervisningsdag og fagenes eksamensdage
+  // (undervisningsdage.json og Vigtige datoer). Eksamensdatoerne læses med første undervisningsdag som "nu", så et
+  // tidligere semesters datoer får det rigtige år. null, når ingen undervisningsdage kendes.
+  function periode() {
+    let dage = {};
+    try { dage = JSON.parse(læs(path.join(SCRIPTS, "undervisningsdage.json")) || "{}"); } catch { dage = {}; }
+    const datoer = fag().flatMap(f => Object.values(dage[f.kort] || {}).flat()).map(x => typeof x === "string" ? x : x?.dato)
+      .filter(x => /^\d{4}-\d{2}-\d{2}$/.test(x || "")).sort();
+    if (!datoer.length) return null;
+    const eks = Object.values(eksamensdatoer(new Date(`${datoer[0]}T12:00`))).map(t => isoDato(new Date(t)));
+    return { fra: datoer[0], til: [datoer.at(-1), ...eks].sort().at(-1) };
+  }
+
+  return { ROD: rod, DATA: SCRIPTS, fag, fagMed, find, fraKort, noegleVarianter, semester, studiemaal, MAAL_FIL, afsnit, deadline, afleveringsMoenster, afleveringsNr,
+    vigtigeDatoer, egenPlan, eksamensformer, eksamensdatoer, periode };
 }
 
-module.exports = { ROD, DATA, fag, fagMed, find, fraKort, noegleVarianter, semester, studiemaal, tabel, afsnit, isoDato, lokalTid, isoUge, mandagIUge, plusDage,
-  deadline, afleveringsMoenster, afleveringsNr, vigtigeDatoer, egenPlan, eksamensformer, eksamensdatoer };
+// Semestermapperne: mapperne ved siden af det aktuelle semester, der har Scripts/fag.json. En mappe
+// uden (fx et tidligere studie) er ikke et semester her.
+function semestermapper(foraelder = path.dirname(ROD)) {
+  let navne = [];
+  try { navne = fs.readdirSync(foraelder); } catch { return []; }
+  return navne.filter(n => !n.startsWith(".")).map(n => path.join(foraelder, n))
+    .filter(d => { try { return fs.statSync(path.join(d, "Scripts", "fag.json")).isFile(); } catch { return false; } });
+}
+
+module.exports = { ...forMappe(ROD), forMappe, semestermapper, tabel, isoDato, lokalTid, isoUge, mandagIUge, plusDage };

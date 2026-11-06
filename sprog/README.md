@@ -25,6 +25,11 @@ Kun koden er med her. Kortene, svarene og ugens tekster ligger i `data/`, som ik
   `udfyld`-kort, der peger på den (`"regel": "es-ser-estar"`) og kommer først blandt de nye kort; "Øv reglen" tager
   dem som en ekstra runde.
 - **Niveauet** sættes af rutinen ud fra en niveautest (de første kort), aldrig på forhånd.
+- **Tid på sprog** (Oversigt): Kompas foreslår tid ud fra tidspunkterne på dine svar på sprogkort, også fra telefonen,
+  og gemmer den først, når du godkender forslaget på Studie → Selvstudie (`kerne.js`, Tid). Den tæller for sig, ikke i
+  Studies dagsmål. Svar med højst 10 minutter imellem hører sammen; hvert svar får tiden siden det forrige og det første
+  den mediane tid mellem svarene; et forslag kommer 10 minutter efter det sidste svar og kun med mindst 5 minutter.
+  Ugens tekst tæller ikke. En session kan slettes på Oversigt.
 
 | Rolle | Nye kort om dagen | Hvad |
 |---|---|---|
@@ -45,13 +50,13 @@ spansk som aktivt sprog og tysk, dansk og engelsk ved siden af.
 | `sprog.js` | rutinens kommandoer: `rapport`, `tilfoej`, `tekst`, `feedback`, `regel`, `niveau`, `aktivt`, `rolle` (se toppen af filen) |
 | `side/` | Oversigt (`index.html`), Dagens kort, Ugens tekst og Regler på telefonen (`mobil.html`), Regler (`regler.html`), visningen af en regel (`regel.js`), service worker og ikoner |
 | `RUTINE.md` | instruktionerne til rutinen Sprog (`sprog-ugen`), søndag aften |
-| `data/` | **ikke i git**: `sprog.json`, `kort.json`, `log.jsonl` (svarene), `tekster/<uge>.json`, `regler.json` |
+| `data/` | **ikke i git**: `sprog.json`, `kort.json`, `log.jsonl` (svarene), `tekster/<uge>.json`, `regler.json`, `sessioner.json` (tid på sprog, brugeren har godkendt, og afviste forslag) |
 
 Testen ligger i Kompas' `tests/test_sprog.js` (midlertidig datamappe og egen port).
 
-Serveren skriver kun det, brugeren selv taster eller klikker (`log.jsonl`): karakteren og svaret på et kort og
-svaret på ugens tekst. Kort, tekster, regler, feedback og niveau skriver rutinen gennem `sprog.js`, som tjekker
-alt, før det gemmes. Serveren svarer kun på Kompas' egne værtsnavne (mod DNS rebinding) og tager kun imod skrivninger
+Serveren skriver kun det, brugeren selv taster eller klikker: karakteren og svaret på et kort og svaret på ugens tekst
+(`log.jsonl`) og de forslag til tid, brugeren godkender eller afviser, og de sessioner, brugeren sletter (`sessioner.json`).
+Kort, tekster, regler, feedback og niveau skriver rutinen gennem `sprog.js`, som tjekker alt, før det gemmes. Serveren svarer kun på Kompas' egne værtsnavne (mod DNS rebinding) og tager kun imod skrivninger
 fra Kompas' egen origin. JavaScript uden afhængigheder; Node 18 eller nyere.
 
 ## Drift
@@ -70,11 +75,14 @@ Test skrivninger mod en kopi: `SPROG_DATA=<mappe> SPROG_PORT=18769 node server.j
 `SPROG_STUDIE_JSON=<fil>` peger på en anden eksport fra Studie (eksamensdatoerne), og `KOMPAS_SEMESTER` på
 semestermappen, som rutinen læser brugerens egne tekster fra.
 
-På telefonen: åbn `https://<mac>.<tailnet>.ts.net/sprog/mobil.html` og vælg Føj til startskærm. Til oplæsning bruger
-siden telefonens tekst til tale; hent sprogene under telefonens indstillinger, så virker det også uden net.
+På telefonen: åbn `https://<mac>.<tailnet>.ts.net/sprog/mobil.html` i Chrome og vælg Føj til startskærm. Service
+workeren (`side/sw.js`) holder også Oversigt og Regler på telefonen med den sidst hentede pakke, så de åbner uden net. Til
+oplæsning bruger siden telefonens tekst til tale; hent sprogene under telefonens indstillinger, så virker det også uden
+net.
 
 ## Kendt dublering
 
 FSRS-modellen (`fsrs`, `planlæg`) er kopieret fra Studie-serveren (`studie/Scripts/kompas-server.js`), så Sprog ikke
 afhænger af semestrets mappe. Pakke og sync følger samme mønster, men er skrevet enkelt for Sprog. Ændres
-FSRS-parametrene ét sted, så ret dem begge steder.
+FSRS-parametrene ét sted, så ret dem begge steder. Det samme gælder forslagene til tid (`forslag` i `kerne.js` og i
+`studie/Scripts/sessioner.js`): ændres reglerne (pause, mindst, dage) ét sted, så ret dem begge steder.

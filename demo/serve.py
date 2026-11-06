@@ -47,7 +47,7 @@ SURE = """<!doctype html>
   der kører i Docker ved siden af Kompas. Kompas viser Sure i sin ramme, skjuler Sures egen menu og bruger
   Sures farver og skrift i resten af siderne.</p>
   <p>Kompas' egne økonomisider er <a href="/#/forbrug/" target="_top">Forbrug</a>,
-  <a href="/#/forbrug/scenarier/" target="_top">Scenarier</a> og <a href="/#/forbrug/su/" target="_top">SU-vagt</a>,
+  <a href="/#/forbrug/su/" target="_top">SU-vagt</a> og <a href="/#/forbrug/gennemgang/" target="_top">Gennemgang</a>,
   som bygger på et udtræk fra Sure. De er med i demoen med opdigtede tal.</p>
 </section></div></body></html>"""
 
@@ -138,6 +138,7 @@ def main() -> None:
     a = p.parse_args()
     from datetime import date
     lav.lav(idag=date.fromisoformat(a.dato) if a.dato else None)
+    ThreadingHTTPServer.request_queue_size = 128  # I dag og menuen henter mange filer på én gang; standarden på 5 nulstiller forbindelser
     srv = ThreadingHTTPServer(("127.0.0.1", a.port), Demo)
     print(f"Kompas-demoen kører på http://localhost:{a.port}  (Ctrl+C stopper)", flush=True)
     try:

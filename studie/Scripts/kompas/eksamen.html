@@ -91,7 +91,17 @@ const SIK = [["sikker", "Sikker"], ["usikker", "Usikker"], ["gaet", "Gætter / k
 // Karakter efter en øvelsesopgave, som i FSRS: 4 let, 3 sad, 2 halvt, 1 blankt. Rettelsen efter en prøveeksamen bruger kun ✓/~/✗.
 const KAR = [[4, "sad", "✓ Let", "Sad med det samme, uden at tænke dig om"], [3, "sad", "✓ Sad", "Sad, men du skulle tænke dig om"],
   [2, "halvt", "~ Halvt", "Noget af det, eller kun med besvær"], [1, "blankt", "✗ Blankt", "Kunne det ikke"]];
-let L = null, S = null, N = [], fag = location.hash.slice(1), tilstand = "liste";
+// #<fag> åbner faget; #<fag>/<sæt>/<nr> åbner opgaven under "øv enkeltopgaver" (køreplanens eksamensopgaver linker sådan)
+const hashDele = () => decodeURIComponent(location.hash.slice(1)).split("/");
+let L = null, S = null, N = [], fag = hashDele()[0] || "", tilstand = "liste";
+async function aabnFraHash() {
+  const [hFag, hSaet, hNr] = hashDele();
+  if (!hSaet || !L?.some(x => x.fag === hFag && x.id === hSaet)) return;
+  fag = hFag;
+  history.replaceState(null, "", "#" + fag);
+  try { await startOevelse(hSaet, +hNr || null); } catch (x) { toast(`Opgaven kunne ikke åbnes: ${x.message}`); }
+}
+window.addEventListener("hashchange", aabnFraHash);
 let E = null, set = null, svar = {}, marks = {}, start = null, facit = null, tick = null;
 let oCur = 0, oVist = false, oSik = null, oFacit = null;
 
@@ -336,7 +346,10 @@ document.addEventListener("change", e => {
 });
 // Svarene gemmes løbende i browseren, så en påbegyndt prøveeksamen kan fortsættes; ingen advarsel ved navigation
 
-Promise.all([hent("/eksamen"), loadStudie().catch(() => null), hent("/eksamen/niveauer").catch(() => [])]).then(([l, s, n]) => { L = l; S = s; N = n; renderListe(); },
+Promise.all([hent("/eksamen"), loadStudie().catch(() => null), hent("/eksamen/niveauer").catch(() => [])]).then(async ([l, s, n]) => {
+  L = l; S = s; N = n; renderListe();
+  await aabnFraHash();
+},
   e => { root().innerHTML = `<div class="card empty">Eksamensserveren svarer ikke (${esc(e.message)}). Se <code>~/.kompas/studie-server.log</code>.</div>`; });
 </script>
 </body>

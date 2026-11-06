@@ -6,7 +6,8 @@ import json
 import sqlite3
 from datetime import date, datetime, timedelta, timezone
 
-from overblik import cli, rapport, side
+from conftest import lav_sessioner, med_zone
+from overblik import cli, config, rapport, side
 from overblik.db import connect
 
 TEKST = {"saetning": "En rolig uge.", "udskilte": [], "sammenhaenge": ["Ingen stærke sammenhænge."],
@@ -101,16 +102,19 @@ def test_dagsplan_lægger_skaerm_selvstudie_og_pas_i_de_planlagte_blokke(miljoe)
     g.executemany("INSERT INTO calendar_events (uid, start_local, end_local, summary, fag_kode, fag_navn, kalender) VALUES (?, ?, ?, ?, ?, ?, 'Test')", [
         ("p1", f"{d}T10:00", f"{d}T12:00", "Øvelse", "KURS102", "Beta – dolor sit amet"),
         ("p2", f"{d}T13:00", f"{d}T14:00", "Delta indhentning", None, None),
-        ("p3", f"{d}T13:30", f"{d}T14:00", "Selvstudie · Delta", None, None),  # CalTask: logget selvstudie, ikke plan
+        ("p3", f"{d}T13:30", f"{d}T14:00", "Selvstudie · Delta", None, None),  # CalTasks gamle logning: hverken plan eller logget
         ("p4", f"{d}T05:30", f"{d}T05:45", "Før døgnskiftet", None, None),  # hører til dagen før
     ])
     g.execute("INSERT INTO activities (activity_id, date, start_local, sport, name, duration_s) VALUES (9, ?, ?, 'running', 'Løb', 1800)",
               [d, f"{d} 13:45:00"])
     g.commit()
     g.close()
+    # Selvstudie fra Studies stopur med ti minutters pause: kun stykkerne tæller
+    lav_sessioner(config.SESSIONER_JSON, miljoe["mandag"], [("Alfa", [(f"{d}T13:30", f"{d}T13:40"),
+                                                                      (f"{d}T13:50", f"{d}T14:00")])])
     (miljoe["tmp"] / "skaermtid.json").write_text(json.dumps({"dage": [{"dato": d, "forloeb": [
-        {"start": f"{d}T13:00+02:00", "slut": f"{d}T13:30+02:00", "kategori": "Studie", "gruppe": "Produktiv"},
-        {"start": f"{d}T13:30+02:00", "slut": f"{d}T13:45+02:00", "kategori": "Sociale medier", "gruppe": "Passiv"}]}]}))
+        {"start": med_zone(f"{d}T13:00"), "slut": med_zone(f"{d}T13:30"), "kategori": "Studie", "gruppe": "Produktiv"},
+        {"start": med_zone(f"{d}T13:30"), "slut": med_zone(f"{d}T13:45"), "kategori": "Sociale medier", "gruppe": "Passiv"}]}]}))
     (miljoe["tmp"] / "studie.json").write_text(json.dumps({"fag": [{"status": {"rytme": {"dage": {d: 4}}}},
                                                                    {"status": {"rytme": {"dage": {d: 3}}}}]}))
     side.eksport(conn, miljoe["tmp"] / "site")
@@ -118,10 +122,10 @@ def test_dagsplan_lægger_skaerm_selvstudie_og_pas_i_de_planlagte_blokke(miljoe)
     dag = plan[d]
     typer = {p["titel"]: p["type"] for p in dag["plan"]}  # testmiljøet har også sine egne forelæsninger
     assert (typer["Øvelse"], typer["Delta indhentning"]) == ("undervisning", "blok") and "Selvstudie · Delta" not in typer
-    assert [x["type"] for x in dag["logget"]] == ["selvstudie", "traening"]
+    assert [(x["type"], x["titel"]) for x in dag["logget"]] == [("selvstudie", "Alfa"), ("traening", "running"), ("selvstudie", "Alfa")]
     blok = next(p for p in dag["plan"] if p["titel"] == "Delta indhentning")["faktisk"]
     assert blok == {"minutter": 60, "skaerm": {"Produktiv": 30, "Passiv": 15}, "kategorier": {"Studie": 30, "Sociale medier": 15},
-                    "uden_skaerm": 15, "selvstudie": 30, "traening": 15}
+                    "uden_skaerm": 15, "selvstudie": 20, "traening": 15}
     assert dag["studiesvar"] == 7
     assert all(p["titel"] != "Før døgnskiftet" for p in dag["plan"])
 
@@ -148,7 +152,8 @@ def test_nat_sammenhaeng_venter_paa_nok_naetter_og_tester_saa(miljoe):
     assert nat["n_naetter"] >= side.NAT_MIN and nat["rho"] < -0.9 and nat["status"] == "stærk"
 
 
-def _glippede_med(miljoe, begivenheder, hentet):
+def _glippede_med(miljoe, begivenheder, hentet, sessioner=()):
+    lav_sessioner(config.SESSIONER_JSON, miljoe["mandag"], list(sessioner))
     cli.opdater()
     g = sqlite3.connect(miljoe["tmp"] / "coach.db")
     g.executemany("INSERT OR REPLACE INTO calendar_events (uid, start_local, end_local, summary, fag_kode, plan_blok, kalender) "
@@ -176,8 +181,11 @@ def test_glippede_kraever_to_doegn_med_planblokke_uden_logget_selvstudie(miljoe)
     assert gl["glippet"][0]["titler"] == ["Gamma · fagnoter"]
 
     # Selvstudie logget på et andet tidspunkt samme døgn tæller også: så er kun ét døgn glippet
-    gl = _glippede_med(miljoe, blokke + [("l1", f"{a}T20:00", f"{a}T20:30", "Selvstudie · Delta", 0)], hentet)
+    gl = _glippede_med(miljoe, blokke, hentet, [("Alfa", [(f"{a}T20:00", f"{a}T20:30")])])
     assert not gl["vis"] and [d["dato"] for d in gl["glippet"]] == [b]
+    # CalTasks gamle logning i kalenderen tæller ikke længere
+    gl = _glippede_med(miljoe, blokke + [("l1", f"{a}T20:00", f"{a}T20:30", "Selvstudie · Delta", 0)], hentet)
+    assert gl["vis"] and [d["dato"] for d in gl["glippet"]] == [b, a]
 
 
 def test_glippede_siger_intet_naar_kalenderen_er_gammel(miljoe):
@@ -186,11 +194,15 @@ def test_glippede_siger_intet_naar_kalenderen_er_gammel(miljoe):
     gl = _glippede_med(miljoe, blokke, (date.today() - timedelta(days=3)).isoformat())
     assert not gl["vis"] and gl["glippet"] == [] and "ikke hentet" in gl["status"]
     assert "aldrig" in _glippede_med(miljoe, blokke, None)["status"]
+    config.SESSIONER_JSON.unlink()
+    side.eksport(connect(), miljoe["tmp"] / "site")
+    gl = json.loads((miljoe["tmp"] / "site" / "liv.json").read_text())["glippede"]
+    assert not gl["vis"] and "sessioner.json mangler" in gl["status"]
 
 
-def _studieuge_med(miljoe, begivenheder, hentet):
-    """Som _glippede_med, men ugetabellen regnes efter begivenhederne, så det loggede selvstudie kommer med."""
-    _glippede_med(miljoe, begivenheder, hentet)
+def _studieuge_med(miljoe, begivenheder, hentet, sessioner=()):
+    """Som _glippede_med, men ugetabellen regnes efter sessionerne, så det loggede selvstudie kommer med."""
+    _glippede_med(miljoe, begivenheder, hentet, sessioner)
     cli.opdater()
     side.eksport(connect(), miljoe["tmp"] / "site")
     return json.loads((miljoe["tmp"] / "site" / "liv.json").read_text())["studieuge"]
@@ -201,13 +213,13 @@ def test_studieuge_maaler_logget_selvstudie_mod_ugens_planlagte_blokke(miljoe):
     blokke = [("p1", f"{m}T09:00", f"{m}T10:30", "Alfa · fagnoter", 1),
               ("p2", f"{m + timedelta(days=6)}T11:00", f"{m + timedelta(days=6)}T12:00", "Beta · e4", 1),  # søndag tæller med
               ("p3", f"{m + timedelta(days=7)}T09:00", f"{m + timedelta(days=7)}T10:00", "Næste uge", 1),
-              ("t1", f"{m}T15:00", f"{m}T16:00", "Tandlæge", 0),  # uden mærket: ikke en del af planen
-              ("l1", f"{m}T00:00", f"{m}T00:30", "Selvstudie · Delta", 0)]  # CalTask tæller kun det, der er slut
-    uge = _studieuge_med(miljoe, blokke, date.today().isoformat())
+              ("t1", f"{m}T15:00", f"{m}T16:00", "Tandlæge", 0)]  # uden mærket: ikke en del af planen
+    logget = [("Alfa", [(f"{m}T00:00", f"{m}T00:30")])]
+    uge = _studieuge_med(miljoe, blokke, date.today().isoformat(), logget)
     assert uge == {"mandag": m.isoformat(), "planlagt_timer": 2.5, "planlagt_blokke": 2,
                    "selvstudie_timer": 0.5, "selvstudie_dage": 1}
 
-    uge = _studieuge_med(miljoe, blokke, (date.today() - timedelta(days=3)).isoformat())
+    uge = _studieuge_med(miljoe, blokke, (date.today() - timedelta(days=3)).isoformat(), logget)
     assert "ikke hentet" in uge["status"]
 
 
@@ -226,11 +238,35 @@ def test_studietid_pr_fag_og_uge(miljoe):
     g.commit(); g.close()
     side.eksport(connect(), miljoe["tmp"] / "site")
     st = json.loads((miljoe["tmp"] / "site" / "liv.json").read_text())["studietid"]
-    assert st["selvstudie"] == [{"navn": "Delta", "timer": 0.5, "uger": {m.isoformat(): 0.5}, "dage": {m.isoformat(): 0.5},
-                                 "sessioner": {m.isoformat(): 1}}]
+    assert "selvstudie" not in st  # Studie regner selvstudiet ud fra sine egne sessioner
     assert st["studieblokke"] == [{"navn": "Alfa", "timer": 0.5, "planlagt_timer": 2.5, "uger": {m.isoformat(): 0.5}}]
     assert all(u["timer"] > 0 for u in st["undervisning"])  # testkalenderens undervisning med fag_kode
     # Hvert fag har sin undervisning pr. slags (art og form), og slagene giver tilsammen fagets timer
     assert all(abs(sum(f["timer"] for f in u["former"]) - u["timer"]) < 0.05 for u in st["undervisning"])
     assert "Tandlæge" not in json.dumps(st, ensure_ascii=False)
     assert next(u for u in st["undervisning"] if u["kode"] == "TEST1")["timer"] == 0.75
+    # Hver gang for sig, kun én gang for den dobbelte, til fremmødet på Selvstudie
+    assert next(u for u in st["undervisning"] if u["kode"] == "TEST1")["gange"] == [
+        {"dato": m.isoformat(), "start": "00:00", "slut": "00:45", "art": "", "form": "", "timer": 0.75}]
+    assert all(abs(sum(g["timer"] for g in u["gange"]) - u["timer"]) < 0.05 for u in st["undervisning"])
+
+
+def test_ugens_kalender_har_sessionerne_pr_stykke_og_ikke_caltask(miljoe):
+    m = miljoe["mandag"] + timedelta(days=14)  # denne uge
+    g = sqlite3.connect(miljoe["tmp"] / "coach.db")
+    g.execute("INSERT INTO calendar_events (uid, start_local, end_local, summary, kalender) VALUES ('c1', ?, ?, 'Selvstudie · Beta🤖', 'Selvstudie')",
+              [f"{m}T09:00", f"{m}T10:00"])
+    g.commit()
+    g.close()
+    lav_sessioner(config.SESSIONER_JSON, miljoe["mandag"], [
+        ("Beta", [(f"{m}T09:00", f"{m}T09:25"), (f"{m}T09:30", f"{m}T10:00")]),
+        ("Alfa", [(f"{m}T23:30", f"{m + timedelta(days=1)}T00:15")])])
+    cli.opdater()
+    side.eksport(connect(), miljoe["tmp"] / "site")
+    alle = json.loads((miljoe["tmp"] / "site" / "liv.json").read_text())["kalender"]
+    # Fra den første uge i kalenderen til næste uge, ikke kun tre uger
+    assert min(alle) == miljoe["mandag"].isoformat() and max(alle) == (m + timedelta(days=7)).isoformat()
+    kal = alle[m.isoformat()]
+    selv = [(e["dato"], e["start"], e["slut"], e["titel"], e["session"]) for e in kal if e["type"] == "selvstudie"]
+    assert selv == [(m.isoformat(), "09:00", "09:25", "Beta", "s-0"), (m.isoformat(), "09:30", "10:00", "Beta", "s-0"),
+                    (m.isoformat(), "23:30", "24:00", "Alfa", "s-1"), ((m + timedelta(days=1)).isoformat(), "00:00", "00:15", "Alfa", "s-1")]

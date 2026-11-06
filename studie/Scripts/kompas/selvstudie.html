@@ -4,15 +4,16 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Studie · Selvstudie</title>
-<!-- Selvstudie i Athenify-stil: øverst fremskridt mod dagsmålet, dage i træk, medaljer, saldo og en kalender; derunder
-     tiden pr. fag mod kursusbeskrivelsernes arbejdstimer. Læser kun selvstudie.json, som eksporten
-     (Scripts/kompas-eksport.js, selvstudie()) skriver ud fra overbliks studietid og arbejdsbyrde i fag.json.
-     Siden regner intet selv: alle tal, også "forventet til nu", står færdige i filen. -->
+<!-- Selvstudie i Athenify-stil: øverst stopuret (start, pause, stop, Pomodoro) og forslag ud fra dine svar; Studie-serveren
+     holder stopuret og skriver sessionerne i Scripts/sessioner.json (/studie/api/stopur, /session og /forslag). Derunder
+     fremskridt mod dagsmålet, fagene mod kursusbeskrivelsernes arbejdstimer, rytmen og et sidepanel med dage i træk,
+     saldo, medaljer, kalender og eksamen; nederst de seneste sessioner, som kan rettes. Læser kun selvstudie.json, som eksporten
+     (Scripts/kompas-eksport.js, selvstudie()) skriver ud fra sessionerne, overbliks undervisning og arbejdsbyrde i
+     fag.json. Siden regner intet selv: alle tal, også "forventet til nu", står færdige i filen. Undtagen er stopuret, som
+     tæller sekunderne i den session, du selv har startet, og lægger dem til dagens loggede tid i ringen. -->
 <link rel="stylesheet" href="/kompas/assets/tokens.css">
 <link rel="stylesheet" href="/kompas/assets/page.css">
 <style>
-  .fag-h { display: flex; align-items: center; gap: 10px; }
-  .fag-h .sw { width: 10px; height: 10px; border-radius: 3px; flex: none; }
   .tal { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 4px 0 14px; color: var(--text-secondary); font-size: 13px; }
   .tal b { color: var(--text-primary); font-weight: 600; }
   .note { margin: 12px 0 0; font-size: 12.5px; color: var(--text-secondary); line-height: 1.5; }
@@ -25,30 +26,43 @@
   :root { --guld: #d4a017; --soelv: #9aa0a6; --bronze: #b0703c;
     /* Kalenderens grønne trin (under bronze, bronze, sølv, guld), som Athenify */
     --t1: #b9ecd0; --t2: #5fc48e; --t3: #2f9e66; --t4: #1f6b45; }
-  .motiv { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
-  .motiv > div { display: grid; gap: 16px; }
+  .hoved { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; align-items: start; }
+  .hoved > .stack { min-width: 0; }
+  .side .afsnit + .afsnit { border-top: 1px solid var(--divider); margin-top: 14px; padding-top: 14px; }
+  .side summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 15px; font-weight: 600; }
+  .side summary::-webkit-details-marker { display: none; }
+  .side summary::before { content: ""; width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent;
+    border-top: 6px solid var(--text-secondary); transition: transform .15s; }
+  .side details:not([open]) summary::before { transform: rotate(-90deg); }
+  .side summary .meta { font-weight: 400; font-size: 13.5px; color: var(--text-secondary); }
+  .side .afsnit[open] > summary { margin-bottom: 10px; }
+  .fagtabel th { text-align: left; font-size: 12px; font-weight: 600; color: var(--text-secondary); padding: 0 4px 6px; }
+  .fagtabel th.t { text-align: right; }
+  .fagtabel .sw { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 6px; }
+  .rytme-valg { display: flex; gap: 8px; flex-wrap: wrap; justify-content: space-between; margin-bottom: 8px; }
+  .tidsrum { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); padding: 4px 8px 0 36px; text-align: center; font-size: 12px; color: var(--text-secondary); }
+  .tidsrum > div { display: grid; gap: 1px; }
+  .tidsrum b { font-size: 13px; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+  .tidsrum .top b, .tidsrum .top span { color: var(--mark); }
   .pills { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; padding: 14px 16px; }
   .pill .k { display: flex; align-items: center; gap: 6px; color: var(--text-secondary); font-size: 12.5px; }
   .pill .v { font-size: 17px; font-weight: 600; margin: 2px 0 6px 20px; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .pill .meter { margin-left: 20px; }
   .meter { height: 7px; border-radius: 4px; background: var(--surface-inset); overflow: hidden; }
   .meter i { display: block; height: 100%; border-radius: 4px; background: #3fa56c; }
-  .sek h2 { display: flex; align-items: center; gap: 6px; }
-  .sek h2 .meta { font-weight: 400; font-size: 14px; color: var(--text-secondary); }
-  .ringe { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; margin-top: 12px; }
+  .ringe { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
   .ring { display: grid; justify-items: center; gap: 6px; font-size: 11px; font-weight: 600; color: var(--text-secondary); letter-spacing: .02em; }
   .ring .rund { position: relative; width: 40px; height: 40px; }
   .ring svg { position: absolute; inset: 0; width: 40px; height: 40px; }
   .ring .spor { stroke: transparent; } .ring .bue { stroke: #3fa56c; stroke-linecap: round; }
   .ring .bund { fill: color-mix(in srgb, #3fa56c 10%, transparent); }
   .ring .tjek { position: absolute; inset: 0; display: grid; place-items: center; color: #2f8a57; }
-  .saldo-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .idag-badge { font-size: 12.5px; font-weight: 600; padding: 3px 8px; border-radius: 8px; }
   .idag-badge.ned { background: var(--destructive-tint); color: var(--destructive); }
   .idag-badge.op { background: var(--success-tint); color: var(--success); }
-  .medaljer { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); text-align: center; margin-top: 8px; }
+  .medaljer { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); text-align: center; }
   .medalje .navn { color: var(--text-secondary); font-size: 13px; }
-  .medalje .tal { display: flex; align-items: center; justify-content: center; gap: 4px; font-size: 34px; font-weight: 700; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+  .medalje .tal { display: flex; align-items: center; justify-content: center; gap: 4px; font-size: 28px; font-weight: 700; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
   .maaned-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 2px 0 12px; }
   .maaned-top b { font-size: 17px; text-transform: capitalize; }
   .maaned-top button { border: 0; background: none; color: var(--text-primary); cursor: pointer; width: 36px; height: 36px; border-radius: 8px; display: inline-grid; place-items: center; }
@@ -70,11 +84,43 @@
   .mgrid .c.t1 { background: var(--t1); color: #14532d; } .mgrid .c.t2 { background: var(--t2); color: #fff; }
   .mgrid .c.t3 { background: var(--t3); color: #fff; } .mgrid .c.t4 { background: var(--t4); color: #fff; }
   .fremtid { display: grid; gap: 8px; }
-  .fremtid .r { display: flex; justify-content: space-between; gap: 12px; font-size: 13.5px; }
-  .fremtid .r span:last-child { color: var(--text-secondary); text-align: right; }
-  @media (max-width: 760px) { .motiv { grid-template-columns: minmax(0, 1fr); } .pills { padding: 12px; gap: 8px; }
+  .fremtid .r { display: grid; gap: 2px; font-size: 13.5px; }
+  .fremtid .r span:last-child { color: var(--text-secondary); font-size: 13px; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; font: inherit; font-size: 14px; font-weight: 500; line-height: 1; padding: 10px 16px; border-radius: 10px; border: 0; cursor: pointer; background: var(--nav-indicator); color: var(--container); }
+  .btn:hover { opacity: .88; } .btn:disabled { opacity: .45; cursor: default; }
+  .btn.ghost { background: var(--container); color: var(--text-primary); box-shadow: var(--shadow-border-xs); }
+  .btn.ghost:hover { background: var(--container-hover); opacity: 1; }
+  .btn.quiet { background: none; color: var(--text-secondary); padding: 8px; font-size: 13px; }
+  .su-fejl { color: var(--destructive); font-size: 13px; }
+  .btn.quiet:hover { color: var(--text-primary); background: var(--surface-hover); opacity: 1; }
+  select, input[type="time"], input[type="date"] { font: inherit; font-size: 13px; color: var(--text-primary); background: var(--container); border: 0; box-shadow: var(--shadow-border-xs); border-radius: 8px; padding: 7px 9px; }
+  select:focus, input:focus { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+  .sdag { margin-top: 10px; } .sdag:first-of-type { margin-top: 0; }
+  .sdag h3 { font-size: 13px; font-weight: 600; color: var(--text-secondary); margin: 0 0 4px; }
+  .sdag h3::first-letter { text-transform: uppercase; }
+  .srow { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-top: 1px solid var(--divider); font-size: 13.5px; }
+  .srow .sw { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+  .srow .t { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .srow .meta { flex: 1; min-width: 0; }
+  #indstillinger summary { list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  #indstillinger summary::-webkit-details-marker { display: none; }
+  #indstillinger summary h2 { margin: 0; font-size: 16px; }
+  #indstillinger[open] summary { margin-bottom: 12px; }
+  .maalform { display: grid; gap: 12px; max-width: 560px; }
+  .maalform .r { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; font-size: 13.5px; }
+  .maalform .r > span:first-child { width: 110px; color: var(--text-secondary); }
+  .maalform input[type="number"] { font: inherit; font-size: 13.5px; width: 5.5em; color: var(--text-primary); background: var(--container); border: 0; box-shadow: var(--shadow-border-xs); border-radius: 8px; padding: 6px 8px; }
+  .srow .snote { color: var(--text-primary); white-space: pre-wrap; }
+  .forslag-r { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 0; border-top: 1px solid var(--divider); font-size: 13.5px; }
+  .forslag-r:first-of-type { border-top: 0; }
+  .forslag-r .hvad { flex: 1; min-width: 200px; display: grid; gap: 2px; }
+  .forslag-r .dele { display: flex; gap: 10px; flex-wrap: wrap; color: var(--text-secondary); font-size: 13px; }
+  .forslag-r .dele .sw { display: inline-block; width: 8px; height: 8px; border-radius: 3px; margin-right: 5px; }
+  .sform { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 8px 0; border-top: 1px solid var(--divider); }
+  @media (max-width: 1000px) { .hoved { grid-template-columns: minmax(0, 1fr); } }
+  @media (max-width: 760px) { .pills { padding: 12px; gap: 8px; }
     .pill .v, .pill .meter { margin-left: 0; } .pill .v { font-size: 15px; } .mgrid { gap: 4px; } .mgrid .c b { font-size: 12.5px; }
-    .mtal b { font-size: 15px; } .fremtid .r { flex-direction: column; gap: 2px; } .fremtid .r span:last-child { text-align: left; } }
+    .mtal b { font-size: 15px; } }
 </style>
 </head>
 <body>
@@ -82,7 +128,12 @@
   <header class="page">
     <div><h1>Selvstudie</h1><p class="sub" id="sub">Tiden pr. fag mod kursusbeskrivelsernes arbejdstimer</p></div>
   </header>
-  <div class="stack" id="root"><div class="card empty">Henter …</div></div>
+  <div class="stack">
+    <section class="card panel" id="forslag" hidden></section>
+    <div class="stack" id="root"><div class="card empty">Henter …</div></div>
+    <section class="card panel" id="sessioner" hidden></section>
+    <details class="card panel" id="indstillinger" hidden><summary><h2>Indstillinger</h2><span class="meta">dagsmål, dage og medaljer</span></summary><div id="indstillinger-form"></div></details>
+  </div>
 </div>
 
 <script src="/kompas/assets/icons.js"></script>
@@ -95,49 +146,31 @@ const dato = s => s ? dayMonth(parseDate(s)).replace(/\.$/, "") : "–";
 // Undervisningen i fagets farve, lysere; selvstudiet i fagets farve
 const lys = farve => `color-mix(in srgb, ${farve} 40%, var(--container))`;
 
-function fagPanel(f) {
-  const tn = f.forventet_til_nu, fv = f.forventet, b = f.brugt;
-  const forv = tn || { undervisning: fv.undervisning, selvstudie: fv.selvstudie, i_alt: fv.i_alt };
-  const forvLabel = tn ? "Forventet til nu" : "Hele kurset";
-  return `<section class="card panel">
-    <div class="panel-head"><h2 class="fag-h"><span class="sw" style="background:${f.farve}"></span>${esc(f.kort)}</h2>
-      <span class="meta">${esc(f.navn)}</span></div>
-    <div class="tal"><span>Brugt <b>${t(b.i_alt)}</b></span>
-      ${tn ? `<span>forventet til nu <b>${t(tn.i_alt)}</b> (${tn.andel} % af kurset gået)</span>` : ""}
-      <span>kurset i alt <b>${t(fv.i_alt)}</b></span></div>
-    <div class="cols">
-      <div><div class="meta" style="margin-bottom:6px">Brugt, fordelt</div><div id="pie-${f.id}"></div></div>
-      <div><div class="meta" style="margin-bottom:6px">${forvLabel} mod brugt</div><div id="bar-${f.id}"></div></div>
-    </div>
-    <p class="note">${tn ? `Forventet til nu er kursets ${t(fv.i_alt)} jævnt fordelt fra ${dato(tn.fra)} til eksamen ${dato(tn.til)}.` : esc(f.grund || "")}
-      ${f.undervisning_ikke_talt ? `${t(f.undervisning_ikke_talt)} undervisning i kalenderen tæller ikke (${[f.ikke_talt?.fravaer ? `${t(f.ikke_talt.fravaer)} fravær` : "",
-        f.ikke_talt?.bruges_ikke ? `${t(f.ikke_talt.bruges_ikke)}, du ikke bruger` : ""].filter(Boolean).join(", ")}).` : ""}
-      Studieblokke: ${t(b.studieblokke_planlagt)} planlagt, ${t(b.studieblokke_forbi)} forbi. Kun det, du logger i CalTask, tæller som selvstudie.</p>
-    <details style="margin-top:12px"><summary>Kursusbeskrivelsens arbejdstimer (${esc(fv.kilde)})</summary>
-      <table class="poster">${fv.poster.map(p => `<tr><td>${esc(p.navn)} ${p.undervisning ? '<span class="badge u">undervisning</span>' : ""}</td><td class="t">${t(p.timer)}</td></tr>`).join("")}
-        <tr class="sum"><td>I alt${fv.semestre > 1 ? ` (${fv.semestre} semestre)` : ""}</td><td class="t">${t(fv.i_alt)}</td></tr></table></details>
-  </section>`;
-}
-
-// ── Athenify-delen: alle tal er regnet af eksporten (motivation i selvstudie.json); siden viser dem kun ──
+// Alle tal er regnet af eksporten (selvstudie.json); siden viser dem kun. Fanerne og de lukkede afsnit huskes i browseren.
 const UGEDAG = ["MAN", "TIR", "ONS", "TOR", "FRE", "LØR", "SØN"], MEDALJE = { guld: "Guld", soelv: "Sølv", bronze: "Bronze" };
 // Timer som "12 min", "1 t 47 min" eller "46 t 22 min" (kun formatering)
 const tm = h => { const m = Math.round(Math.abs(h) * 60), tt = Math.floor(m / 60), r = m % 60;
   return `${h < 0 ? "−" : ""}${tt && r ? `${tt} t ${r} min` : tt ? `${tt} t` : `${r} min`}`; };
+// Kort til hjørnerne i radaren: "45m", "2t", "1,5t"
+const kortTid = h => h < 1 ? `${Math.round(h * 60)}m` : `${fmt(h, h < 10 && h % 1 ? 1 : 0)}t`;
 let MÅNED = null;  // den viste måned i kalenderen
+const fane = (navn, valg, std) => { const v = gemt.hent(`selvstudie:${navn}`); return v in valg ? v : std; };
+const segment = (navn, valg, valgt) => `<div class="seg" role="group">${Object.entries(valg).map(([k, n]) =>
+  `<button type="button" data-fane="${navn}" data-v="${k}" aria-pressed="${k === valgt}">${n}</button>`).join("")}</div>`;
 
 function pill(navn, p) {
   return `<div class="pill"><div class="k">${icon("calendar", 14)}${navn}</div><div class="v">${tm(p.timer)}</div>
     <div class="meter" aria-hidden="true" title="${p.pct} % af ${t(p.maal)}"><i style="width:${Math.min(100, p.pct)}%"></i></div></div>`;
 }
 // En ring pr. dag: buen så langt, som dagen nåede mod dagsmålet; flueben, når der er logget; dobbelt og tyk ring, når målet er nået
+// En fridag (intet dagsmål) uden selvstudie får en kop
 function ring(d, mål) {
-  const r = 17, c = 2 * Math.PI * r, andel = Math.min(1, d.timer / mål), tyk = d.naaet ? 4 : 2.5;
+  const md = d.maal_dag ?? mål, r = 17, c = 2 * Math.PI * r, andel = md ? Math.min(1, d.timer / md) : d.timer > 0 ? 1 : 0, tyk = d.naaet ? 4 : 2.5;
   return `<div class="ring" title="${esc(`${weekday(parseDate(d.dato))} ${dayMonth(parseDate(d.dato))}: ${tm(d.timer)}${d.medalje ? ` · ${MEDALJE[d.medalje]}` : ""}`)}">
     <span>${UGEDAG[d.ugedag]}</span>
     <span class="rund"><svg viewBox="0 0 40 40" aria-hidden="true">${d.timer > 0 ? `<circle class="bund" cx="20" cy="20" r="${r - 2}"/>` : `<circle cx="20" cy="20" r="${r}" fill="none" style="stroke:var(--divider)" stroke-width="2"/>`}
       ${andel > 0 ? `<circle class="bue" cx="20" cy="20" r="${r}" fill="none" stroke-width="${tyk}" stroke-dasharray="${(c * andel).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 20 20)"/>` : ""}</svg>
-      ${d.timer > 0 ? `<span class="tjek">${icon(d.naaet ? "check-check" : "check", 16)}</span>` : ""}</span></div>`;
+      ${d.timer > 0 ? `<span class="tjek">${icon(d.naaet ? "check-check" : "check", 16)}</span>` : d.fridag ? `<span class="tjek" style="color:var(--text-subdued)">${icon("coffee", 15)}</span>` : ""}</span></div>`;
 }
 function kalender(m) {
   const i = Math.max(0, m.maaneder.findIndex(x => x.maaned === MÅNED)), x = m.maaneder[i];
@@ -149,102 +182,346 @@ function kalender(m) {
     <div class="mgrid">${UGEDAG.map(u => `<div class="ud">${u}</div>`).join("")}${"<div></div>".repeat(x.forskyd)}${x.dage.map(d =>
       `<div class="c ${d.timer == null ? "tom" : `t${d.trin}`}" title="${esc(`${weekday(parseDate(d.dato))} ${dayMonth(parseDate(d.dato))}: ${d.timer == null ? "ingen data" : tm(d.timer)}${d.sessioner ? ` · ${d.sessioner} ${d.sessioner === 1 ? "session" : "sessioner"}` : ""}${d.medalje ? ` · ${MEDALJE[d.medalje]}` : ""}`)}">
         <small>${d.dag}</small>${d.timer ? `<b>${fmt(d.timer, d.timer < 10 ? 1 : 0)} t</b>` : ""}</div>`).join("")}</div>
-    <p class="note">Farven følger medaljerne: lysest under ${t(m.medaljer_graenser.bronze)}, mørkest fra ${t(m.medaljer_graenser.guld)}. Målet er ${t(m.maal)} om dagen fra ${dato(m.fra)}.</p>`;
-}
-function motivation(m, fag) {
-  if (!m) return "";
-  MÅNED ||= m.maaneder.at(-1)?.maaned;
-  const md = m.i_alt.medaljer;
-  return `<section class="card pills">${pill("I dag", m.i_dag)}${pill("Uge", m.uge)}${pill("Måned", m.maaned)}</section>
-    <div class="motiv"><div>
-      <section class="card panel sek"><h2>Dage i træk <span class="meta">· ${m.i_traek} ${m.i_traek === 1 ? "dag" : "dage"}</span><span style="color:var(--warning)">${icon("flame", 18)}</span></h2>
-        <div class="ringe">${m.seneste_7.map(d => ring(d, m.maal)).join("")}</div>
-        <p class="note">Dobbelt flueben: dagsmålet på ${t(m.maal)} er nået. ${m.i_traek_maal} ${m.i_traek_maal === 1 ? "dag" : "dage"} i træk med målet; længst ${m.laengst_i_traek} med selvstudie.</p></section>
-      <section class="card panel sek"><div class="saldo-top"><h2>Saldo <span class="meta">· ${tm(m.saldo)}</span></h2>
-          <span class="idag-badge ${m.saldo_i_dag < 0 ? "ned" : "op"}">I dag: ${m.saldo_i_dag > 0 ? "+" : ""}${tm(m.saldo_i_dag)} ${m.saldo_i_dag < 0 ? "↓" : "↑"}</span></div>
-        <div id="saldo"></div>
-        <p class="note">Den samlede forskel mellem logget selvstudie og ${t(m.maal)} om dagen siden ${dato(m.fra)}.</p></section>
-      <section class="card panel sek"><h2>Medaljer</h2>
-        <div class="medaljer">${["guld", "soelv", "bronze"].map(k => `<div class="medalje"><div class="navn">${MEDALJE[k]}</div>
-          <div class="tal"><span style="color:var(--${k})">${icon("trophy", 26)}</span><span style="color:var(--${k})">${md[k]}</span></div></div>`).join("")}</div>
-        <p class="note">Bronze fra ${t(m.medaljer_graenser.bronze)}, sølv fra ${t(m.medaljer_graenser.soelv)} og guld fra ${t(m.medaljer_graenser.guld)} logget på en dag, siden ${dato(m.fra)}.</p></section>
-    </div><div>
-      <section class="card panel sek"><h2>Kalender</h2><div id="kalender">${kalender(m)}</div></section>
-      <section class="card panel"><div class="panel-head"><h2>Eksamen</h2><span class="meta">${icon("target", 14)} hvad der skal til</span></div>
-        <div class="fremtid">${m.eksamener.map(e => { const f = fag.find(x => x.kort === e.fag), fs = f?.forudsigelse;
-          return `<div class="r"><span><b>${esc(e.fag)}</b> · ${dato(e.dato)} · om ${e.dage} dage</span><span>${fs
-            ? `${t(fs.tilbage)} selvstudie mangler efter kursusbeskrivelsen: ${t(fs.pr_uge)} om ugen`
-            : esc(f?.grund || "Ingen forudsigelse")}</span></div>`; }).join("")}</div></section>
-    </div></div>
-    <section class="card panel"><div class="panel-head"><h2>Dag for dag</h2><span class="meta">de seneste 28 dage, pr. fag</span></div>
-      <div id="dage"></div></section>`;
-}
-function tegnMotivation(m, fag) {
-  if (!m) return;
-  lineChart(document.getElementById("saldo"), { label: "Saldo mod dagsmålet", height: 150, color: "#2e7cf6", fyld: true, fmt: v => fmt(v, 0),
-    points: m.dage.map(d => ({ label: dato(d.dato), y: d.saldo, tip: `${dato(d.dato)}: saldo <b>${tm(d.saldo)}</b><br>logget ${tm(d.timer)}` })) });
-  document.getElementById("kalender").onclick = e => { const b = e.target.closest("[data-mnd]"); if (!b || b.disabled) return;
-    MÅNED = m.maaneder[+b.dataset.mnd].maaned; document.getElementById("kalender").innerHTML = kalender(m); };
-  const seneste = m.dage.slice(-28);
-  stackChart(document.getElementById("dage"), { label: "Logget selvstudie pr. dag og fag", height: 180, fmt: v => fmt(v, 0),
-    series: fag.map(f => ({ label: f.kort, color: f.farve })), ref: { y: m.maal, label: `Dagsmål ${t(m.maal)}` },
-    points: seneste.map(d => ({ label: dato(d.dato), ys: fag.map(f => d.pr_fag[f.id] || 0),
-      tip: `${weekday(parseDate(d.dato))} ${dayMonth(parseDate(d.dato))}: <b>${tm(d.timer)}</b>${fag.filter(f => d.pr_fag[f.id]).map(f => `<br>${esc(f.kort)} ${tm(d.pr_fag[f.id])}`).join("")}` })) });
+    <p class="note">Farven følger medaljerne: lysest under ${t(m.medaljer_graenser.bronze)}, mørkest fra ${t(m.medaljer_graenser.guld)}. Målet er ${t(m.maal)} om dagen (${esc(m.gaelder)}) fra ${dato(m.fra)}.</p>`;
 }
 
-function render(d) {
-  document.getElementById("sub").textContent = `Tiden pr. fag mod kursusbeskrivelsernes arbejdstimer · aflæst ${stamp(d.genereret)}`;
-  if (d.mangler) { document.getElementById("root").innerHTML = `<div class="card empty">${esc(d.mangler)}</div>`; return; }
-  const fag = d.fag;
-  document.getElementById("root").innerHTML = `${motivation(d.motivation, fag)}
-    <section class="card panel">
-      <div class="panel-head"><h2>Fordeling</h2><span class="meta">${t(d.i_alt.undervisning)} undervisning · ${t(d.i_alt.selvstudie)} selvstudie</span></div>
-      <div class="cols">
-        <div><div class="meta" style="margin-bottom:6px">Selvstudie pr. fag (logget i CalTask)</div><div id="pie-selvstudie"></div></div>
-        <div><div class="meta" style="margin-bottom:6px">Brugt tid pr. fag (undervisning og selvstudie)</div><div id="pie-brugt"></div></div>
-      </div>
+// Sidepanelet, som Athenifys: dage i træk, saldo, medaljer, kalenderen og eksamen i ét kort; hvert afsnit kan lukkes
+function afsnit(id, titel, indhold) {
+  const lukket = (gemt.hent("selvstudie:lukket") || "").split(",").includes(id);
+  return `<details class="afsnit" data-afsnit="${id}"${lukket ? "" : " open"}><summary>${titel}</summary>${indhold}</details>`;
+}
+function sidepanel(m, fag) {
+  const md = m.i_alt.medaljer;
+  return `<aside class="card panel side">
+    ${afsnit("traek", `Dage i træk <span class="meta">· ${m.i_traek} ${m.i_traek === 1 ? "dag" : "dage"}</span><span style="color:var(--warning);display:inline-flex">${icon("flame", 16)}</span>`,
+      `<div class="ringe">${m.seneste_7.map(d => ring(d, m.maal)).join("")}</div>
+      <p class="note">Dobbelt flueben: dagsmålet på ${t(m.maal)} er nået.${m.gaelder !== "alle dage" ? ` Kop: en fridag (målet gælder ${esc(m.gaelder)}), som ikke bryder rækken.` : ""} ${m.i_traek_maal} ${m.i_traek_maal === 1 ? "dag" : "dage"} i træk med målet; længst ${m.laengst_i_traek} med selvstudie.</p>`)}
+    ${afsnit("saldo", `Saldo <span class="meta">· ${tm(m.saldo)}</span><span class="idag-badge ${m.saldo_i_dag < 0 ? "ned" : "op"}">I dag: ${m.saldo_i_dag > 0 ? "+" : ""}${tm(m.saldo_i_dag)} ${m.saldo_i_dag < 0 ? "↓" : "↑"}</span>`,
+      `<div id="saldo"></div><p class="note">Den samlede forskel mellem logget selvstudie og ${t(m.maal)} om dagen (${esc(m.gaelder)}) siden ${dato(m.fra)}.</p>`)}
+    ${afsnit("medaljer", "Medaljer", `<div class="medaljer">${["guld", "soelv", "bronze"].map(k => `<div class="medalje"><div class="navn">${MEDALJE[k]}</div>
+        <div class="tal"><span style="color:var(--${k})">${icon("trophy", 22)}</span><span style="color:var(--${k})">${md[k]}</span></div></div>`).join("")}</div>
+      <p class="note">Bronze fra ${t(m.medaljer_graenser.bronze)}, sølv fra ${t(m.medaljer_graenser.soelv)} og guld fra ${t(m.medaljer_graenser.guld)} logget på en dag, siden ${dato(m.fra)}.</p>`)}
+    ${afsnit("kalender", "Kalender", `<div id="kalender">${kalender(m)}</div>`)}
+    ${afsnit("eksamen", `Eksamen <span class="meta">· hvad der skal til</span>`, `<div class="fremtid">${m.eksamener.map(e => { const f = fag.find(x => x.kort === e.fag), fs = f?.forudsigelse;
+        return `<div class="r"><span><b>${esc(e.fag)}</b> · ${dato(e.dato)} · om ${e.dage} dage</span><span>${fs
+          ? `${t(fs.tilbage)} selvstudie mangler efter kursusbeskrivelsen: ${t(fs.pr_uge)} om ugen`
+          : esc(f?.grund || "Ingen forudsigelse")}</span></div>`; }).join("")}</div>`)}
+  </aside>`;
+}
+
+// Fag: alle fag i ét kort, som Athenifys Courses, hvert i sin farve. Mod forventet viser forventet til nu, når det kan
+// regnes (ét semester med kendt start og eksamen), ellers hele kurset.
+const FAG_FANER = { forventet: "Mod forventet", fordeling: "Fordeling", tabel: "Tabel" };
+const svag = (farve, pct) => `color-mix(in srgb, ${farve} ${pct}%, var(--container))`;
+// Hvad forventet er for et fag: dette semesters del (et kursus over flere semestre) eller hele kurset
+const forventetHvad = f => f.forventet.dette_semester ? "dette semester" : "hele kurset";
+function fagNote(f) {
+  const tn = f.forventet_til_nu, b = f.brugt;
+  const fv = f.forventet, hvad = fv.dette_semester ? `dette semesters ${t(fv.i_alt)} af kursets ${t(fv.hele_kurset)}` : `kursets ${t(fv.i_alt)}`;
+  const til = tn?.til_er === "sidste_undervisning" ? `sidste undervisningsdag ${dato(tn.til)}` : `eksamen ${dato(tn?.til)}`;
+  return `${tn ? `Forventet til nu er ${hvad} jævnt fordelt fra ${dato(tn.fra)} til ${til} (${tn.andel} % gået).` : esc(f.grund || "")}
+    ${fv.vurdering ? `Semestrets del er en vurdering: ${esc(fv.vurdering)}` : ""}
+    ${f.undervisning_ikke_talt ? `${t(f.undervisning_ikke_talt)} undervisning i kalenderen tæller ikke (${[f.ikke_talt?.fravaer ? `${t(f.ikke_talt.fravaer)} fravær` : "",
+      f.ikke_talt?.bruges_ikke ? `${t(f.ikke_talt.bruges_ikke)}, du ikke bruger` : ""].filter(Boolean).join(", ")}).` : ""}
+    Studieblokke: ${t(b.studieblokke_planlagt)} planlagt, ${t(b.studieblokke_forbi)} forbi.`;
+}
+function tegnFag(d) {
+  const el = document.getElementById("fagindhold"), fag = d.fag, v = fane("fag", FAG_FANER, "forventet");
+  if (v === "forventet") {
+    const hele = fag.filter(f => !f.forventet_til_nu);
+    const sem = fag.filter(f => f.forventet.dette_semester);
+    const tn = fag.filter(f => f.forventet_til_nu);
+    el.innerHTML = `<div id="fag-graf"></div><p class="note">Den grønne kurve er det forventede for hele perioden; den stiplede ring er forventet til nu${tn.length
+      ? ` (${tn.map(f => `${esc(f.kort)} ${f.forventet_til_nu.andel} % gået`).join(", ").replace(/, ([^,]*)$/, " og $1")})` : ""}.
+      ${sem.length ? `${sem.map(f => esc(f.kort)).join(" og ")} løber over to semestre; forventet er dette semesters del, som er en vurdering (se Tabel).` : ""}
+      ${hele.length ? `${hele.map(f => esc(f.kort)).join(" og ")}: hele kurset. ${esc([...new Set(hele.map(f => f.grund))].join(" "))}` : ""}</p>`;
+    maalChart(el.querySelector("#fag-graf"), { label: "Forventet mod brugt pr. fag", height: 240, fmt: v => `${fmt(v, 0)} t`,
+      maal: { label: "Forventet" }, punkt: { label: "Forventet til nu" }, vaerdi: { label: "Brugt" },
+      points: fag.map(f => { const fv = f.forventet, tn = f.forventet_til_nu, b = f.brugt; return { label: `${f.kort} · ${forventetHvad(f)}`,
+        maal: fv.i_alt, punkt: tn ? tn.i_alt : null, vaerdi: b.i_alt, color: f.farve,
+        tip: `<b>${esc(f.kort)}</b><br>forventet (${forventetHvad(f)}) ${t(fv.i_alt)}${tn ? `<br>forventet til nu ${t(tn.i_alt)} (${tn.andel} % gået)` : ""}<br>brugt ${t(b.i_alt)}: undervisning ${t(b.undervisning)} · selvstudie ${t(b.selvstudie)}` }; }) });
+  } else if (v === "fordeling") {
+    el.innerHTML = `<div class="cols">
+        <div><div class="meta" style="margin-bottom:6px">Selvstudie pr. fag</div><div id="pie-selvstudie"></div></div>
+        <div><div class="meta" style="margin-bottom:6px">Brugt tid pr. fag (undervisning og selvstudie)</div><div id="pie-brugt"></div></div></div>`;
+    pieChart(el.querySelector("#pie-selvstudie"), { label: "Selvstudie pr. fag",
+      slices: fag.map(f => ({ label: f.kort, y: f.brugt.selvstudie, color: f.farve, tip: `${esc(f.kort)}: <b>${t(f.brugt.selvstudie)}</b> selvstudie` })),
+      midte: { tal: t(d.i_alt.selvstudie), tekst: "selvstudie" } });
+    pieChart(el.querySelector("#pie-brugt"), { label: "Brugt tid pr. fag",
+      slices: fag.map(f => ({ label: f.kort, y: f.brugt.i_alt, color: f.farve, tip: `${esc(f.kort)}: <b>${t(f.brugt.i_alt)}</b> i alt` })),
+      midte: { tal: t(d.i_alt.brugt), tekst: "brugt" } });
+  } else {
+    el.innerHTML = `<table class="poster fagtabel"><tr><th>Fag</th><th class="t">Undervisning</th><th class="t">Selvstudie</th><th class="t">Brugt</th><th class="t">Forventet</th></tr>
+      ${fag.map(f => `<tr><td><span class="sw" style="background:${f.farve}"></span><b>${esc(f.kort)}</b> <span class="meta">${esc(f.navn)}</span></td>
+        <td class="t">${t(f.brugt.undervisning)}</td><td class="t">${t(f.brugt.selvstudie)}</td><td class="t"><b>${t(f.brugt.i_alt)}</b></td>
+        <td class="t">${t(f.forventet.i_alt)}<br><span class="meta">${f.forventet_til_nu ? `til nu ${t(f.forventet_til_nu.i_alt)}` : forventetHvad(f)}</span></td></tr>`).join("")}
+      <tr class="sum"><td>I alt</td><td class="t">${t(d.i_alt.undervisning)}</td><td class="t">${t(d.i_alt.selvstudie)}</td><td class="t">${t(d.i_alt.brugt)}</td><td></td></tr></table>
+      ${fag.map(f => `<details style="margin-top:10px"><summary><b>${esc(f.kort)}</b>: noter og kursusbeskrivelsens arbejdstimer</summary>
+        <p class="note">${fagNote(f)}</p>
+        <table class="poster">${f.forventet.poster.map(p => `<tr><td>${esc(p.navn)} ${p.undervisning ? '<span class="badge u">undervisning</span>' : ""}</td><td class="t">${t(p.timer)}</td></tr>`).join("")}
+          <tr class="sum"><td>${f.forventet.dette_semester ? `Dette semester (af ${t(f.forventet.hele_kurset)} over ${f.forventet.semestre} semestre)` : `I alt${f.forventet.semestre > 1 ? ` (${f.forventet.semestre} semestre)` : ""}`} · ${esc(f.forventet.kilde)}</td><td class="t">${t(f.forventet.i_alt)}</td></tr></table></details>`).join("")}
       <p class="note">Undervisningen er det, kalenderen har som undervisning, fra ${dato(d.kalender_fra)}; om du var der, ved Kompas ikke.
         ${d.fravaer?.length ? `Undervisningen i uge ${d.fravaer.map(x => x.uge + (x.fag ? ` (${esc(x.fag)})` : "")).join(", ").replace(/, ([^,]*)$/, " og $1")} tæller ikke, fordi du ikke var til stede.` : ""}
         ${d.bruges_ikke?.length ? `Det tæller heller ikke: ${d.bruges_ikke.map(x => `${esc(x.fag || "alle fag")} ${esc([x.art, x.form].filter(Boolean).join(" · "))}`).join(", ").replace(/, ([^,]*)$/, " og $1")}, som du ikke bruger.` : ""}
-        ${d.fravaer?.length || d.bruges_ikke?.length ? `Begge dele står i <code>Scripts/fravaer.json</code>.` : ""}
-        Selvstudie er det, du har logget i CalTask (fra ${dato(d.selvstudie_fra)}).${d.ukendt?.length ? ` Logget, men ikke knyttet til et fag: ${d.ukendt.map(u => `${esc(u.navn)} (${t(u.timer)})`).join(", ")}.` : ""}</p>
-    </section>
-    ${fag.map(fagPanel).join("")}
-    <section class="card panel">
-      <div class="panel-head"><h2>Uge for uge</h2><span class="meta">logget selvstudie pr. fag</span></div>
-      <div id="uger"></div>
-    </section>`;
-
-  pieChart(document.getElementById("pie-selvstudie"), { label: "Selvstudie pr. fag",
-    slices: fag.map(f => ({ label: f.kort, y: f.brugt.selvstudie, color: f.farve, tip: `${esc(f.kort)}: <b>${t(f.brugt.selvstudie)}</b> selvstudie` })),
-    midte: { tal: t(d.i_alt.selvstudie), tekst: "selvstudie" } });
-  pieChart(document.getElementById("pie-brugt"), { label: "Brugt tid pr. fag",
-    slices: fag.map(f => ({ label: f.kort, y: f.brugt.i_alt, color: f.farve, tip: `${esc(f.kort)}: <b>${t(f.brugt.i_alt)}</b> i alt` })),
-    midte: { tal: t(d.i_alt.brugt), tekst: "brugt" } });
-  for (const f of fag) {
-    const tn = f.forventet_til_nu, fv = f.forventet, b = f.brugt, forv = tn || fv;
-    pieChart(document.getElementById(`pie-${f.id}`), { label: `${f.kort}: brugt, fordelt`, height: 150,
-      slices: [{ label: "Undervisning", y: b.undervisning, color: lys(f.farve), tip: `Undervisning: <b>${t(b.undervisning)}</b>` },
-               { label: "Selvstudie", y: b.selvstudie, color: f.farve, tip: `Selvstudie: <b>${t(b.selvstudie)}</b>` }],
-      midte: { tal: t(b.i_alt), tekst: "brugt" } });
-    stackChart(document.getElementById(`bar-${f.id}`), { label: `${f.kort}: ${tn ? "forventet til nu" : "hele kurset"} mod brugt`, height: 170,
-      fmt: v => fmt(v, 0),
-      series: [{ label: "Undervisning", color: lys(f.farve) }, { label: "Selvstudie", color: f.farve }],
-      points: [{ label: tn ? "Forventet" : "Kurset", ys: [forv.undervisning, forv.selvstudie],
-                 tip: `${tn ? "Forventet til nu" : "Hele kurset"}: <b>${t(forv.i_alt)}</b><br>undervisning ${t(forv.undervisning)} · selvstudie ${t(forv.selvstudie)}` },
-               { label: "Brugt", ys: [b.undervisning, b.selvstudie],
-                 tip: `Brugt: <b>${t(b.i_alt)}</b><br>undervisning ${t(b.undervisning)} · selvstudie ${t(b.selvstudie)}` }] });
+        ${d.bruges_ikke?.length ? `De slags står i <code>Scripts/fravaer.json</code>.` : ""}
+        De gange, du ikke var til, markerer du i Ugeoverblik (klik på undervisningen); de tæller ikke som brugt.
+        Selvstudie er det, du har logget med stopuret eller gemt fra et forslag (fra ${dato(d.selvstudie_fra)}).${d.ukendt?.length ? ` Logget, men ikke knyttet til et fag: ${d.ukendt.map(u => `${esc(u.navn)} (${t(u.timer)})`).join(", ")}.` : ""}</p>`;
   }
-  tegnMotivation(d.motivation, fag);
-  const uger = [...new Set(fag.flatMap(f => f.uger.map(u => u.mandag)))].sort();
-  stackChart(document.getElementById("uger"), { label: "Logget selvstudie pr. uge og fag", height: 190, fmt: v => fmt(v, 0),
-    series: fag.map(f => ({ label: f.kort, color: f.farve })),
-    points: uger.map(m => {
-      const ys = fag.map(f => f.uger.find(u => u.mandag === m)?.selvstudie ?? 0);
-      return { label: `U${isoWeek(parseDate(m))}`, ys,
-        tip: `Uge ${isoWeek(parseDate(m))}<br>${fag.map((f, i) => `${esc(f.kort)}: ${t(ys[i])}`).join("<br>")}` };
-    }) });
 }
+
+// Rytme: hvornår du studerer, som Athenifys Weekdays og Time of day. Eksporten har delt tiden på ugedage, timer og tidsrum;
+// siden fremhæver det tidsrum, eksporten har markeret som det største.
+const RYTME_FANER = { ugedage: "Ugedage", tidspunkt: "Tidspunkt" }, PERIODER = { uge: "Uge", maaned: "Måned", alt: "Alt" };
+const DAGNAVN = ["mandag", "tirsdag", "onsdag", "torsdag", "fredag", "lørdag", "søndag"];
+function tegnRytme(r) {
+  const el = document.getElementById("rytmeindhold"), v = fane("rytme", RYTME_FANER, "ugedage"), x = r[fane("periode", PERIODER, "uge")];
+  if (v === "ugedage") {
+    el.innerHTML = `<div id="radar"></div>`;
+    radarChart(el.querySelector("#radar"), { label: "Selvstudie pr. ugedag", height: 320, fmt: kortTid, midte: { tekst: "I ALT", tal: t(x.i_alt) },
+      points: UGEDAG.map((u, i) => ({ label: u, y: x.ugedage[i], tip: `${DAGNAVN[i].replace(/^./, c => c.toUpperCase())}: <b>${tm(x.ugedage[i])}</b>` })) });
+  } else {
+    const top = x.tidsrum.find(s => s.stoerst), timer = Array.from({ length: 24 }, (_, i) => (i + 2) % 24);
+    el.innerHTML = `<div id="timer"></div><div class="tidsrum">${x.tidsrum.map(s => `<div class="${s.stoerst ? "top" : ""}">
+      <span>${s.fra}–${s.til}</span><b>${s.pct} %</b><small>${s.timer ? tm(s.timer) : "–"}</small></div>`).join("")}</div>`;
+    barChart(el.querySelector("#timer"), { label: "Selvstudie pr. time på døgnet", height: 170, fmt: v => fmt(v, 1),
+      points: timer.map(h => ({ label: String(h), y: x.timer[h], dim: !top || (h - top.fra + 24) % 24 >= 4,
+        tip: `kl. ${h}–${(h + 1) % 24}: <b>${tm(x.timer[h])}</b>` })) });
+  }
+}
+
+function render(d) {
+  DATA = d;
+  document.getElementById("sub").textContent = `Tiden pr. fag mod kursusbeskrivelsernes arbejdstimer · aflæst ${stamp(d.genereret)}`;
+  if (d.mangler) { document.getElementById("root").innerHTML = `<div class="card empty">${esc(d.mangler)}</div>`; return; }
+  const fag = d.fag, m = d.motivation;
+  if (m) MÅNED ||= m.maaneder.at(-1)?.maaned;
+  document.getElementById("root").innerHTML = `
+    ${m ? `<section class="card pills">${pill("I dag", m.i_dag)}${pill("Uge", m.uge)}${pill("Måned", m.maaned)}</section>` : ""}
+    <div class="hoved"><div class="stack">
+      <section class="card panel"><div class="panel-head"><h2>Fag</h2>${segment("fag", FAG_FANER, fane("fag", FAG_FANER, "forventet"))}</div>
+        <div class="tal"><span>Brugt i alt <b>${t(d.i_alt.brugt)}</b></span><span>undervisning <b>${t(d.i_alt.undervisning)}</b></span><span>selvstudie <b>${t(d.i_alt.selvstudie)}</b></span></div>
+        <div id="fagindhold"></div></section>
+      <section class="card panel"><div class="panel-head"><h2>Forløb</h2>${segment("forloeb", FORLOEB, fane("forloeb", FORLOEB, "dag"))}</div>
+        <div id="forloeb"></div></section>
+      ${d.rytme ? `<section class="card panel"><div class="panel-head"><h2>Rytme</h2><span class="meta">hvornår du studerer</span></div>
+        <div class="rytme-valg">${segment("rytme", RYTME_FANER, fane("rytme", RYTME_FANER, "ugedage"))}${segment("periode", PERIODER, fane("periode", PERIODER, "uge"))}</div>
+        <div id="rytmeindhold"></div></section>` : ""}
+    </div>${m ? sidepanel(m, fag) : ""}</div>`;
+
+  tegnFag(d);
+  visIndstillinger(m);
+  if (d.rytme) tegnRytme(d.rytme);
+  if (m) {
+    lineChart(document.getElementById("saldo"), { label: "Saldo mod dagsmålet", height: 140, color: "#2e7cf6", fyld: true, fmt: v => fmt(v, 0),
+      points: m.dage.map(x => ({ label: dato(x.dato), y: x.saldo, tip: `${dato(x.dato)}: saldo <b>${tm(x.saldo)}</b><br>logget ${tm(x.timer)}` })) });
+  }
+  tegnForloeb(d);
+}
+// Indstillinger: dagsmålet, de dage det gælder, og medaljernes grænser. Gemmes af Studie-serveren (Scripts/studiemaal.json);
+// eksporten regner tallene om bagefter. Felterne fyldes ikke igen, mens du retter i dem.
+function visIndstillinger(m) {
+  const el = document.getElementById("indstillinger"), f = document.getElementById("indstillinger-form");
+  el.hidden = !m;
+  if (!m || el.contains(document.activeElement)) return;
+  const dage = m.studiedage || [0, 1, 2, 3, 4, 5, 6], md = m.medaljer_graenser || {};
+  f.innerHTML = `<form class="maalform" id="maalform">
+    <div class="r"><span>Dagsmål</span><input type="number" name="dag_timer" value="${m.maal}" min="0.25" max="12" step="0.25" required> timer selvstudie om dagen</div>
+    <div class="r"><span>Gælder</span><div class="seg" role="group" aria-label="Dage med dagsmål">${UGEDAG.map((u, i) =>
+      `<button type="button" data-dag="${i}" aria-pressed="${dage.includes(i)}">${u}</button>`).join("")}</div></div>
+    <div class="r"><span>Medaljer</span>bronze <input type="number" name="bronze" value="${md.bronze}" min="0.25" max="16" step="0.25" required>
+      sølv <input type="number" name="soelv" value="${md.soelv}" min="0.25" max="16" step="0.25" required>
+      guld <input type="number" name="guld" value="${md.guld}" min="0.25" max="16" step="0.25" required> timer</div>
+    <div class="r"><button type="submit" class="btn">Gem</button><span class="su-fejl" data-fejl></span></div>
+    <p class="note" style="margin:0">De andre dage er fridage: de trækker ikke saldoen ned og bryder ikke dage i træk, men det, du studerer, tæller.
+      Saldoen, medaljerne og kalenderen regnes om fra ${dato(m.fra)}.</p></form>`;
+}
+document.getElementById("indstillinger").addEventListener("click", e => {
+  const b = e.target.closest("[data-dag]"); if (!b) return;
+  b.setAttribute("aria-pressed", String(b.getAttribute("aria-pressed") !== "true"));
+});
+document.getElementById("indstillinger").addEventListener("submit", async e => {
+  e.preventDefault();
+  const f = e.target, fejl = f.querySelector("[data-fejl]");
+  const dage = [...f.querySelectorAll("[data-dag]")].filter(b => b.getAttribute("aria-pressed") === "true").map(b => +b.dataset.dag);
+  try {
+    await kald("/studiemaal", { dag_timer: +f.dag_timer.value, dage, medaljer: { bronze: +f.bronze.value, soelv: +f.soelv.value, guld: +f.guld.value } });
+    fejl.style.color = "var(--success)"; fejl.textContent = "Gemt; tallene regnes om …";
+    document.activeElement?.blur();
+    opdaterTal();
+  } catch (err) { fejl.style.color = ""; fejl.textContent = err.message; }
+});
+
+// Forløb: det loggede selvstudie pr. fag dag for dag (de seneste 28 dage, med dagsmålet), uge for uge og måned for måned
+const FORLOEB = { dag: "Dag", uge: "Uge", maaned: "Måned" };
+const MDR = ["jan", "feb", "mar", "apr", "maj", "jun", "jul", "aug", "sep", "okt", "nov", "dec"];
+function tegnForloeb(d) {
+  const el = document.getElementById("forloeb"), fag = d.fag, m = d.motivation, v = fane("forloeb", FORLOEB, "dag");
+  const serier = fag.map(f => ({ label: f.kort, color: f.farve }));
+  const tip = (navn, ys) => `${navn}<br>${fag.map((f, i) => `${esc(f.kort)}: ${tm(ys[i])}`).join("<br>")}`;
+  if (v === "dag" && m) {
+    stackChart(el, { label: "Logget selvstudie pr. dag og fag", height: 190, fmt: v => fmt(v, 0), series: serier, ref: { y: m.maal, label: `Dagsmål ${t(m.maal)}` },
+      points: m.dage.slice(-28).map(x => { const ys = fag.map(f => x.pr_fag[f.id] || 0);
+        return { label: dato(x.dato), ys, tip: tip(`${weekday(parseDate(x.dato))} ${dayMonth(parseDate(x.dato))}: <b>${tm(x.timer)}</b>`, ys) }; }) });
+  } else if (v === "maaned") {
+    const mdr = [...new Set(fag.flatMap(f => Object.keys(f.maaneder || {})))].sort();
+    stackChart(el, { label: "Logget selvstudie pr. måned og fag", height: 190, fmt: v => fmt(v, 0), series: serier,
+      points: mdr.map(k => { const ys = fag.map(f => f.maaneder?.[k] ?? 0), navn = `${MDR[+k.slice(5, 7) - 1]} ${k.slice(0, 4)}`;
+        return { label: navn, ys, tip: tip(`<b>${navn}</b>`, ys) }; }) });
+  } else {
+    const uger = [...new Set(fag.flatMap(f => f.uger.map(u => u.mandag)))].sort();
+    stackChart(el, { label: "Logget selvstudie pr. uge og fag", height: 190, fmt: v => fmt(v, 0), series: serier,
+      points: uger.map(w => { const ys = fag.map(f => f.uger.find(u => u.mandag === w)?.selvstudie ?? 0);
+        return { label: `U${isoWeek(parseDate(w))}`, ys, tip: tip(`<b>Uge ${isoWeek(parseDate(w))}</b>`, ys) }; }) });
+  }
+}
+// Fanerne, måneden i kalenderen og de lukkede afsnit i sidepanelet
+document.getElementById("root").addEventListener("click", e => {
+  const b = e.target.closest("[data-fane]");
+  if (b) {
+    gemt.gem(`selvstudie:${b.dataset.fane}`, b.dataset.v);
+    b.parentElement.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+    if (b.dataset.fane === "fag") tegnFag(DATA); else if (b.dataset.fane === "forloeb") tegnForloeb(DATA); else tegnRytme(DATA.rytme);
+    return;
+  }
+  const mb = e.target.closest("[data-mnd]");
+  if (mb && !mb.disabled) { MÅNED = DATA.motivation.maaneder[+mb.dataset.mnd].maaned; document.getElementById("kalender").innerHTML = kalender(DATA.motivation); }
+});
+document.getElementById("root").addEventListener("toggle", e => {
+  const id = e.target.dataset?.afsnit; if (!id) return;
+  const lukket = new Set((gemt.hent("selvstudie:lukket") || "").split(",").filter(Boolean));
+  if (e.target.open) lukket.delete(id); else lukket.add(id);
+  gemt.gem("selvstudie:lukket", [...lukket].join(","));
+}, true);
+
+// ── Sessionerne og forslagene. Studie-serveren holder dem (Scripts/sessioner.json); selve timeren (stopur og Pomodoro)
+// står i Kompas' menu under Frister og øverst over siden (shell.html), som siger til her, når den har gemt en session.
+// Uden Mac'en (kopien på bærbaren) kan intet gemmes, og sessionerne vises ikke. ──
+const API = "/studie/api";
+let SU = null, RET = null, DATA = null;
+const gemt = { hent: k => { try { return localStorage.getItem(k); } catch { return null; } }, gem: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
+const msT = s => Date.parse(s);
+const to = n => String(n).padStart(2, "0");
+const klok = t => { const d = new Date(t); return `${to(d.getHours())}:${to(d.getMinutes())}`; };
+const fagFra = id => SU?.fag.find(f => f.id === id) || { kort: id, farve: "var(--gray-400)" };
+
+// sti under Studie-serverens API, eller en hel sti til en anden server (Sprog: /sprog/api/…)
+async function kald(sti, krop) {
+  const r = await fetch(sti.startsWith("/sprog/") ? sti : `${API}${sti}`, krop ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(krop) } : { cache: "no-store" });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.fejl || `serveren svarede ${r.status}`);
+  return d;
+}
+async function hentStopur() {
+  try { SU = await kald("/stopur"); } catch { /* beholder det, der står; uden Mac'en vises intet */ }
+  if (!document.querySelector("#sessioner :focus")) { visSessioner(); visForslag(); }
+}
+// Efter en ændring kører eksporten (2 sekunder efter); tallene hentes igen, når en eksport, der begyndte efter
+// ændringen, er færdig (en tidligere, fx efter en pause, har ikke sessionen med)
+async function opdaterTal() {
+  const ændret = Date.now();
+  for (let i = 0; i < 8; i++) {
+    await new Promise(r => setTimeout(r, 1500));
+    try { const d = await (await fetch("selvstudie.json", { cache: "no-store" })).json(); if (Date.parse(d.genereret) > ændret) { render(d); return; } } catch {}
+  }
+}
+// En fejl vises ved formularen (felt), som beholder det, du har tastet
+async function skriv(sti, krop, felt) {
+  try { SU = await kald(sti, krop); RET = null; opdaterTal(); }
+  catch (e) { felt.textContent = e.message; return; }
+  visSessioner(); visForslag();
+}
+// Timeren i rammen har gemt eller kasseret en session
+window.addEventListener("message", e => { if (e.origin === location.origin && e.data?.kompas === "stopur") { hentStopur(); opdaterTal(); } });
+
+// Forslag: selvstudie ud fra tidspunkterne på dine svar, som serverne har regnet (Studie i /stopur, Sprog i /sprog/api/tid).
+// Intet tæller, før du trykker Gem. Sprog gemmes hos Sprog og tæller ikke i dagsmålet.
+let SPROG = null;
+async function hentSprog() { try { SPROG = await kald("/sprog/api/tid"); } catch { SPROG = null; } visForslag(); }
+const dagNavn = t => { const k = iso(new Date(t)); return k === iso(new Date()) ? "i dag" : k === iso(addDays(new Date(), -1)) ? "i går" : `${weekday(new Date(t))} ${dayMonth(new Date(t))}`; };
+function visForslag() {
+  const el = document.getElementById("forslag");
+  const fs = [...(SU?.forslag || []).map(f => ({ ...f, hvor: "studie" })), ...(SPROG?.forslag || []).map(f => ({ ...f, hvor: "sprog" }))]
+    .sort((a, b) => msT(b.start) - msT(a.start));
+  el.hidden = !fs.length;
+  if (!fs.length) return;
+  const del = (f, x) => f.hvor === "sprog" ? `<span>${esc(x.navn)} ${tm(x.timer)}</span>`
+    : `<span><span class="sw" style="background:${fagFra(x.fag).farve}"></span>${esc(x.kort)} ${tm(x.timer)}</span>`;
+  el.innerHTML = `<div class="panel-head"><h2>Forslag</h2><span class="meta">ud fra dine svar · tæller først, når du gemmer</span></div>
+    ${fs.map(f => `<div class="forslag-r" data-id="${esc(f.id)}" data-hvor="${f.hvor}">
+      <div class="hvad"><span><b>${esc(dagNavn(f.start).replace(/^./, c => c.toUpperCase()))} ${klok(f.start)}–${klok(f.slut)}</b>
+        <span class="meta">· ${f.svar} svar · ${esc(f.hvor === "sprog" ? "sprogkort" : f.typer.join(", ").toLowerCase())}</span></span>
+        <span class="dele">${f.dele.map(x => del(f, x)).join("")}${f.hvor === "sprog" ? "<span>tæller ikke i dagsmålet</span>" : ""}</span>
+        <span class="su-fejl" data-fejl></span></div>
+      <button type="button" class="btn ghost" data-forslag="gem">Gem</button><button type="button" class="btn quiet" data-forslag="afvis">Afvis</button></div>`).join("")}
+    <p class="note">Svar med højst ${SU?.forslag_regler?.pause_min ?? 10} minutter imellem hører sammen. Hvert svar får tiden siden det forrige, og det første den mediane tid
+      mellem svarene. Tid, du allerede har logget, er trukket fra.</p>`;
+}
+document.getElementById("forslag").addEventListener("click", async e => {
+  const b = e.target.closest("[data-forslag]"); if (!b) return;
+  const r = b.closest(".forslag-r"), krop = { id: r.dataset.id, handling: b.dataset.forslag };
+  r.querySelectorAll("button").forEach(x => x.disabled = true);
+  try {
+    if (r.dataset.hvor === "sprog") { SPROG = await kald("/sprog/api/forslag", krop); }
+    else { SU = await kald("/forslag", krop); if (krop.handling === "gem") opdaterTal(); visSessioner(); }
+    visForslag();
+  } catch (err) { r.querySelector("[data-fejl]").textContent = err.message; r.querySelectorAll("button").forEach(x => x.disabled = false); }
+});
+
+// De seneste 14 dages sessioner, pr. dag. En session rettes i en linje: fag, dato, fra og til (pauserne bliver, hvor de er).
+function sessionForm(s) {
+  const nu = new Date(), a = s ? new Date(s.start) : new Date(nu - 30 * 6e4), z = s ? new Date(s.slut) : nu;
+  const valgt = s?.fag || gemt.hent("selvstudie:fag") || SU.fag[0]?.id;
+  return `<form class="sform" data-id="${esc(s?.id || "")}">
+    <select name="fag" aria-label="Fag">${SU.fag.map(f => `<option value="${esc(f.id)}"${f.id === valgt ? " selected" : ""}>${esc(f.kort)}</option>`).join("")}</select>
+    <input type="date" name="dato" value="${iso(a)}" max="${iso(nu)}" required aria-label="Dato">
+    <input type="time" name="fra" value="${klok(a)}" required aria-label="Fra"> – <input type="time" name="til" value="${klok(z)}" required aria-label="Til">
+    <label class="meta">pause <input type="number" name="pause" value="${s?.pause_min || 0}" min="0" step="1" style="width:4.5em" aria-label="Pause i minutter"> min</label>
+    <input name="aktivitet" value="${esc(s?.aktivitet || "")}" maxlength="60" placeholder="Aktivitet" list="aktiviteter" aria-label="Aktivitet" style="width:9em">
+    <input name="note" value="${esc(s?.note || "")}" maxlength="1000" placeholder="Note" aria-label="Note" style="flex:1;min-width:10em">
+    <datalist id="aktiviteter">${(SU.aktiviteter || []).map(x => `<option value="${esc(x)}">`).join("")}</datalist>
+    <button class="btn" type="submit">Gem</button><button class="btn ghost" type="button" data-luk>Annullér</button>
+    ${s ? `<button class="btn quiet" type="button" data-slet="${esc(s.id)}">Slet</button>` : ""}
+    ${s?.pause_min ? `<span class="meta">Pausen bliver, hvor den er; ændrer du den, lægges den midt i</span>` : ""}<span class="su-fejl" data-fejl></span></form>`;
+}
+function visSessioner() {
+  const el = document.getElementById("sessioner");
+  if (!SU) { el.hidden = true; return; }
+  el.hidden = false;
+  const dage = new Map();
+  for (const s of SU.sessioner) { const k = iso(new Date(s.start)); dage.set(k, [...(dage.get(k) || []), s]); }
+  const række = s => RET === s.id ? sessionForm(s) : `<div class="srow"><span class="sw" style="background:${fagFra(s.fag).farve}"></span>
+    <span class="t">${klok(s.start)}–${klok(s.slut)}</span><b>${esc(s.kort)}</b>
+    <span class="meta">${s.aktivitet ? `${esc(s.aktivitet)} · ` : ""}${tm(s.timer)}${s.pause_min ? ` · ${s.pause_min} min pause` : ""}${s.pomodoro ? " · Pomodoro" : ""}${s.kilde === "caltask" ? " · fra CalTask" : s.kilde === "tilføjet" ? " · tilføjet" : ""}${s.note ? `<br><span class="snote">${esc(s.note)}</span>` : ""}</span>
+    <button type="button" class="btn quiet" data-ret="${esc(s.id)}" aria-label="Ret ${esc(s.kort)} ${klok(s.start)}">${icon("pencil", 14)}</button></div>`;
+  const dag = ([k, ss]) => `<div class="sdag"><h3>${k === iso(new Date()) ? "I dag" : `${weekday(parseDate(k))} ${dayMonth(parseDate(k))}`}</h3>${ss.map(række).join("")}</div>`;
+  const alle = [...dage], nye = alle.slice(0, 3), ældre = alle.slice(3);
+  el.innerHTML = `<div class="panel-head"><h2>Sessioner</h2><span class="meta">de seneste 14 dage
+      <button type="button" class="btn quiet" data-ret="ny">${icon("plus", 14)}Tilføj</button></span></div>
+    ${RET === "ny" ? sessionForm(null) : ""}
+    ${alle.length ? nye.map(dag).join("") : `<p class="note">Ingen sessioner de seneste 14 dage.</p>`}
+    ${ældre.length ? `<details style="margin-top:10px"${ældre.some(([, ss]) => ss.some(s => s.id === RET)) ? " open" : ""}><summary class="meta">${ældre.length} ${ældre.length === 1 ? "dag" : "dage"} før</summary>${ældre.map(dag).join("")}</details>` : ""}`;
+}
+document.getElementById("sessioner").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.ret) { RET = b.dataset.ret; visSessioner(); return; }
+  if ("luk" in b.dataset) { RET = null; visSessioner(); return; }
+  if (b.dataset.slet) {
+    const s = SU.sessioner.find(x => x.id === b.dataset.slet);
+    if (s && confirm(`Slet ${s.kort} ${klok(s.start)}–${klok(s.slut)}?`)) skriv("/session", { id: s.id, slet: true }, b.closest("form").querySelector("[data-fejl]"));
+  }
+});
+document.getElementById("sessioner").addEventListener("submit", e => {
+  e.preventDefault();
+  const f = e.target, a = new Date(`${f.dato.value}T${f.fra.value}`), z = new Date(`${f.dato.value}T${f.til.value}`);
+  if (z <= a) z.setDate(z.getDate() + 1);  // til før fra: sessionen gik over midnat
+  skriv("/session", { id: f.dataset.id || undefined, fag: f.fag.value, start: a.toISOString(), slut: z.toISOString(), pause_min: f.pause.value || 0,
+    aktivitet: f.aktivitet.value, note: f.note.value }, f.querySelector("[data-fejl]"));
+});
+
+hentStopur(); hentSprog();
+setInterval(hentStopur, 60000);
+setInterval(hentSprog, 5 * 60000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) { hentStopur(); hentSprog(); } });
 
 fetch("selvstudie.json", { cache: "no-store" }).then(r => { if (!r.ok) throw new Error(`selvstudie.json svarede ${r.status}`); return r.json(); })
   .then(render)

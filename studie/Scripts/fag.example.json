@@ -1,5 +1,5 @@
 {
-  "_forklaring": "Eksempel med demoens tre opdigtede fag. Kopiér til semestermappens Scripts/fag.json og skriv dine egne fag. Koden i Scripts/ og siderne læser fagene herfra; et nyt semester er en ny fag.json. Datoer står i CLAUDE.md under \"Vigtige datoer\", eksamens- og arbejdsform i README.md under \"... trænes forskelligt\" (readme er rækkens navn i Fag-kolonnen). Felter: id (bruges i logs og nøgler; ændres ikke midt i et semester), kort (vises på siderne og står i Fag-kolonnen), alias (tidligere kortnavne, som ældre køreplaner og markeringer stadig bruger), navn, mappe, readme, fagnoter_overskrift (overskriften i køreplanen og fagnoterne starter med den), genkald, begreber (ekstra_kolonne og det tilhørende ekstra_spoergsmaal til begrebet), kode (mappen med drills og øvelser), afleveringer (mappe, præfiks som Opgave i Opgave 3, og navn), leetcode, usb_noter (fagnoterne i Word er et tilladt hjælpemiddel til eksamen; de vises uge for uge på siden USB-noter, hvor du kan vurdere dem), eksamenstraening (form: skriftlig, kode eller mundtlig; note under sættene), forudsaetning (en frist af typen, der er forudsætning for eksamen), canvas (kurser og standardmappe), oevelse_navn (navnet på øvelsessæt fra Canvas), farve (valgfri; ellers efter rækkefølgen), kursuskode (kursets kode, som kalenderens undervisning har), studiemaal (øverst: dagsmål og medaljernes grænser i timer, til siden Selvstudie), arbejdsbyrde (kursusbeskrivelsens arbejdstimer: poster med navn, timer og om det er skemalagt undervisning, plus antal semestre kurset løber; til siden Selvstudie).",
+  "_forklaring": "Eksempel med demoens tre opdigtede fag. Kopiér til semestermappens Scripts/fag.json og skriv dine egne fag. Koden i Scripts/ og siderne læser fagene herfra; et nyt semester er en ny fag.json. Datoer står i CLAUDE.md under \"Vigtige datoer\", eksamens- og arbejdsform i README.md under \"... trænes forskelligt\" (readme er rækkens navn i Fag-kolonnen). Felter: id (bruges i logs og nøgler; ændres ikke midt i et semester), kort (vises på siderne og står i Fag-kolonnen), alias (tidligere kortnavne, som ældre køreplaner og markeringer stadig bruger), navn, mappe, readme, fagnoter_overskrift (overskriften i køreplanen og fagnoterne starter med den), genkald, begreber (ekstra_kolonne og det tilhørende ekstra_spoergsmaal til begrebet), kode (mappen med drills og øvelser), afleveringer (mappe, præfiks som Opgave i Opgave 3, og navn), leetcode, studieguide (markdown i fagets mappe: hvordan du lærer ugens pensum hurtigst, med forelæsning, øvelser, bog og videoer; vises udfoldelig over køreplanen på Fag, og Studie-rutinen skriver næste uges), resumeer (mappe i fagets mappe med kapitelresuméer, én .md pr. kapitel, med ugen i overskriften som (uge 37); vægtet efter eksamen og vist udfoldeligt under studieguiden), usb_noter (fagnoterne i Word er et tilladt hjælpemiddel til eksamen; de vises uge for uge på siden USB-noter, hvor du kan vurdere dem), eksamenstraening (form: skriftlig, kode eller mundtlig; note under sættene), forudsaetning (en frist af typen, der er forudsætning for eksamen), canvas (kurser og standardmappe), oevelse_navn (navnet på øvelsessæt fra Canvas), farve (valgfri; ellers efter rækkefølgen), kursuskode (kursets kode, som kalenderens undervisning har), studiemaal (øverst: dagsmål og medaljernes grænser i timer, til siden Selvstudie), arbejdsbyrde (kursusbeskrivelsens arbejdstimer: poster med navn, timer og om det er skemalagt undervisning, plus antal semestre kurset løber; til siden Selvstudie; for et kursus over flere semestre kan dette_semester have dette semesters del af posterne, en vurdering af, hvordan den er fundet, til: eksamen eller sidste_undervisning, hvor det forventede slutter, og tidligere: de tidligere semestres del af posterne, som nyt-semester.js har trukket fra kursets poster).",
   "semester": "Demosemester",
   "studiemaal": {
     "dag_timer": 2.5,
@@ -19,6 +19,8 @@
       "mappe": "Alfa",
       "readme": "Alfa",
       "fagnoter_overskrift": "Alfa",
+      "studieguide": "studieguide.md",
+      "resumeer": "Resumeer",
       "genkald": true,
       "begreber": {
         "ekstra_kolonne": null
@@ -71,7 +73,47 @@
             "timer": 35,
             "undervisning": false
           }
-        ]
+        ],
+        "dette_semester": {
+          "til": "eksamen",
+          "vurdering": "Resten af kursusbeskrivelsens timer efter første semester: hver post minus det, det semester har haft (tidligere).",
+          "poster": [
+            {
+              "navn": "Forelæsninger",
+              "timer": 18
+            },
+            {
+              "navn": "Øvelser",
+              "timer": 9
+            },
+            {
+              "navn": "Læsning",
+              "timer": 35
+            },
+            {
+              "navn": "Gruppeprojekt",
+              "timer": 45
+            },
+            {
+              "navn": "Eksamen",
+              "timer": 35
+            }
+          ],
+          "tidligere": [
+            {
+              "navn": "Forelæsninger",
+              "timer": 18
+            },
+            {
+              "navn": "Øvelser",
+              "timer": 9
+            },
+            {
+              "navn": "Læsning",
+              "timer": 35
+            }
+          ]
+        }
       },
       "oevelse_navn": "Exercise"
     },
@@ -82,6 +124,8 @@
       "mappe": "Beta",
       "readme": "Beta",
       "fagnoter_overskrift": "Beta",
+      "studieguide": "studieguide.md",
+      "resumeer": "Resumeer",
       "genkald": true,
       "begreber": {
         "ekstra_kolonne": "Hvad det får dig til at se",
@@ -138,6 +182,7 @@
       "mappe": "Gamma",
       "readme": "Gamma",
       "fagnoter_overskrift": "Gamma",
+      "studieguide": "studieguide.md",
       "kode": "vscode",
       "afleveringer": {
         "mappe": "vscode/Opgaver",

@@ -29,7 +29,7 @@ KOLONNER: list[tuple[str, str]] = [
     ("variabelt_kr", "variable køb i alt, uden refusioner og deling med venner"),
     # Studie
     ("undervisning_timer", "skemalagt undervisning i kalenderen"),
-    ("selvstudie_timer", "selvstudie logget i CalTask"),
+    ("selvstudie_timer", "selvstudie logget på Kompas (før timeren i CalTask)"),
     ("selvstudie_dage", "dage med selvstudie"),
 ]
 

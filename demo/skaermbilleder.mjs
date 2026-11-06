@@ -35,7 +35,7 @@ const BILLEDER = [
   ["sprog", "/#/sprog/", 1440, 1000, "dark"],
   ["sprog-mobil", "/sprog/mobil.html", 390, 844, "dark", 2],
   ["forbrug", "/#/forbrug/", 1440, 1000, "dark", 1, klik("12 mdr.")],
-  ["scenarier", "/#/forbrug/scenarier/", 1440, 1000, "dark"],
+  ["gennemgang", "/#/forbrug/gennemgang/", 1440, 1000, "dark"],
   ["su", "/#/forbrug/su/", 1440, 1000, "dark"],
   ["mobil", "/studie/mobil.html", 390, 844, "dark", 2],
 ];

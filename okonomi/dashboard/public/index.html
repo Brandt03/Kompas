@@ -109,6 +109,17 @@
   .more { margin-top: 6px; background: none; border: 0; color: var(--ink-2); font: inherit; font-size: 13px; cursor: pointer; padding: 6px 10px; text-align: left; }
   .more:hover { color: var(--ink); text-decoration: underline; }
   .empty { color: var(--muted); padding: 32px 0; text-align: center; }
+  /* folding panels (Rejser og begivenheder, Faste betalinger, Uge for uge): closed they show only the heading and its summary */
+  .fold > summary { list-style: none; cursor: pointer; border-radius: 10px; margin: -6px -8px 14px; padding: 6px 8px; }
+  .fold > summary::-webkit-details-marker { display: none; }
+  .fold > summary:hover { background: var(--wash); }
+  .fold > summary h2::before {
+    content: ""; display: inline-block; width: 7px; height: 7px; margin: 0 10px 2px 2px;
+    border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(-45deg); transition: transform .15s;
+  }
+  .fold[open] > summary h2::before { transform: rotate(45deg); }
+  .fold:not([open]) { padding-bottom: 12px; }
+  .fold:not([open]) > summary { margin-bottom: -6px; }
   .row.fast { cursor: default; } .row.fast:hover { background: transparent; }
   .row.fast .nm { flex-wrap: wrap; gap: 2px 8px; } .row.fast .nm b { flex: none; } .row.fast .nm small { white-space: normal; }
 
@@ -205,14 +216,32 @@
     <svg id="trend" role="img" aria-label="Forbrug pr. måned"></svg>
   </section>
 
-  <section class="card panel" id="ugerPanel" hidden>
-    <div class="panel-head">
+  <details class="card panel fold" id="tagsPanel" hidden>
+    <summary class="panel-head">
+      <h2>Rejser og begivenheder</h2>
+      <span class="hint" id="tagsMeta" style="margin:0"></span>
+    </summary>
+    <div class="rows" id="tagRows"></div>
+    <p class="hint" style="margin:10px 0 0">Forbruget med samme tag i Sure, uanset periode. Bed Claude om at tagge en rejse ("tag 3.–9. maj som Lissabon"), eller tag selv i Sure. Klik på et tag for at se fordelingen, udviklingen og posteringerne for det alene; klik på det igen eller vælg en periode for at komme tilbage.</p>
+  </details>
+
+  <details class="card panel fold" id="fastePanel" hidden>
+    <summary class="panel-head">
+      <h2>Faste betalinger</h2>
+      <span class="hint" id="fasteMeta" style="margin:0"></span>
+    </summary>
+    <div class="rows" id="faste"></div>
+    <p class="hint" style="margin:10px 0 0">Fundet i Sure ud fra dine posteringer: samme modtager og kategori i mindst 3 af 6 måneder, eller én gang om året, og omtrent samme beløb de sidste gange. Næste dato er en måned (et år) efter sidste betaling. Pr. måned tæller de årlige med en tolvtedel. Klik på en betaling for at se dens posteringer; står perioden på én måned, skifter den til 12 mdr. Følger ikke den periode, du har valgt ovenfor.</p>
+  </details>
+
+  <details class="card panel fold" id="ugerPanel" hidden>
+    <summary class="panel-head">
       <h2>Uge for uge</h2>
       <span class="hint" id="ugerMeta" style="margin:0"></span>
-    </div>
+    </summary>
     <div class="rows" id="uger"></div>
     <p class="hint" style="margin:10px 0 0">Variabelt forbrug pr. uge, mandag til søndag, regnet af Overblik med samme definition som ugereviewet: udgifter i Variable udgifter uden deling med venner. Tallene følger ikke den periode, du har valgt ovenfor.</p>
-  </section>
+  </details>
 
   <section class="card panel">
     <div class="panel-head">
@@ -284,8 +313,11 @@
     return kept.join(" ").replace(/\b([A-ZÆØÅ])([A-ZÆØÅ]+)\b/g, (_, a, b) => a + b.toLowerCase());
   }
 
-  let DATA = [], CATS = [], TODAY_KEY, FIRST_KEY, LAST_KEY;
-  const state = { preset: "month", month: null, dim: "category", selected: null, txMonth: null, showAll: false, showAllTx: false };
+  let DATA = [], CATS = [], FASTE = {}, TODAY_KEY, FIRST_KEY, LAST_KEY;
+  // tag: a chosen trip or event (Rejser og begivenheder). It replaces the period: tiles, Fordeling, the trend and
+  // Posteringer then show only its spending, from its first to its last month.
+  const state = { preset: "month", month: null, dim: "category", selected: null, tag: null, txMonth: null, showAll: false, showAllTx: false };
+  const scope = () => (state.tag ? DATA.filter((t) => t.tags.includes(state.tag)) : DATA);
 
   // ---------- colours ----------
   // Groups are pinned. Categories/payees are ranked once (all time); the donut's named
@@ -317,6 +349,10 @@
 
   // ---------- period ----------
   function periodRange() {
+    if (state.tag) {
+      const ms = scope().map((t) => t.ym).sort();
+      return [ms[0], ms[ms.length - 1]];
+    }
     switch (state.preset) {
       case "month": return [state.month, state.month];
       case "year": return [`${state.year}-01`, `${state.year}-12`];
@@ -326,6 +362,7 @@
     }
   }
   function periodText() {
+    if (state.tag) return state.tag;
     const [a, b] = periodRange();
     if (state.preset === "year") return state.year === TODAY_KEY.slice(0, 4) ? `${state.year} til dato` : state.year;
     return a === b ? monthName(a, true) : `${monthName(a)} – ${monthName(b)}`;
@@ -345,15 +382,15 @@
   // ---------- render ----------
   function render() {
     const [a, b] = periodRange();
-    const inPeriod = DATA.filter((t) => t.ym >= a && t.ym <= b);
+    const inPeriod = scope().filter((t) => t.ym >= a && t.ym <= b);
     const byCat = breakdown(inPeriod, "category");
     const total = byCat.reduce((s, x) => s + x.total, 0);
     const monthsCount = monthsBetween(a, b > TODAY_KEY ? TODAY_KEY : b).length || 1;
 
     // filters
-    $("presets").querySelectorAll("button").forEach((btn) => btn.setAttribute("aria-pressed", String(btn.dataset.p === state.preset)));
+    $("presets").querySelectorAll("button").forEach((btn) => btn.setAttribute("aria-pressed", String(!state.tag && btn.dataset.p === state.preset)));
     const byYear = state.preset === "year";
-    $("stepper").style.display = state.preset === "month" || byYear ? "" : "none";
+    $("stepper").style.display = !state.tag && (state.preset === "month" || byYear) ? "" : "none";
     $("periodLabel").textContent = periodText();
     $("prev").disabled = byYear ? state.year <= FIRST_KEY.slice(0, 4) : state.month <= FIRST_KEY;
     $("next").disabled = byYear ? state.year >= LAST_KEY.slice(0, 4) : state.month >= LAST_KEY;
@@ -370,14 +407,84 @@
       el("div", { class: "label" }, dotColor ? el("i", { class: "dot", style: `background:${dotColor}` }) : null, label),
       el("div", { class: "value", title: value, text: value }),
       sub ? el("div", { class: "sub", text: sub }) : null));
-    tile("Forbrug i alt", kr.format(total), periodText());
-    tile("Gennemsnit pr. måned", kr.format(total / monthsCount), `${monthsCount} ${monthsCount === 1 ? "måned" : "måneder"}`);
+    // A trip's total is net, like in Rejser og begivenheder: money paid back by friends (a category that nets below
+    // 0, which Fordeling leaves out) is taken off here
+    const net = inPeriod.filter((t) => t.spend).reduce((s, t) => s + t.amount, 0);
+    if (state.tag && total - net > 0.5) tile("Forbrug i alt", kr.format(net), `${state.tag} · ${kr.format(total - net)} betalt tilbage`);
+    else tile("Forbrug i alt", kr.format(total), periodText());
+    if (state.tag) {
+      const dates = inPeriod.filter((t) => t.spend).map((t) => t.date).sort();
+      const days = Math.round((new Date(dates[dates.length - 1]) - new Date(dates[0])) / 864e5) + 1;
+      const dato = (s) => { const [y, m, d] = s.split("-").map(Number); return `${d}. ${MONTHS[m - 1]} ${y}`; };
+      tile("Periode", `${days} ${days === 1 ? "dag" : "dage"}`, dates[0] === dates[dates.length - 1] ? dato(dates[0]) : `${dato(dates[0])} – ${dato(dates[dates.length - 1])}`);
+    } else tile("Gennemsnit pr. måned", kr.format(total / monthsCount), `${monthsCount} ${monthsCount === 1 ? "måned" : "måneder"}`);
     tile("Største kategori", top ? top.key : "–", top ? `${pctFmt.format(top.total / total)} af forbruget · ${kr.format(top.total)}` : "", top ? colorOf("category", top.key) : null);
-    tile("Posteringer", String(nTx), "køb og betalinger i perioden");
+    tile("Posteringer", String(nTx), state.tag ? "med dette tag" : "køb og betalinger i perioden");
 
     renderBreakdown(inPeriod);
     renderTrend();
+    renderTags();
+    renderFaste();
     renderTable(inPeriod);
+  }
+
+  // ---------- rejser og begivenheder (tags) ----------
+  // A trip is its own period, so a tag sums all its spending; refunds within the tag count against it.
+  function renderTags() {
+    const byTag = new Map();
+    for (const t of DATA) for (const tag of t.spend ? t.tags : []) {
+      const cur = byTag.get(tag) || { key: tag, total: 0, n: 0, first: t.date, last: t.date };
+      cur.total += t.amount; cur.n += 1;
+      if (t.date < cur.first) cur.first = t.date;
+      if (t.date > cur.last) cur.last = t.date;
+      byTag.set(tag, cur);
+    }
+    const items = [...byTag.values()].sort((a, b) => b.last.localeCompare(a.last));
+    $("tagsPanel").hidden = !items.length;
+    if (!items.length) return;
+    const dato = (s, withYear) => { const [y, m, d] = s.split("-").map(Number); return `${d}. ${MONTHS[m - 1]}${withYear ? ` ${y}` : ""}`; };
+    const span = (x) => x.first === x.last ? dato(x.first, true) : `${dato(x.first, x.first.slice(0, 4) !== x.last.slice(0, 4))} – ${dato(x.last, true)}`;
+    const max = Math.max(...items.map((x) => x.total), 1);
+    $("tagRows").replaceChildren(...items.map((x) => {
+      const sel = state.tag === x.key;
+      return el("button", { class: "row", "aria-pressed": String(sel), onclick: () => toggleTag(x.key) },
+        el("span", { class: "nm" }, el("b", { text: x.key }), el("small", { text: `· ${span(x)} · ${x.n} ${x.n === 1 ? "postering" : "posteringer"}` })),
+        el("span", { class: "amt", text: kr2.format(x.total) }),
+        el("span", { class: "pct" }),
+        el("span", { class: "bar" }, el("i", { style: `width:${Math.max(x.total, 0) / max * 100}%;background:var(--ink-2);opacity:.75` })));
+    }));
+    $("tagsMeta").textContent = `${items.length} ${items.length === 1 ? "tag" : "tags"}`;
+  }
+
+  // Open or closed is remembered per panel in this browser; closed by default
+  for (const id of ["tagsPanel", "fastePanel", "ugerPanel"]) {
+    const key = `forbrug-${id}-aaben`, panel = $(id);
+    try { panel.open = localStorage.getItem(key) === "1"; } catch { /* private mode */ }
+    panel.addEventListener("toggle", () => { try { localStorage.setItem(key, panel.open ? "1" : "0"); } catch { /* private mode */ } });
+  }
+
+  // ---------- faste betalinger ----------
+  // Found by the export (data.json "faste"); the page only shows them. A row selects its payee like Modtagere does.
+  function renderFaste() {
+    const all = FASTE.betalinger || [];
+    $("fastePanel").hidden = !all.length;
+    if (!all.length) return;
+    const thisYear = TODAY_KEY.slice(0, 4);
+    const dato = (s) => { const [y, m, d] = s.split("-").map(Number); return `${d}. ${MONTHS[m - 1]}${String(y) === thisYear ? "" : ` ${y}`}`; };
+    const row = (f) => {
+      const key = payee({ name: f.navn, merchant: f.merchant });
+      const sel = state.selected && state.selected.dim === "merchant" && state.selected.key === key;
+      const bits = [f.kategori, f.aktiv ? `næste ${dato(f.naeste)}` : `ikke betalt siden ${dato(f.sidst)}`];
+      if (f.foer != null) bits.push(`${f.beloeb > f.foer ? "steg" : "faldt"} fra ${kr.format(f.foer)}`);
+      return el("button", { class: "row", "aria-pressed": String(!!sel), style: f.aktiv ? "" : "opacity:.6", onclick: () => { state.tag = null; if (!sel && state.preset === "month") { state.preset = "12m"; state.txMonth = null; } toggleSelect("merchant", key); } },
+        el("span", { class: "nm" }, el("b", { text: key }), el("small", { text: "· " + bits.join(" · ") })),
+        el("span", { class: "amt", text: kr2.format(f.beloeb) }),
+        el("span", { class: "pct", text: f.interval === "år" ? "om året" : "om md." }));
+    };
+    const aktive = all.filter((f) => f.aktiv), stoppede = all.filter((f) => !f.aktiv);
+    $("faste").replaceChildren(...aktive.map(row),
+      ...(stoppede.length ? [el("div", { class: "hint", style: "margin:12px 10px 4px", text: "Ikke betalt i over halvanden måned (årlige: et år)" }), ...stoppede.map(row)] : []));
+    $("fasteMeta").textContent = `${aktive.length} ${aktive.length === 1 ? "aktiv" : "aktive"} · ca. ${kr.format(FASTE.pr_maaned)} om måneden`;
   }
 
   function renderBreakdown(inPeriod) {
@@ -451,8 +558,9 @@
     const [pa, pb] = periodRange();
     // context window: the 12 months ending with the later of the period end and today (a chosen year shows
     // just its own months); long periods (> 2 years) switch to one column per year
-    const end = state.preset === "year" ? pb : pb > TODAY_KEY ? pb : TODAY_KEY;
-    const start = state.preset === "year" ? pa : [addMonths(end, -11), FIRST_KEY].sort().pop();
+    // a tag shows just its own months
+    const end = state.tag || state.preset === "year" ? pb : pb > TODAY_KEY ? pb : TODAY_KEY;
+    const start = state.tag || state.preset === "year" ? pa : [addMonths(end, -11), FIRST_KEY].sort().pop();
     const months = monthsBetween(start < pa ? start : pa, end);
     const yearly = months.length > 24;
     const buckets = yearly
@@ -465,15 +573,15 @@
       series = [{ key: sel.key, color: colorOf(sel.dim, sel.key), match: (t) => t[sel.dim] === sel.key }];
       $("trendTitle").textContent = `Udvikling pr. ${yearly ? "år" : "måned"} · ${sel.key}`;
     } else if (state.dim === "group") {
-      const groups = breakdown(DATA, "group").map((g) => g.key);
+      const groups = breakdown(scope(), "group").map((g) => g.key);
       series = groups.map((g) => ({ key: g, color: colorOf("group", g), match: (t) => t.group === g }));
       $("trendTitle").textContent = `Udvikling pr. ${yearly ? "år" : "måned"}`;
     } else {
       // Same slices and colours as the donut above (its top 5 in the chosen period, the rest as Andet), so a colour
       // means the same thing in both charts
-      const dim = state.dim, shown = donutItems(breakdown(DATA.filter((t) => t.ym >= pa && t.ym <= pb), dim)).map((x) => x.key), named = new Set(shown);
+      const dim = state.dim, shown = donutItems(breakdown(scope().filter((t) => t.ym >= pa && t.ym <= pb), dim)).map((x) => x.key), named = new Set(shown);
       series = shown.map((k) => ({ key: k, color: colorOf(dim, k), match: (t) => t[dim] === k }));
-      if (DATA.some((t) => t.spend && !named.has(t[dim]))) series.push({ key: OTHER, color: "var(--other)", match: (t) => !named.has(t[dim]) });
+      if (scope().some((t) => t.spend && !named.has(t[dim]))) series.push({ key: OTHER, color: "var(--other)", match: (t) => !named.has(t[dim]) });
       $("trendTitle").textContent = `Udvikling pr. ${yearly ? "år" : "måned"}`;
     }
     const tl = $("trendLegend"); tl.replaceChildren();
@@ -481,7 +589,7 @@
 
     // per bucket net per series (<=0 counts as 0 so stacks stay honest)
     const vals = buckets.map((b) => series.map((s) => {
-      const v = DATA.filter((t) => t.spend && t.ym.startsWith(b.key) && s.match(t)).reduce((acc, t) => acc + t.amount, 0);
+      const v = scope().filter((t) => t.spend && t.ym.startsWith(b.key) && s.match(t)).reduce((acc, t) => acc + t.amount, 0);
       return Math.max(v, 0);
     }));
     const totals = vals.map((v) => v.reduce((a, b) => a + b, 0));
@@ -532,13 +640,14 @@
   }
 
   function renderTable(inPeriod) {
-    let rows = state.txMonth ? DATA.filter((t) => t.ym.startsWith(state.txMonth)) : inPeriod;
     const sel = state.selected;
+    let rows = state.txMonth ? scope().filter((t) => t.ym.startsWith(state.txMonth)) : inPeriod;
     if (sel) rows = rows.filter((t) => t[sel.dim] === sel.key);
     rows = rows.filter((t) => t.spend).sort((a, b) => b.date.localeCompare(a.date));
 
     const tags = $("tags"); tags.replaceChildren();
     const tag = (label, onClear) => tags.append(el("span", { class: "tag" }, label, el("button", { "aria-label": `Fjern filter ${label}`, onclick: onClear, text: "×" })));
+    if (state.tag) tag(state.tag, () => toggleTag(state.tag));
     if (state.txMonth) tag(state.txMonth.length === 4 ? state.txMonth : monthName(state.txMonth, true), () => { state.txMonth = null; render(); });
     if (sel) tag(sel.key, () => { state.selected = null; render(); });
 
@@ -623,6 +732,13 @@
     render();
   }
 
+  function toggleTag(key) {
+    state.tag = state.tag === key ? null : key;
+    state.selected = null; state.txMonth = null; state.showAll = false; state.showAllTx = false;
+    render();
+    if (state.tag) $("presets").scrollIntoView({ behavior: "smooth", block: "start" });  // the tiles and Fordeling now show it
+  }
+
   function toggleSelect(dim, key) {
     state.selected = state.selected && state.selected.dim === dim && state.selected.key === key ? null : { dim, key };
     state.showAllTx = false;
@@ -649,7 +765,7 @@
 
   // ---------- controls ----------
   const PRESETS = [["month", "Måned"], ["movein", "Siden flytning"], ["year", "År"], ["12m", "12 mdr."], ["all", "Alt"]];
-  PRESETS.forEach(([p, label]) => $("presets").append(el("button", { "data-p": p, text: label, onclick: () => { state.preset = p; state.txMonth = null; state.showAll = false; render(); } })));
+  PRESETS.forEach(([p, label]) => $("presets").append(el("button", { "data-p": p, text: label, onclick: () => { state.preset = p; state.tag = null; state.txMonth = null; state.showAll = false; render(); } })));
   [["group", "Grupper"], ["category", "Kategorier"], ["merchant", "Modtagere"]].forEach(([d, label]) =>
     $("dims").append(el("button", { "data-d": d, text: label, onclick: () => { state.dim = d; state.showAll = false; if (state.selected && state.selected.dim !== d) state.selected = null; render(); } })));
   // the stepper moves a month, or a year when "År" is chosen
@@ -670,7 +786,7 @@
     const category = t.category || UNCAT;
     // spend = everything outside income and savings; uncategorised only counts outgoing money
     const spend = group !== INCOME_GROUP && group !== SAVINGS_GROUP && (category !== UNCAT || amount > 0);
-    return { ...t, amount, group, category, ym: ym(t.date), spend, merchant: payee(t) };
+    return { ...t, amount, group, category, ym: ym(t.date), spend, merchant: payee(t), tags: t.tags || [] };
   }
 
   // ---------- uge for uge (Overblik) ----------
@@ -708,6 +824,7 @@
     const pending = Object.fromEntries(Object.entries(pendingGet()).filter(([, p]) => new Date(p.at) > exported));
     pendingSet(pending);
     CATS = d.categories || [];
+    FASTE = d.faste || {};
     DATA = d.transactions.map((t) => derive({ ...t, ...(pending[t.id] && { category: pending[t.id].category, group: pending[t.id].group }) }));
     const now = new Date();
     TODAY_KEY = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;

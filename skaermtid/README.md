@@ -92,6 +92,9 @@ kategorier og dine valg), enhederne (nedenfor), Dine valg, Reglerne og nederst *
 sammen; flisen Ukategoriseret springer derned og folder den ud). Perioden (I dag, Denne uge, 4 uger) er fælles: et
 klik i ét panel skifter alle dem, der har den. `/skaermtid/#enheder` springer ned til enhederne.
 
+På telefonen holder en service worker (`side/sw.js`, kopieres med siden af `byg`) siden, designkittet og de sidst
+byggede tal, så siden åbner uden net; tallene hentes frisk, når Mac'en svarer. Dine valg gemmes kun, mens Mac'en er vågen.
+
 Enhederne (feltet `enhedsside` i `skaermtid.json`):
 
 - **Hvad du bruger hver enhed til:** en bjælke pr. enhed delt i grupperne (Timer: på samme akse; Andel: hver bjælke

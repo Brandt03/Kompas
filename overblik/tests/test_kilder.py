@@ -6,7 +6,7 @@ import json
 import sqlite3
 from datetime import date, datetime, timedelta
 
-from conftest import idag, lav_garmin
+from conftest import idag, lav_garmin, lav_sessioner
 
 from overblik import cli, config, db, kilder
 
@@ -157,7 +157,7 @@ def test_rapport_opdater_giver_rapporten_med_fejlen_i_kilder(miljoe, capsys):
     ud = capsys.readouterr()
     assert "kilden sure fejlede" in ud.err
     r = json.loads(ud.out)
-    assert {k["kilde"]: bool(k["fejl"]) for k in r["kilder"]} == {"garmin": False, "kalender": False, "sure": True}
+    assert {k["kilde"]: bool(k["fejl"]) for k in r["kilder"]} == {"garmin": False, "kalender": False, "selvstudie": False, "sure": True}
 
 
 def test_tilbagebetaling_trækkes_kun_fra_op_til_ugens_køb(tmp_path, monkeypatch):
@@ -180,3 +180,28 @@ def test_tilbagebetaling_trækkes_kun_fra_op_til_ugens_køb(tmp_path, monkeypatc
     assert u1["dagligvarer_kr"] == -100
     assert u1["variabelt_kr"] == 440  # kun køb, uændret
 
+
+
+# --- selvstudie fra Studies sessioner ---------------------------------------
+
+def test_selvstudie_pr_uge_fra_sessionerne_uden_pauser(miljoe):
+    m = miljoe["mandag"]
+    lav_sessioner(config.SESSIONER_JSON, m + timedelta(days=7), [
+        ("Beta", [(f"{m}T09:00", f"{m}T10:00")]),  # før loggens fra: ugen beholder sit gemte tal
+        ("Beta", [(f"{m + timedelta(days=7)}T09:00", f"{m + timedelta(days=7)}T09:25"),
+                  (f"{m + timedelta(days=7)}T09:30", f"{m + timedelta(days=7)}T09:55")]),  # 5 min pause
+        ("Alfa", [(f"{m + timedelta(days=8)}T23:30", f"{m + timedelta(days=9)}T00:30")]),  # under dagen, den begyndte
+    ])
+    uger, til = kilder.selvstudie(m)
+    assert m.isoformat() not in uger
+    assert uger[(m + timedelta(days=7)).isoformat()] == {"selvstudie_timer": 1.83, "selvstudie_dage": 2}
+    assert uger[(m + timedelta(days=14)).isoformat()] == {"selvstudie_timer": 0.0, "selvstudie_dage": 0}
+    assert til == f"{m + timedelta(days=9)}T00:30"
+
+
+def test_selvstudie_uden_sessioner_er_ukendt_ikke_0(miljoe):
+    config.SESSIONER_JSON.unlink()
+    assert kilder.selvstudie(miljoe["mandag"]) == ({}, None)
+    cli.opdater()
+    uge = db.connect().execute("SELECT selvstudie_timer FROM uger WHERE mandag = ?", [miljoe["mandag"].isoformat()]).fetchone()
+    assert uge["selvstudie_timer"] is None

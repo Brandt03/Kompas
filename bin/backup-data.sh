@@ -1,20 +1,27 @@
 #!/bin/zsh
-# Backup af de lokale data, der hverken ligger i skyen eller git:
+# Backup af de lokale data, der hverken ligger i skyen eller git, og af koden:
 #   garmin-coach  ~/.garmin-coach/coach.db  Garmin-historik, kalender og perioder med vurderinger
 #   overblik      ~/.overblik/liv.db        ugetabellen og ugereviewene
 #   sprog         ~/kompas/sprog/data/      kortene, dine svar og ugens tekster (en mappe; gemmes som .tar.gz)
+#   sure-gennemgang ~/kompas/okonomi/gennemgang/ Økonomi-rutinens månedlige gennemgange (data, ikke i git)
 #   activitywatch ~/Library/Application Support/activitywatch/aw-server/peewee-sqlite.v2.db
 #                                           al skærmtid fra alle enheder (Skærmtid regner forfra fra den)
+#   git-kompas    ~/kompas                  repoet som git bundle: hele historikken og alle grene, men ikke det, der
+#                                           ikke er committet (fx Skærmtids valg.json)
 # Én pr. dag, gzippet, i $KOMPAS_BACKUP (gerne en mappe, der synkes til OneDrive/iCloud). De nyeste 14 pr.
 # kilde beholdes.
-# Køres af opdater.sh (første gang hver dag) og af kompas-stop.sh. --tving laver en ny, selv om dagens findes.
+# Desuden Sures database én gang om dagen, når Sure kører (okonomi/bin/backup-db.sh, i $SURE_BACKUP, 30 dage).
+# Køres af opdater.sh (første gang hver dag) og af kompas-start.sh (Kompas-appen) og kompas-stop.sh. --tving laver en
+# ny, selv om dagens findes.
 # Tidspunktet for dagens backup noteres i ~/.kompas/backup-sidst til siden Forbindelser.
 #
 # Gendan (luk først det, der bruger databasen):
 #   gunzip -c "<backup>.db.gz" > ~/.garmin-coach/coach.db
 #   tar xzf "<backup>.tar.gz" -C ~/kompas/sprog          (Sprog: luk først local.kompas.sprog)
+#   tar xzf "<backup>.tar.gz" -C ~/kompas/okonomi        (Økonomi-rutinens gennemgange)
 #   gunzip -c "<backup>.db.gz" > "$HOME/Library/Application Support/activitywatch/aw-server/peewee-sqlite.v2.db"
 #                                                        (ActivityWatch: luk først appen, og slet -wal og -shm ved siden af)
+#   git clone "<backup>.bundle" ~/kompas-gendannet
 set -euo pipefail
 zmodload zsh/datetime
 DEST="${KOMPAS_BACKUP:-$HOME/Backup/kompas}"
@@ -25,13 +32,23 @@ d=$(date +%F)
 strftime -r -s middag '%F %T' "$d 12:00:00"
 sidst=
 for navn src in garmin-coach "$HOME/.garmin-coach/coach.db" overblik "$HOME/.overblik/liv.db" sprog "$HOME/kompas/sprog/data" \
-                activitywatch "$HOME/Library/Application Support/activitywatch/aw-server/peewee-sqlite.v2.db"; do
+                sure-gennemgang "$HOME/kompas/okonomi/gennemgang" \
+                activitywatch "$HOME/Library/Application Support/activitywatch/aw-server/peewee-sqlite.v2.db" \
+                git-kompas "$HOME/kompas"; do
   [[ -e $src ]] || continue
-  [[ -d $src ]] && ext=tar.gz || ext=db.gz
+  if [[ $navn == git-* ]]; then ext=bundle; elif [[ -d $src ]]; then ext=tar.gz; else ext=db.gz; fi
   ud="$DEST/$navn-$d.$ext"
   sidst=$ud
   [[ -f $ud && ${1:-} != --tving ]] && continue
-  if [[ -d $src ]]; then
+  if [[ $ext == bundle ]]; then
+    # Hele historikken i én fil; git bundle verify tjekker, at den kan klones, før den erstatter gårsdagens
+    tmp=$(mktemp -t kompas-backup)
+    git -C "$src" bundle create "$tmp.bundle" --all 2>/dev/null &&
+      git -C "$src" bundle verify "$tmp.bundle" >/dev/null 2>&1 ||
+      { rm -f "$tmp" "$tmp.bundle"; print -u2 "$navn: git bundle kunne ikke laves"; exit 1; }
+    cp "$tmp.bundle" "$ud.partial" && mv "$ud.partial" "$ud"
+    rm -f "$tmp.bundle"
+  elif [[ -d $src ]]; then
     # En mappe med tekstfiler, som serveren skriver atomisk (log.jsonl tilføjes kun). Den midlertidige fil ligger
     # lokalt, så en halvt skrevet kopi aldrig når skyen, og den tjekkes, før den erstatter gårsdagens
     tmp=$(mktemp -t kompas-backup)
@@ -50,15 +67,20 @@ for navn src in garmin-coach "$HOME/.garmin-coach/coach.db" overblik "$HOME/.ove
   # De nyeste KEEP beholdes. Mappen kan ikke listes, når launchd kører os (se nederst), så navnene prøves dag for
   # dag et år tilbage, regnet fra middag, så sommertid ikke springer en dato over. Sletning er heller ikke tilladt
   # under launchd ("Operation not permitted"); det må ikke stoppe de næste kilders backup, så det tælles kun op,
-  # og oprydningen sker, når scriptet kører fra Luk Kompas eller en terminal
+  # og oprydningen sker, når scriptet kører fra Kompas-appen eller en terminal
   antal=0 gamle=0
   for (( i = 0; i <= 366; i++ )); do
     strftime -s dag %F $(( middag - i * 86400 ))
     if [[ -f $DEST/$navn-$dag.$ext ]] && (( ++antal > KEEP )); then rm -f -- "$DEST/$navn-$dag.$ext" 2>/dev/null || (( ++gamle )); fi
   done
   print "$navn → $ud ($(du -h "$ud" | cut -f1))"
-  if (( gamle )); then print "$navn: $gamle gamle backups kunne ikke slettes herfra; de ryddes af Luk Kompas eller \`~/kompas/bin/backup-data.sh --tving\` i en terminal"; fi
+  if (( gamle )); then print "$navn: $gamle gamle backups kunne ikke slettes herfra; de ryddes, når Kompas-appen åbnes, eller af \`~/kompas/bin/backup-data.sh --tving\` i en terminal"; fi
 done
+# Sures database, én gang om dagen (backup-db.sh springer selv over, når Sure er slukket). En fejl dér må ikke
+# stoppe noteringen nedenfor, for de andre backups er taget
+if [[ ! -f ${SURE_BACKUP:-$HOME/Backup}/sure-$d.dump || ${1:-} == --tving ]]; then
+  $HOME/kompas/okonomi/bin/backup-db.sh || print -u2 "sure: backup fejlede (se ovenfor)"
+fi
 # Hertil kommer vi kun, når alle backups for i dag findes. Forbindelser kan ikke selv liste OneDrive-mappen:
 # når launchd starter noget, tillader macOS' privatlivsbeskyttelse stat og skrivning der, men hverken læsning
 # af mappen eller sletning

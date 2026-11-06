@@ -33,7 +33,11 @@ SKAERMTID_JSON = _path("LIV_SKAERMTID_JSON", "~/.kompas/skaermtid/skaermtid.json
 # Studiets eksport (Kompas' Studie), hvor svarene pr. dag i Træning og På farten står pr. fag (fag[].status.rytme).
 STUDIE_JSON = _path("LIV_STUDIE_JSON", "~/.kompas/studie/studie.json")
 
-# Selvstudie logges med CalTask som kalenderbegivenheder, fx "Selvstudie · Alfa".
+# Selvstudiet: sessionerne fra timeren i Kompas (Studies stopur), som Studies eksport skriver (Scripts/sessioner.json i
+# semestermappen → her). Før timeren blev det logget i CalTask; de sessioner er flyttet ind i Studies log.
+SESSIONER_JSON = _path("LIV_SESSIONER_JSON", "~/.kompas/studie/sessioner.json")
+# CalTasks gamle begivenheder i kalenderen, fx "Selvstudie · Alfa". De står i Studies log nu, så de tælles ikke fra kalenderen
+# (og er ikke en del af planen).
 SELVSTUDIE_PRAEFIKS = os.environ.get("LIV_SELVSTUDIE_PRAEFIKS", "Selvstudie ·")
 # Dagen logningen begyndte. Uger før er ukendte, ikke 0 timer.
 SELVSTUDIE_FRA = os.environ.get("LIV_SELVSTUDIE_FRA", "2026-09-28")

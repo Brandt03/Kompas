@@ -116,7 +116,56 @@ async function pensumPaaTelefonen() {
   tjek("en hentet fil hentes ikke igen", kald === foer, kald - foer);
 }
 
-pensumPaaTelefonen().catch(e => tjek("På farten: pensum", false, e.stack)).then(() => {
+// ── Telefonen uden Mac'en: alle Studie-sider ligger på telefonen, og markeringer venter i en kø ──
+{
+  const sw = fs.readFileSync(path.join(SIDER, "mobil-sw.js"), "utf8");
+  const sider = vm.runInNewContext(sw.match(/const SIDER = (\[[\s\S]*?\]);/)[1]);
+  const mangler = fs.readdirSync(SIDER).filter(n => n.endsWith(".html")).map(n => n === "index.html" ? "/studie/" : `/studie/${n}`).filter(p => !sider.includes(p));
+  tjek("service workeren henter alle Studie-sider, når den installeres", !mangler.length, mangler.join(", "));
+  const kit = [...new Set(fs.readdirSync(SIDER).filter(n => n.endsWith(".html")).flatMap(n => fs.readFileSync(path.join(SIDER, n), "utf8").match(/\/kompas\/assets\/[\w.-]+\.(?:js|css)/g) || []))];
+  tjek("service workeren henter det designkit, siderne bruger", kit.every(k => sider.includes(k)), kit.filter(k => !sider.includes(k)).join(", "));
+}
+async function markeringUdenNet() {
+  const lagre = new Map(), lyt = {}, sendt = [];
+  const lager = n => { if (!lagre.has(n)) { const m = new Map(); lagre.set(n, { match: async p => m.get(p)?.clone(), put: async (p, r) => { m.set(p, r); }, add: async () => {} }); } return lagre.get(n); };
+  let net = true, laest = { alfa: { 36: "2026-10-01" } };
+  vm.runInContext(fs.readFileSync(path.join(SIDER, "mobil-sw.js"), "utf8"), vm.createContext({
+    self: { addEventListener: (t, f) => { lyt[t] = f; }, registration: {} }, caches: { open: async n => lager(n), keys: async () => [...lagre.keys()], delete: async () => true },
+    location: { origin: "https://mac.ts.net" }, URL, Response, Request, Promise, Set, JSON, Math, Date, String, setTimeout: () => 0,
+    fetch: async (inp, init = {}) => {
+      if (!net) throw new TypeError("Mac'en svarer ikke");
+      const url = typeof inp === "string" ? inp : inp.url, sti = new URL(url, "https://mac.ts.net").pathname;
+      if (sti === "/studie/api/sync") { const k = JSON.parse(init.body); sendt.push(...k.poster); return new Response(JSON.stringify({ resultater: k.poster.map(p => ({ id: p.id, ok: true })) })); }
+      if (sti === "/studie/api/laest") return new Response(JSON.stringify(laest));
+      return new Response("{}");
+    } }));
+  const kald = (sti, krop) => {
+    let svar; const vent = [];
+    const request = krop ? new Request("https://mac.ts.net" + sti, { method: "POST", body: JSON.stringify(krop), headers: { "Content-Type": "application/json" } })
+      : { method: "GET", url: "https://mac.ts.net" + sti };
+    lyt.fetch({ request, respondWith: p => { svar = p; }, waitUntil: p => vent.push(p) });
+    return Promise.resolve(svar).then(async r => { await Promise.all(vent); return r; });
+  };
+  let rørt = false; lyt.fetch({ request: { method: "GET", url: "https://mac.ts.net/studie/api/pakke" }, respondWith: () => { rørt = true; }, waitUntil() {} });
+  tjek("pakken går forbi service workeren, så På farten ser, at Mac'en ikke svarer", !rørt);
+  await kald("/studie/api/laest");
+  net = false;
+  const r = await kald("/studie/api/laest", { fag: "alfa", uge: 37, laest: true }), d = await r.json();
+  tjek("uden net: en læst uge får et svar med det samme", r.ok && d.laest && d.koe, JSON.stringify(d));
+  const l = await (await kald("/studie/api/laest")).json();
+  tjek("uden net: den læste uge står i de gemte data", l.alfa[37] === d.laest && l.alfa[36] === "2026-10-01", JSON.stringify(l));
+  const g = await kald("/studie/api/genkald", { fag: "alfa", fil: "x", nr: 1, mark: "glad" });
+  tjek("uden net: et genkaldssvar henviser til På farten", g.status === 503 && /På farten/.test((await g.json()).fejl));
+  tjek("uden net: intet sendt", !sendt.length);
+  net = true; laest = { alfa: { 36: "2026-10-01", 37: d.laest } };
+  await kald("/studie/api/laest");
+  tjek("med net igen: markeringen sendes gennem /sync med sit tidspunkt", sendt.length === 1 && sendt[0].type === "laest" && sendt[0].data.uge === 37
+    && Date.parse(sendt[0].tid) > 0, JSON.stringify(sendt));
+  await kald("/studie/api/laest");
+  tjek("en sendt markering sendes ikke igen", sendt.length === 1, sendt.length);
+}
+
+pensumPaaTelefonen().then(markeringUdenNet).catch(e => tjek("På farten: pensum og markeringer", false, e.stack)).then(() => {
   if (fejl) { console.log(`${fejl} fejl`); process.exit(1); }
   console.log("siderne: alt ok");
 });

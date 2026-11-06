@@ -2,11 +2,16 @@
 //
 // En lille lokal server, der lader siden læse og skrive DIT arbejde i semestermappen. Den kan kun:
 //   - skrive dit svar og din markering [✓]/[~]/[✗] ind under et spørgsmål i */Genkald/genkald-*.md
-//     (karakteren 1-4, som repetitionen planlægges efter, står kun i genkald-log.jsonl)
+//     (karakteren 1-4, som repetitionen planlægges efter, din sikkerhed i procent og det, du skrev under Tænk højt,
+//     står kun i genkald-log.jsonl)
 //   - skrive dine begreber med egne ord (og for Beta: "Hvad det får dig til at se") i */Genkald/begreber.md
 //   - skrive det, du skriver under "I egne ord" for en uge på Fag-siden, i */egne-ord.md
 //   - skrive din vurdering af en uge i USB-noterne (brugbar, for meget, mangler noget + en kommentar) i usb-vurdering.json
 //   - erstatte TOM med DIT gæt i en tjek(...)-linje i kodefagets Drills/kap*.js og køre filen
+//   - starte, holde pause med og stoppe timeren (i Kompas' menu) og gemme de sessioner, du tilføjer, retter eller godkender
+//     (forslag ud fra dine svar), i sessioner.json
+//   - dine mål fra Indstillinger på Selvstudie (dagsmål, ugedage og medaljer) i studiemaal.json
+//   - en undervisningsgang, du ikke var til (eller alligevel var til), fra Fremmøde på Selvstudie, i fremmoede.json
 // På farten (mobil.html) henter en pakke med dagens kort, så du kan svare uden net, og sender svarene
 // tilbage med /sync, når Mac'en er vågen. Det er de samme skrivninger som ovenfor (også I egne ord), bare senere.
 // Fag-siden åbner forelæsninger og øvelser i */Pensum/ gennem /pensum/... (kun læsning), også på telefonen, hvor
@@ -64,6 +69,8 @@ function skriv(f, tekst) { const tmp = path.join(path.dirname(f), `.${path.basen
 const idag = (d = new Date()) => { return `${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}`; };
 // Dagens dato som 2026-10-10 i Mac'ens lokaltid. toISOString() er UTC og giver gårsdagens dato mellem midnat og kl. 2.
 const idagIso = (d = new Date()) => S.isoDato(d);
+// Dagen, en skrivning skete: tidspunktet fra telefonens kø (sync), ellers nu
+const dagFra = meta => meta?.tid ? new Date(meta.tid) : new Date();
 function logFoersoeg(post) { fs.appendFileSync(LOG, JSON.stringify({ tid: new Date().toISOString(), ...post }) + "\n"); eksporterSnart(); }
 // Efter en gemning køres Kompas-eksporten, så Fag-siden og I dag viser de nye tal. Flere gemninger
 // lige efter hinanden giver kun én kørsel. En testserver på en kopi af mappen skal sætte STUDIE_EKSPORT_UD,
@@ -171,9 +178,23 @@ function facit(fag, fil, nr) {
 }
 
 const SIKKERHED = ["sikker", "usikker", "gaet"];
+// Skyderen giver sikkerheden i procent (0-100 i trin af 10): hvor sandsynligt du tror, dit svar er rigtigt. Ordet
+// (sikker fra 70 %, usikker fra 30 %, ellers gaet) udledes, så kalibreringen og drillenes planlægning også passer
+// med svarene fra før skyderen og med eksamenssiden, der stadig sender ordet
+const SIKKER_FRA = 70, USIKKER_FRA = 30;
+function sikkerhedAf({ sikkerhed, procent }) {
+  if (procent != null) {
+    if (!Number.isInteger(procent) || procent < 0 || procent > 100) throw new Error("sikkerheden skal være 0-100 %");
+    return { sikkerhed: procent >= SIKKER_FRA ? "sikker" : procent >= USIKKER_FRA ? "usikker" : "gaet", procent };
+  }
+  return SIKKERHED.includes(sikkerhed) ? { sikkerhed } : {};
+}
+// Tænk højt: det, du skrev eller dikterede om, hvordan du tænkte. Står kun i loggen, ikke i genkaldsfilen
+const tankerAf = tanker => { const t = String(tanker || "").replace(/\r/g, "").trim(); return t ? { tanker: t } : {}; };
 // meta: { tid, sync_id } for svar, der er givet på telefonen og sendes senere (se /sync)
-function gemGenkald({ fag, fil, nr, svar, mark, karakter, sikkerhed }, meta = {}) {
+function gemGenkald({ fag, fil, nr, svar, mark, karakter, sikkerhed, procent, tanker }, meta = {}) {
   const f = genkaldFil(fag, fil);
+  const sik = sikkerhedAf({ sikkerhed, procent });
   const bed = mark != null || karakter != null ? bedømmelse({ mark, karakter }) : null;
   mark = bed?.mark;
   const { linjer, blokke: bs } = blokke(læs(f));
@@ -194,7 +215,7 @@ function gemGenkald({ fag, fil, nr, svar, mark, karakter, sikkerhed }, meta = {}
   const ny = [...linjer.slice(0, b.start), ...krop, ...bag, ...linjer.slice(b.slut)];
   skriv(f, ny.join("\n"));
   logFoersoeg({ ...meta, type: "genkald", noegle: `${fag}/${fil}#${nr}`, mark: mark || null, ...(bed ? { karakter: bed.karakter } : {}),
-    ...(SIKKERHED.includes(sikkerhed) ? { sikkerhed } : {}) });
+    ...sik, ...tankerAf(tanker) });
   return { gemt: true };
 }
 
@@ -541,7 +562,8 @@ async function skrivDrill(f, fil, linje, beskrivelse, gaet, gaettede, meta) {
 // ── eksamen (gamle sæt, tjeklister og pensumspørgsmål) ──────────────
 // <Fag>/Eksamenstræning/<id>.md + <id>-svar.md. Opbygning: "# titel", en kursiv metalinje, "---",
 // sektioner "## Del A …"/"## Opgave 1 …"/"## Uge 36 …" med evt. fælles tekst, og opgaver "**N.**".
-// Hver opgave slutter med "*Emne: … · uge NN*" eller "· kap. N".
+// Hver opgave slutter med "*Emne: Tema — detalje · uge NN*" (samme Tema for samme emne i alle sæt; Til eksamen
+// grupperer efter det) eller "· kap. N og M" (første kapitel er hovedemnet).
 const eksDir = fag => path.join(ROD, fagMappe(fag), "Eksamenstræning");
 const kodeEksamen = fag => S.find(fag)?.eksamenstraening?.form === "kode";
 function eksFil(fag, id, svar = false) {
@@ -618,6 +640,85 @@ function eksamenNiveauer() {
   }
   return ud;
 }
+// Til eksamen (Fag-siden): hvad de gamle sæt har spurgt om fra ugens stof. Et spørgsmål hører til ugen i sit
+// "*Emne: Tema — detalje · uge N*" og grupperes efter Tema (det før " — "), så samme tema tælles på tværs af sættene.
+// Er det mærket "· kap. N og M", hører det til ugerne, hvis forelæsning er mappet til et af kapitlerne (kapitler i
+// undervisningsdage.json); det første kapitel er opgavens hovedemne, og sådan et fag grupperes efter sæt og opgave.
+// Sæt med et årstal i navnet er gamle eksamenssæt; de andre (dine pensumspørgsmål) er egne og står for sig.
+const POINT = /(\d+(?:[.,]\d+)?)\s*(?:points?|P|%)(?![a-zæøå])/gi;
+// Spørgsmålenes point i en sektion: deres egne point (eller %) fra første linje, en opgaves "N point i alt" delt
+// mellem delopgaverne, og resten af sektionens point ligeligt (multiple choice altid ligeligt)
+function pointISektion(sek) {
+  const qs = sek.spoergsmaal, ud = qs.map(() => null);
+  if (qs.length > 1 && !/multiple choice/i.test(sek.titel)) {
+    const grupper = new Map();
+    qs.forEach((q, i) => {
+      const l = q.tekst.split("\n")[0], k = (l.match(/^[*(\s]*([A-C])\.?\s*Q?\s*(\d+)/) || []).slice(1).join("") || i;
+      let alt = null, egen = null;
+      for (const m of l.matchAll(POINT)) { const v = +m[1].replace(",", "."); if (/^\s*i alt/.test(l.slice(m.index + m[0].length))) alt ??= v; else egen ??= v; }
+      (grupper.get(k) || grupper.set(k, []).get(k)).push({ i, alt, egen });
+    });
+    for (const g of grupper.values()) {
+      const alt = g.find(x => x.alt != null)?.alt ?? null, egne = g.filter(x => x.egen != null);
+      const T = alt ?? (egne.length === 1 && g.length > 1 ? egne[0].egen : null);
+      if (T == null) { g.forEach(x => ud[x.i] = x.egen); continue; }
+      const fri = alt != null ? g.filter(x => x.egen == null) : g;
+      if (alt != null) egne.forEach(x => ud[x.i] = x.egen);
+      const rest = T - (alt != null ? egne.reduce((a, x) => a + x.egen, 0) : 0);
+      fri.forEach(x => ud[x.i] = rest / fri.length);
+    }
+  }
+  if (sek.vaegt == null) return ud;
+  const brugt = ud.reduce((a, v) => a + (v || 0), 0), mangler = ud.filter(v => v == null).length;
+  if (brugt > sek.vaegt + 0.01) return qs.map(() => sek.vaegt / qs.length);
+  return ud.map(v => v ?? (sek.vaegt - brugt) / mangler);
+}
+function eksamenUger() {
+  const sidste = {}, ud = {};
+  for (const ps of Object.values(eksamensLog())) for (const p of ps) sidste[p.noegle] = RES[p.mark];
+  let dage = {}; try { dage = JSON.parse(læs(path.join(S.DATA, "undervisningsdage.json"))); } catch {}
+  const form = sek => /multiple choice/i.test(sek) ? "MC" : /tegne|model/i.test(sek) ? "model" : /kortsvar/i.test(sek) ? "kortsvar" : sek;
+  for (const { id: fag, kort } of S.fagMed("eksamenstraening")) {
+    let filer = []; try { filer = fs.readdirSync(eksDir(fag)).filter(n => /\.md$/.test(n) && !/-svar\.md$/.test(n) && !/^README/i.test(n)).sort().reverse(); } catch { continue; }
+    const kapUger = {};
+    for (const fl of dage[kort]?.Forelæsninger || []) for (const k of fl.kapitler || []) (kapUger[k] ||= []).push(S.isoUge(new Date(`${fl.dato}T12:00`)));
+    const saet = [], uger = {};
+    for (const n of filer) {
+      const id = n.replace(/\.md$/, ""), e = parseEksamen(læs(path.join(eksDir(fag), n))), gammelt = /^\d{4}/.test(id);
+      const total = e.sektioner.reduce((a, s) => a + (s.vaegt || 0), 0);
+      saet.push({ id, titel: e.titel, gammelt, total });
+      for (const sek of e.sektioner) {
+        const pt = pointISektion(sek);
+        sek.spoergsmaal.forEach((q, i) => {
+          if (!q.emne) return;
+          const kap = ((q.emne.match(/kap\.\s*([\d,\s]+(?:og\s+\d+)?)/i) || [])[1]?.match(/\d+/g) || []).map(Number);
+          const emne = q.emne.replace(/\s*·\s*(uge|kap\.).*$/i, "");
+          for (const u of q.uge ? [q.uge] : [...new Set(kap.flatMap(k => kapUger[k] || []))]) {
+            const hoved = !!q.uge || (kapUger[kap[0]] || []).includes(u);
+            const uge = uger[u] ||= { grupper: {}, egne: [] }, x = { saet: id, nr: q.nr, emne, form: form(sek.titel), point: pt[i],
+              andel: total && pt[i] != null ? pt[i] / total : null, hoved, resultat: sidste[`${fag}/${id}#${q.nr}`] || null };
+            if (!gammelt) { uge.egne.push(x); continue; }
+            const navn = q.uge ? emne.split(" — ")[0] : `${id} · ${sek.titel}`;
+            (uge.grupper[navn] ||= { navn, sektion: q.uge ? null : sek.titel, spoergsmaal: [] }).spoergsmaal.push(x);
+          }
+        });
+      }
+    }
+    const gamle = saet.filter(s => s.gammelt);
+    // Pr. uge: i hvor mange gamle sæt ugens stof er hovedemne, og hvor stor en andel af et sæts point det i snit
+    // giver. Grupperne står med de hyppigste temaer først; i et kapitelfag med hovedemnerne først, nyeste sæt først.
+    for (const [u, uge] of Object.entries(uger)) {
+      const grupper = Object.values(uge.grupper).map(g => ({ ...g, saet: [...new Set(g.spoergsmaal.map(x => x.saet))],
+        hoved: g.spoergsmaal.some(x => x.hoved), point: g.spoergsmaal.filter(x => x.hoved).reduce((a, x) => a + (x.point || 0), 0) / (gamle.length || 1) }));
+      const hoved = grupper.flatMap(g => g.spoergsmaal).filter(x => x.hoved);
+      grupper.sort((a, b) => a.sektion != null ? b.hoved - a.hoved : b.saet.length - a.saet.length || b.point - a.point);
+      uger[u] = { saet_med: new Set(hoved.map(x => x.saet)).size, andel: gamle.length ? hoved.reduce((a, x) => a + (x.andel || 0), 0) / gamle.length : null,
+        grupper, egne: uge.egne };
+    }
+    ud[fag] = { saet_i_alt: gamle.length, saet, kapitler: kapUger, uger };
+  }
+  return ud;
+}
 function eksFacitAlle(fag, id) {
   const f = path.join(eksDir(fag), `${id}-svar.md`);
   if (!fs.existsSync(f)) return {};
@@ -651,25 +752,26 @@ function afslutEksamen({ fag, id, svar, marks, start, slut, tilstand }) {
   eksporterSnart();
   return { gemt: path.relative(ROD, fil) };
 }
-function gemEksamenResultat({ fag, id, nr, mark, karakter, sikkerhed }, meta = {}) {
+function gemEksamenResultat({ fag, id, nr, mark, karakter, sikkerhed, procent, tanker }, meta = {}) {
   eksFil(fag, id);
   const bed = bedømmelse({ mark, karakter });
-  logFoersoeg({ ...meta, type: "eksamen", noegle: `${fag}/${id}#${+nr}`, ...bed, ...(SIKKERHED.includes(sikkerhed) ? { sikkerhed } : {}) });
+  logFoersoeg({ ...meta, type: "eksamen", noegle: `${fag}/${id}#${+nr}`, ...bed, ...sikkerhedAf({ sikkerhed, procent }), ...tankerAf(tanker) });
   return { gemt: true };
 }
 
 // ── læste uger (Fag → Styr på) ───────────────────────────────────────
 // Scripts/laest.json: { "alfa": { "36": "2026-10-01" }, "beta": { ... } }. Nye genkaldsspørgsmål kommer kun
 // i Dagens kort fra uger, der er markeret her; ellers ville man "genkalde" stof, man ikke har læst.
+// Fag uden genkald markerer også uger; dér bruger Studie-rutinen dem til indhentningen.
 const LAEST = path.join(S.DATA, "laest.json");
 function læst() { try { return JSON.parse(læs(LAEST)); } catch { return {}; } }
-function gemLæst({ fag, uge, laest }) {
-  if (!S.find(fag)?.genkald) throw new Error("ukendt fag");
+function gemLæst({ fag, uge, laest }, meta = {}) {
+  if (!S.find(fag)) throw new Error("ukendt fag");
   uge = String(+uge);
   if (!(+uge >= 1 && +uge <= 53)) throw new Error("ukendt uge");
   const l = læst();
   l[fag] ||= {};
-  if (laest) l[fag][uge] = idagIso(); else delete l[fag][uge];
+  if (laest) l[fag][uge] = idagIso(dagFra(meta)); else delete l[fag][uge];
   skriv(LAEST, JSON.stringify(l, null, 1) + "\n");
   return { fag, uge: +uge, laest: l[fag][uge] || null };
 }
@@ -680,7 +782,7 @@ function gemLæst({ fag, uge, laest }) {
 const USB = path.join(S.DATA, "usb-vurdering.json");
 const VURDERINGER = ["brugbar", "for_meget", "mangler"];
 function usbVurdering() { try { return JSON.parse(læs(USB)); } catch { return {}; } }
-function gemUsbVurdering({ fag, del, vurdering, kommentar }) {
+function gemUsbVurdering({ fag, del, vurdering, kommentar }, meta = {}) {
   if (!S.find(fag)?.usb_noter) throw new Error("ukendt fag");
   del = String(del ?? "").trim();
   if (!/^(\d{1,2}|[\p{L}][\p{L} ]{0,39})$/u.test(del)) throw new Error("ukendt uge eller afsnit");
@@ -689,7 +791,7 @@ function gemUsbVurdering({ fag, del, vurdering, kommentar }) {
   if (kommentar.length > 2000) throw new Error("kommentaren er for lang");
   const v = usbVurdering();
   v[fag] ||= {};
-  if (vurdering || kommentar) v[fag][del] = { vurdering: vurdering || null, kommentar, dato: idagIso() };
+  if (vurdering || kommentar) v[fag][del] = { vurdering: vurdering || null, kommentar, dato: idagIso(dagFra(meta)) };
   else delete v[fag][del];
   skriv(USB, JSON.stringify(v, null, 1) + "\n");
   return { fag, del, ...(v[fag][del] || { vurdering: null, kommentar: "", dato: null }) };
@@ -831,7 +933,7 @@ function logPoster() {
 function hændelser(poster) {
   const ud = {};
   const put = (k, h) => (ud[k] ||= []).push(h);
-  const bedømt = (p, t) => ({ t, res: RES[p.mark], g: KARAKTER_MARK[p.karakter] ? +p.karakter : MARK_KARAKTER[RES[p.mark]], sikkerhed: p.sikkerhed });
+  const bedømt = (p, t) => ({ t, res: RES[p.mark], g: KARAKTER_MARK[p.karakter] ? +p.karakter : MARK_KARAKTER[RES[p.mark]], sikkerhed: p.sikkerhed, procent: p.procent });
   const sidsteDrillFejl = {};
   for (const p of poster) {
     const t = Date.parse(p.tid);
@@ -932,6 +1034,12 @@ async function repetitionsKort() {
   // Kalibrering: hvor tit sad det, når du sagde "sikker" / "usikker" / "gætter"?
   const kal = Object.fromEntries(SIKKERHED.map(s => [s, { n: 0, sad: 0, halvt: 0, blankt: 0 }]));
   for (const hs of Object.values(H)) for (const h of hs) if (h.sikkerhed && kal[h.sikkerhed] && RES[h.res]) { kal[h.sikkerhed].n++; kal[h.sikkerhed][h.res]++; }
+  // Og i procent fra skyderen, i fem spand: sagde du 70-80 %, burde det sidde omkring tre ud af fire gange
+  const kalProcent = [[0, 20], [30, 40], [50, 60], [70, 80], [90, 100]].map(([fra, til]) => ({ fra, til, n: 0, sad: 0, halvt: 0, blankt: 0 }));
+  for (const hs of Object.values(H)) for (const h of hs) {
+    const sp = h.procent != null && RES[h.res] && kalProcent.find(x => h.procent >= x.fra && h.procent <= x.til);
+    if (sp) { sp.n++; sp[h.res]++; }
+  }
   const klaretIdag = poster.filter(p => ["genkald", "overhoer", "drill-rep"].includes(p.type) && p.mark && Date.parse(p.tid) >= idagStart.getTime()).length;
   const næste = alle.filter(k => !k.ny && k.forfald > dagSlut.getTime()).sort((a, b) => a.forfald - b.forfald)[0];
   // Til eksamen: hvor sandsynligt du kan de kort, du har gennemgået, på eksamensdagen, hvis du ikke repeterer mere
@@ -949,7 +1057,7 @@ async function repetitionsKort() {
       ulaeste_uger: [...ulæste.values()].map(u => ({ ...u, uger: [...u.uger].sort((a, b) => a - b) })),
       nye_klar: alle.filter(k => k.ny && k.laest).length, klaret_i_dag: klaretIdag, dagsmaal: MAKS_KORT, i_alt: alle.length,
       laert: alle.filter(k => !k.ny && k.s >= LÆRT).length, naeste: næste ? new Date(næste.forfald).toISOString() : null,
-      kalibrering: kal, minutter: Math.max(1, Math.round(kø.length * MIN_PR_KORT)), min_pr_kort: MIN_PR_KORT, eksamen, maal_eksamen: MÅL_EKSAMEN,
+      kalibrering: kal, kalibrering_procent: kalProcent, sikker_fra: SIKKER_FRA, usikker_fra: USIKKER_FRA, minutter: Math.max(1, Math.round(kø.length * MIN_PR_KORT)), min_pr_kort: MIN_PR_KORT, eksamen, maal_eksamen: MÅL_EKSAMEN,
       // Dit seneste svar (drill, genkald, eksamen), til "Står stille" på I dag; en færdig-markeret frist er ikke et svar
       sidst_svar: poster.findLast(p => p.type !== "deadline")?.tid || null },
   };
@@ -980,23 +1088,24 @@ async function repetitionSvar(noegle) {
   }
   throw new Error("ukendt kort");
 }
-function gemRepetition({ noegle, mark, karakter, sikkerhed, svar }, meta = {}) {
+function gemRepetition({ noegle, mark, karakter, sikkerhed, procent, tanker, svar }, meta = {}) {
   noegle = String(noegle || "");
   const bed = bedømmelse({ mark, karakter });
   if (sikkerhed != null && !SIKKERHED.includes(sikkerhed)) throw new Error("ukendt sikkerhed");
+  const sik = sikkerhedAf({ sikkerhed, procent });
   const type = noegle.split(":")[0], rest = noegle.slice(noegle.indexOf(":") + 1);
   if (type === "genkald") {
     const m = rest.match(genkaldNoegle());
     if (!m) throw new Error("ukendt kort");
-    return gemGenkald({ fag: m[1], fil: m[2], nr: +m[3], svar, karakter: bed.karakter, sikkerhed }, meta);
+    return gemGenkald({ fag: m[1], fil: m[2], nr: +m[3], svar, karakter: bed.karakter, ...sik, tanker }, meta);
   }
   if (type === "eksamen") {
     const m = rest.match(/^(\w+)\/([\w-]+)#(\d+)$/);
     if (!m) throw new Error("ukendt kort");
-    return gemEksamenResultat({ fag: m[1], id: m[2], nr: +m[3], karakter: bed.karakter, sikkerhed }, meta);
+    return gemEksamenResultat({ fag: m[1], id: m[2], nr: +m[3], karakter: bed.karakter, ...sik, tanker }, meta);
   }
   if (type !== "begreb" && type !== "drill") throw new Error("ukendt kort");
-  logFoersoeg({ ...meta, type: type === "begreb" ? "overhoer" : "drill-rep", noegle: rest, ...bed, ...(sikkerhed ? { sikkerhed } : {}) });
+  logFoersoeg({ ...meta, type: type === "begreb" ? "overhoer" : "drill-rep", noegle: rest, ...bed, ...sik, ...tankerAf(tanker) });
   return { gemt: true };
 }
 
@@ -1054,6 +1163,8 @@ async function sync({ poster }) {
       const d = p.data || {};
       const r = p.type === "repetition" ? gemRepetition(d, meta) : p.type === "begreb" ? gemBegreb(d, meta)
         : p.type === "drill" ? await gemDrill(d, meta) : p.type === "egne-ord" ? gemEgneOrd({ ...d, foer: d.foer ?? "" })
+        // Markeringer fra Studie-siderne på telefonen, sat uden net (mobil-sw.js); datoen er dagen, du satte dem
+        : p.type === "laest" ? gemLæst(d, meta) : p.type === "deadline" ? gemDeadline(d, meta) : p.type === "usb-vurdering" ? gemUsbVurdering(d, meta)
         : (() => { throw new Error("ukendt type"); })();
       if (r.status === "ukendt") { ud.push({ id, ok: false, fejl: r.fejl }); continue; }
       // Står samme id to gange i én sending, gemmes det kun første gang
@@ -1068,12 +1179,12 @@ async function sync({ poster }) {
 // Færdig-markering fra Deadlines-siden. Afleveringer (fx Opgave 3) skrives i kolonnen "Afleveret" i fagets
 // afleveringstabel (der hvor køreplanen også læser dem); andre frister i Scripts/deadlines-status.json.
 const STATUS = path.join(S.DATA, "deadlines-status.json");
-function gemDeadline({ noegle, faerdig }) {
+function gemDeadline({ noegle, faerdig }, meta = {}) {
   noegle = String(noegle || "");
   const [fagKort, rest = ""] = noegle.split(/\|(.*)/s);
   const g = S.afleveringsNr(rest) === rest ? rest : null;
   if (!/^[\wÆØÅæøå]{1,12}$/.test(fagKort) || !(g || /^[a-z]+\|\d{0,2}$/.test(rest))) throw new Error("ukendt frist");
-  const dato = new Date(), iso = idagIso(dato);
+  const dato = dagFra(meta), iso = idagIso(dato);
   if (g) {
     const af = S.fraKort(fagKort)?.afleveringer ? S.fraKort(fagKort) : S.fagMed("afleveringer")[0];
     const f = path.join(ROD, af.mappe, af.afleveringer.mappe, "README.md");
@@ -1084,7 +1195,7 @@ function gemDeadline({ noegle, faerdig }) {
     const i = linjer.findIndex((l, j) => j > hovedIdx && celler(l)[0] === g);
     if (kol < 0 || i < 0) throw new Error(`${g} står ikke i statustabellen`);
     const c = celler(linjer[i]);
-    c[kol] = faerdig ? idag() : "";
+    c[kol] = faerdig ? idag(dato) : "";
     linjer[i] = række(c);
     skriv(f, linjer.join("\n"));
   } else {
@@ -1094,8 +1205,207 @@ function gemDeadline({ noegle, faerdig }) {
     if (faerdig) st[noegle] = { faerdig: iso };
     skriv(STATUS, JSON.stringify(st, null, 1) + "\n");
   }
-  logFoersoeg({ type: "deadline", noegle, faerdig: !!faerdig });
-  return { noegle, faerdig: faerdig ? (g ? idag() : iso) : null };
+  logFoersoeg({ type: "deadline", noegle, faerdig: !!faerdig, ...(meta.tid ? { tid: meta.tid, sync_id: meta.sync_id } : {}) });
+  return { noegle, faerdig: faerdig ? (g ? idag(dato) : iso) : null };
+}
+
+// ── selvstudie ───────────────────────────────────────────────────────
+// Stopuret og sessionerne på siden Selvstudie, i Scripts/sessioner.json (formatet står i sessioner.js). Serveren skriver
+// kun det, du trykker: start, pause, fortsæt, skift fag, stop og de sessioner, du selv tilføjer, retter eller sletter.
+// Stopuret står i filen, ikke i browseren, så det kan startes på Mac'en og stoppes på bærbaren.
+const SS = require("./sessioner");
+const pomodoroFor = () => ({ ...SS.POMODORO, ...(S.studiemaal()?.pomodoro || {}) });
+// Pomodoro, som du har valgt den i timeren: minutter pr. fokus, minutters pause og hvor mange fokus (antal er valgfrit;
+// uden det kører Pomodoro, til du stopper). true giver standarden fra fag.json eller sessioner.js.
+function pomodoroFra(valg) {
+  if (!valg) return null;
+  const std = pomodoroFor(), x = valg === true ? {} : valg;
+  const tal = (v, lo, hi, d) => { if (v == null) return d; v = Math.round(+v); if (!(v >= lo && v <= hi)) throw new Error("ugyldig Pomodoro"); return v; };
+  const antal = tal(x.antal, 1, 12, std.antal ?? null);
+  return { arbejde: tal(x.arbejde, 5, 180, std.arbejde), pause: tal(x.pause, 1, 60, std.pause), ...(antal ? { antal } : {}) };
+}
+const nySessionId = () => `s-${crypto.randomBytes(6).toString("hex")}`;
+const tidspunkt = t => S.lokalTid(new Date(t));
+const kl = t => { const d = new Date(t); return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; };
+const SESSIONER_OM = "Selvstudiet fra stopuret på siden Selvstudie og det, du selv har tilføjet der (formatet står i Scripts/sessioner.js). Studie-serveren skriver filen; ret den gennem siden.";
+// Én session pr. linje, så en ændring er let at se i git. Kun de seneste afviste forslag gemmes; ældre kommer ikke igen.
+function gemSessioner(d) {
+  skriv(SS.FIL, `{\n "_om": ${JSON.stringify(SESSIONER_OM)},\n "fra": ${JSON.stringify(d.fra || idagIso())},\n "igang": ${JSON.stringify(d.igang)},\n`
+    + ` "afviste": ${JSON.stringify((d.afviste || []).slice(-200))},\n`
+    + ` "sessioner": [\n${d.sessioner.map(s => `  ${JSON.stringify(s)}`).join(",\n")}\n ]\n}\n`);
+  eksporterSnart();
+}
+// Dine svar i loggen, som forslagene regnes ud fra: drills hører til faget med kode, resten til fagets id forrest i nøglen
+// (som rytmen i eksporten). Færdig-markeringer og andet, der ikke er et svar, tæller ikke.
+const SVAR_TYPER = { genkald: "Genkald", begreb: "Begreber", overhoer: "Begreber", drill: "Drills", "drill-rep": "Drills", eksamen: "Eksamen" };
+function svarTider() {
+  const kodefag = S.fagMed("kode")[0]?.id || null;
+  return logPoster().filter(p => SVAR_TYPER[p.type] && Date.parse(p.tid) > 0).map(p => ({ t: Date.parse(p.tid), type: SVAR_TYPER[p.type],
+    fag: /^drill/.test(p.type) ? kodefag : String(p.noegle || "").split("/")[0] })).filter(x => S.find(x.fag));
+}
+const forslagUd = (d, nu) => SS.forslag(svarTider(), d, nu).map(f => ({ ...f, start: tidspunkt(f.start), slut: tidspunkt(f.slut),
+  dele: f.dele.map(x => ({ fag: x.fag, kort: kort(x.fag), timer: Math.round(x.timer * 100) / 100, stykker: x.stykker.map(st => st.map(tidspunkt)) })) }));
+// Til siden: stopuret, dagens loggede tid uden det, der kører, og sessionerne de seneste 14 dage (nyeste først)
+function stopur(nu = Date.now()) {
+  const d = SS.læs(), r2 = x => Math.round(x * 100) / 100, dag = s => S.isoDato(new Date(SS.start(s)));
+  const idag = S.isoDato(new Date(nu)), fra = S.isoDato(S.plusDage(new Date(nu), -13));
+  return { nu: tidspunkt(nu), fra: d.fra, maal: S.studiemaal()?.dag_timer ?? null, pomodoro: pomodoroFor(),
+    fag: S.fag().map(f => ({ id: f.id, kort: f.kort, farve: f.farve })),
+    igang: d.igang && { ...d.igang, kort: kort(d.igang.fag) }, forslag: forslagUd(d, nu), forslag_regler: SS.FORSLAG,
+    i_dag: r2(d.sessioner.filter(s => dag(s) === idag).reduce((a, s) => a + SS.timer(s), 0)),
+    sessioner: d.sessioner.filter(s => dag(s) >= fra).sort((a, b) => Date.parse(SS.start(b)) - Date.parse(SS.start(a))).map(s => ({
+      id: s.id, fag: s.fag, kort: kort(s.fag), start: SS.start(s), slut: SS.slut(s), timer: r2(SS.timer(s)),
+      pause_min: Math.round((Date.parse(SS.slut(s)) - Date.parse(SS.start(s))) / 6e4 - SS.timer(s) * 60), kilde: s.kilde, pomodoro: !!s.pomodoro,
+      aktivitet: s.aktivitet || null, note: s.note || null })),
+    // De aktiviteter, du har skrevet før, nyeste først, som forslag i timerens Gem session
+    aktiviteter: [...new Set([...d.sessioner].reverse().map(s => s.aktivitet).filter(Boolean))].slice(0, 12) };
+}
+// Aktivitet (fx "Øvelser") og note er valgfri tekst, du selv skriver, når du gemmer eller retter en session
+function fritekst(v, max, navn) {
+  v = String(v ?? "").replace(/\r\n?/g, "\n").trim();
+  if (v.length > max) throw new Error(`${navn} er for lang`);
+  return v;
+}
+const tekster = (aktivitet, note) => ({ aktivitet: fritekst(aktivitet, 60, "aktiviteten"), note: fritekst(note, 1000, "noten") });
+// Stykkerne efter dine rettelser: starten og slutningen flyttes, og pauserne bliver, hvor de er. Retter du pausen (minutter i
+// alt), lægges den midt i sessionen, fordi Kompas ikke ved, hvornår du holdt den. Tider i ms.
+function rettStykker(gamle, a, b, pauseMin) {
+  if (!(a < b)) throw new Error("slut skal ligge efter start");
+  if (b - a > 16 * 36e5) throw new Error("en session kan højst vare 16 timer");
+  let ms = gamle.map(([x, y]) => [Math.max(Date.parse(x), a), Math.min(Date.parse(y), b)]).filter(([x, y]) => y > x);
+  if (ms.length) { ms[0][0] = a; ms.at(-1)[1] = b; } else ms = [[a, b]];
+  const pause = Math.round((b - a - ms.reduce((t, [x, y]) => t + y - x, 0)) / 6e4);
+  if (pauseMin != null && pauseMin !== "" && Math.round(+pauseMin) !== pause) {
+    const p = Math.round(+pauseMin) * 6e4;
+    if (!(p >= 0 && p < b - a)) throw new Error("pausen skal være kortere end sessionen");
+    const midt = a + (b - a - p) / 2;
+    ms = p ? [[a, midt], [midt + p, b]] : [[a, b]];
+  }
+  return ms;
+}
+// Kun stykkerne må ikke overlappe; en session fra et forslag kan ligge i pauserne i en anden
+function tjekOverlap(d, ms, undtagen, nu) {
+  const over = [...d.sessioner.filter((_, j) => j !== undtagen), ...(d.igang ? [d.igang] : [])]
+    .find(s => s.stykker.some(st => ms.some(([x, y]) => Date.parse(st[0]) < y && SS.slutFor(st, s.pomodoro, nu) > x)));
+  if (over) throw new Error(`overlapper med ${kort(over.fag)} ${kl(SS.start(over))}–${SS.slut(over) ? kl(SS.slut(over)) : "nu"}`);
+}
+function gemStopur({ handling, fag, pomodoro, start, slut, pause_min, aktivitet, note } = {}, nu = Date.now()) {
+  const d = SS.læs(), g = d.igang, sidste = g?.stykker.at(-1), åben = !!sidste && !sidste[1];
+  // Et åbent stykke lukkes, hvor det slutter (med Pomodoro efter arbejde-minutterne), dog senest t
+  const luk = (t = nu) => { if (åben) sidste[1] = tidspunkt(Math.min(SS.slutFor(sidste, g.pomodoro, nu), t)); };
+  let besked = null;
+  if (handling === "start") {
+    if (g) throw new Error("stopuret kører allerede");
+    if (!S.find(fag)) throw new Error("ukendt fag");
+    d.igang = { id: nySessionId(), fag, pomodoro: pomodoroFra(pomodoro), stykker: [[tidspunkt(nu), null]] };
+  } else if (!g) throw new Error("stopuret kører ikke");
+  else if (handling === "pause") { if (!åben) throw new Error("stopuret holder allerede pause"); luk(); }
+  else if (handling === "fortsaet") {
+    // Med Pomodoro kan det næste stykke startes, når det forrige er udløbet, også uden at der er trykket pause
+    if (åben && SS.slutFor(sidste, g.pomodoro, nu) >= nu) throw new Error("stopuret kører allerede");
+    if (g.pomodoro?.antal && g.stykker.length >= g.pomodoro.antal) throw new Error("alle Pomodoros er færdige; stop og gem");
+    luk(); g.stykker.push([tidspunkt(nu), null]);
+  } else if (handling === "skift") { if (!S.find(fag)) throw new Error("ukendt fag"); g.fag = fag; }
+  else if (handling === "annuller") d.igang = null;
+  else if (handling === "stop") {
+    // Gem session i timeren kan rette starten, slutningen (du stoppede tidligere, men glemte at trykke stop; intet efter
+    // det tidspunkt tæller), pausen og faget og give en aktivitet og en note med
+    let t = nu;
+    if (slut != null) { t = Date.parse(slut); if (!(t > Date.parse(start ?? SS.start(g)) && t <= nu)) throw new Error("sluttiden skal ligge mellem starten og nu"); }
+    if (fag != null && !S.find(fag)) throw new Error("ukendt fag");
+    const tx = tekster(aktivitet, note);
+    luk(t);
+    const lukket = g.stykker.map(([a, b]) => [a, Date.parse(b) > t ? tidspunkt(t) : b]).filter(([a, b]) => Date.parse(b) > Date.parse(a));
+    let ms = start != null || (pause_min != null && pause_min !== "")
+      ? rettStykker(lukket, start != null ? Date.parse(start) : Date.parse(lukket[0]?.[0] ?? SS.start(g)), t, pause_min)
+      : lukket.map(([a, b]) => [Date.parse(a), Date.parse(b)]);
+    // Stykker under et minut (fx en pause, der blev fortrudt med det samme) tæller ikke
+    ms = ms.filter(([a, b]) => b - a >= 6e4);
+    d.igang = null;
+    if (ms.length) {
+      tjekOverlap(d, ms, -1, nu);
+      d.sessioner.push({ id: g.id, fag: fag ?? g.fag, stykker: ms.map(([a, b]) => [tidspunkt(a), tidspunkt(b)]), kilde: "stopur",
+        ...(g.pomodoro ? { pomodoro: g.pomodoro } : {}), ...(tx.aktivitet ? { aktivitet: tx.aktivitet } : {}), ...(tx.note ? { note: tx.note } : {}) });
+      d.sessioner.sort((x, y) => Date.parse(SS.start(x)) - Date.parse(SS.start(y)));
+    } else besked = "Under et minut, så intet er gemt.";
+  } else throw new Error("ukendt handling");
+  gemSessioner(d);
+  return { ...stopur(nu), besked };
+}
+// En session, du tilføjer bagefter (uden id), retter (fag, start, slut, pause, aktivitet og note) eller sletter (slet: true)
+function gemSession({ id, fag, start, slut, pause_min, aktivitet, note, slet } = {}, nu = Date.now()) {
+  const d = SS.læs(), i = id ? d.sessioner.findIndex(s => s.id === id) : -1;
+  if (id && i < 0) throw new Error("sessionen findes ikke");
+  if (slet) {
+    if (i < 0) throw new Error("sessionen findes ikke");
+    d.sessioner.splice(i, 1); gemSessioner(d); return stopur(nu);
+  }
+  if (!S.find(fag)) throw new Error("ukendt fag");
+  const a = Date.parse(start), b = Date.parse(slut);
+  if (b > nu + 5 * 6e4) throw new Error("sessionen kan ikke slutte ude i fremtiden");
+  const ms = rettStykker(i >= 0 ? d.sessioner[i].stykker : [], a, b, pause_min), tx = tekster(aktivitet, note);
+  tjekOverlap(d, ms, i, nu);
+  const stykker = ms.map(([x, y]) => [tidspunkt(x), tidspunkt(y)]);
+  const s = i >= 0 ? { ...d.sessioner[i], fag, stykker, rettet: tidspunkt(nu) } : { id: nySessionId(), fag, stykker, kilde: "tilføjet" };
+  // Aktivitet og note sendes kun fra formularer, der har dem; uden feltet bliver de stående
+  for (const k of ["aktivitet", "note"]) if ((k === "aktivitet" ? aktivitet : note) !== undefined) { if (tx[k]) s[k] = tx[k]; else delete s[k]; }
+  if (i >= 0) d.sessioner[i] = s; else d.sessioner.push(s);
+  d.sessioner.sort((x, y) => Date.parse(SS.start(x)) - Date.parse(SS.start(y)));
+  gemSessioner(d);
+  return stopur(nu);
+}
+
+// Dine mål fra Indstillinger på Selvstudie: dagsmålet i timer, de ugedage det gælder (0 = mandag … 6 = søndag) og medaljernes
+// grænser. Gemmes i Scripts/studiemaal.json, som går forud for studiemaal i fag.json (semester.js).
+function gemStudiemaal({ dag_timer, dage, medaljer } = {}) {
+  const t = (v, lo, hi, navn) => { v = Math.round(+v * 100) / 100; if (!(v >= lo && v <= hi)) throw new Error(`${navn} skal være mellem ${lo} og ${hi} timer`); return v; };
+  if (!Array.isArray(dage) || !dage.length || dage.some(x => !Number.isInteger(x) || x < 0 || x > 6)) throw new Error("vælg mindst én dag");
+  const m = { bronze: t(medaljer?.bronze, 0.25, 16, "bronze"), soelv: t(medaljer?.soelv, 0.25, 16, "sølv"), guld: t(medaljer?.guld, 0.25, 16, "guld") };
+  if (!(m.bronze < m.soelv && m.soelv < m.guld)) throw new Error("bronze skal være under sølv, og sølv under guld");
+  const ny = { _om: "Dine mål fra Indstillinger på siden Selvstudie (Studie-serveren skriver filen); går forud for studiemaal i fag.json.",
+    dag_timer: t(dag_timer, 0.25, 12, "dagsmålet"), dage: [...new Set(dage)].sort(), medaljer: m, rettet: tidspunkt(Date.now()) };
+  skriv(S.MAAL_FIL, JSON.stringify(ny, null, 1) + "\n");
+  eksporterSnart();
+  return { studiemaal: S.studiemaal() };
+}
+
+// Fremmøde: en undervisningsgang, du markerer på Selvstudie, at du ikke var til (eller alligevel var til). id er
+// "<kursuskode>|<dato>T<start>", som eksporten giver gangene. Gemmes i Scripts/fremmoede.json; eksporten trækker dem fra.
+const FREMMOEDE = path.join(S.DATA, "fremmoede.json");
+// Til Ugeoverblik: de gange, du har markeret, og de slags undervisning, du aldrig bruger (bruges_ikke i fravaer.json, med
+// fagets kursuskode), som ikke kan markeres, fordi de ikke tæller
+function fremmoede() {
+  let d = {}; try { d = JSON.parse(læs(FREMMOEDE)); } catch (e) { if (e.code !== "ENOENT") throw e; }
+  let fj = {}; try { fj = JSON.parse(læs(path.join(S.DATA, "fravaer.json"))); } catch { /* ingen */ }
+  const bruges_ikke = (fj.bruges_ikke || []).flatMap(x => S.fag().filter(f => !x.fag || [f.kort, ...(f.alias || []), f.id].some(n => n.toLowerCase() === String(x.fag).toLowerCase()))
+    .filter(f => f.kursuskode).map(f => ({ kode: f.kursuskode, art: x.art ?? null, form: x.form ?? null })));
+  return { ikke: d.ikke || [], bruges_ikke };
+}
+function gemFremmoede({ id, til_stede } = {}) {
+  id = String(id || "");
+  const m = id.match(/^([A-Z0-9]{4,16})\|(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})$/);
+  if (!m || !S.fag().some(f => f.kursuskode === m[1]) || isNaN(Date.parse(`${m[2]}T${m[3]}`))) throw new Error("ukendt undervisningsgang");
+  let d = {}; try { d = JSON.parse(læs(FREMMOEDE)); } catch (e) { if (e.code !== "ENOENT") throw e; }
+  const ikke = new Set(d.ikke || []);
+  if (til_stede) ikke.delete(id); else ikke.add(id);
+  skriv(FREMMOEDE, JSON.stringify({ _om: "Undervisningsgange, du ikke var til, som du har markeret under Fremmøde på Selvstudie (Studie-serveren skriver filen). Kursuskode|dato og start.",
+    ikke: [...ikke].sort() }, null, 1) + "\n");
+  eksporterSnart();
+  return { id, til_stede: !!til_stede, ...fremmoede() };
+}
+
+// Et forslag godkendt (gem: én session pr. fag) eller afvist (kommer ikke igen). Forslaget regnes igen her, så det kun
+// gemmes, som det står nu.
+function gemForslag({ id, handling } = {}, nu = Date.now()) {
+  const d = SS.læs(), f = forslagUd(d, nu).find(x => x.id === id);
+  if (!f) throw new Error("forslaget findes ikke længere");
+  if (handling === "gem") {
+    for (const x of f.dele) d.sessioner.push({ id: nySessionId(), fag: x.fag, stykker: x.stykker, kilde: "forslag" });
+    d.sessioner.sort((x, y) => Date.parse(SS.start(x)) - Date.parse(SS.start(y)));
+  } else if (handling === "afvis") d.afviste = [...d.afviste, id];
+  else throw new Error("ukendt handling");
+  gemSessioner(d);
+  return stopur(nu);
 }
 
 // ── http ─────────────────────────────────────────────────────────────
@@ -1103,7 +1413,7 @@ function gemDeadline({ noegle, faerdig }) {
 // står i den mappe (navnet sammenlignes med mappens liste, så ../ og andre mapper aldrig kan nås), og kun læsning.
 // Øvelsessæt kommer også som markdown (.md); de vises som ren tekst, så browseren åbner dem i stedet for at hente dem.
 const PENSUM_TYPER = { ".pdf": "application/pdf", ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation", ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  ".md": "text/plain; charset=utf-8" };
+  ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", ".md": "text/plain; charset=utf-8" };
 function sendPensum(res, sti) {
   const [fag, mappe, fil] = sti.split("/").slice(2).map(s => decodeURIComponent(s).normalize("NFC"));
   const m = fagMappe(fag), nfc = s => s.normalize("NFC");
@@ -1147,11 +1457,14 @@ const server = http.createServer(async (req, res) => {
       if (sti === "/usb-vurdering") return send(res, 200, usbVurdering());
       if (sti === "/eksamen") return send(res, 200, eksamenListe());
       if (sti === "/eksamen/niveauer") return send(res, 200, eksamenNiveauer());
+      if (sti === "/eksamen/uger") return send(res, 200, eksamenUger());
       if (sti === "/eksamen/saet") { const f = eksFil(url.searchParams.get("fag"), url.searchParams.get("id")); return send(res, 200, parseEksamen(læs(f))); }
       // Facit kun på opfordring: ét nummer under øvelse, alle efter en afleveret prøveeksamen
       if (sti === "/eksamen/facit") { const fag = url.searchParams.get("fag"), id = url.searchParams.get("id"), nr = url.searchParams.get("nr"); eksFil(fag, id);
         const alle = eksFacitAlle(fag, id); return send(res, 200, nr ? { facit: alle[+nr] || null } : { facit: alle }); }
       if (sti.startsWith("/pensum/")) return sendPensum(res, sti);
+      if (sti === "/stopur") return send(res, 200, stopur());
+      if (sti === "/fremmoede") return send(res, 200, fremmoede());
       if (sti === "/pakke") return send(res, 200, await pakke());
       if (sti === "/repetition/svar") return send(res, 200, await repetitionSvar(url.searchParams.get("noegle") || ""));
       return send(res, 404, { fejl: "ikke fundet" });
@@ -1174,6 +1487,11 @@ const server = http.createServer(async (req, res) => {
     if (sti === "/drill") return send(res, 200, await gemDrill(d));
     if (sti === "/sync") return send(res, 200, await sync(d));
     if (sti === "/deadline") return send(res, 200, gemDeadline(d));
+    if (sti === "/stopur") return send(res, 200, gemStopur(d));
+    if (sti === "/session") return send(res, 200, gemSession(d));
+    if (sti === "/forslag") return send(res, 200, gemForslag(d));
+    if (sti === "/studiemaal") return send(res, 200, gemStudiemaal(d));
+    if (sti === "/fremmoede") return send(res, 200, gemFremmoede(d));
     return send(res, 404, { fejl: "ikke fundet" });
   } catch (e) {
     return send(res, 400, { fejl: fejltekst(e) });

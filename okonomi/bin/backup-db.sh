@@ -1,7 +1,8 @@
 #!/bin/zsh
 # Dumps the Sure database to $SURE_BACKUP/sure-YYYY-MM-DD.dump (one per day, newest 30 kept). Point SURE_BACKUP
 # at a folder that is synced off the machine (OneDrive, iCloud ...).
-# Run by kompas-stop.sh before the VM is stopped. Log: dashboard/backup.log
+# Run by $KOMPAS_HOME/bin/backup-data.sh: once a day from the update (~/.kompas/opdater.log), 2 min after Kompas.app
+# starts (dashboard/backup.log), and by kompas-stop.sh before the VM is stopped.
 #
 # Restore (overwrites the current database):
 #   docker compose up -d db
@@ -22,8 +23,10 @@ docker compose exec -T db pg_dump -U sure_user -d sure_production -Fc > "$tmp"
 docker compose exec -T db pg_restore --list < "$tmp" >/dev/null
 mv "$tmp" "$file"
 
-# Keep the newest $KEEP daily dumps; only ever touches files named sure-YYYY-MM-DD.dump in $DEST
-ls -1 "$DEST" | grep -E '^sure-[0-9]{4}-[0-9]{2}-[0-9]{2}\.dump$' | sort -r | tail -n +$((KEEP + 1)) | while read -r old; do
+# Keep the newest $KEEP daily dumps; only ever touches files named sure-YYYY-MM-DD.dump in $DEST. Under launchd
+# (the daily update via backup-data.sh) macOS may allow writing to a cloud folder but neither listing nor deleting,
+# so the cleanup is skipped there and happens when Kompas.app runs this.
+{ ls -1 "$DEST" | grep -E '^sure-[0-9]{4}-[0-9]{2}-[0-9]{2}\.dump$' | sort -r | tail -n +$((KEEP + 1)) | while read -r old; do
   rm -f "$DEST/$old"
-done
+done } 2>/dev/null || true
 echo "$(date '+%F %T') backup $(basename "$file") ($(du -h "$file" | cut -f1))"

@@ -70,6 +70,16 @@ tjek("står stille: Mac i dag, ukendt og sjælden enhed vises ikke", !/Mac · |U
 render({ studie: studie([]), sprog: { kort: [], sidst_svar: før(30) }, genkald: { kort: [], statistik: { sidst_svar: før(30) } } });
 tjek("står stille: intet venter, ingen linje", !/Står stille/.test(root()), root());
 
+// ── Selvstudie: forslag fra Studie og Sprog, der venter (stopuret står i rammen, ikke her) ──
+{
+  const start = new Date(Date.now() - 42 * 6e4).toISOString();
+  render({ studie: studie([]), stopur: { igang: { kort: "Alfa", pomodoro: null, stykker: [[start, null]] }, forslag: [{ id: "f-1" }] }, sprogtid: { forslag: [{ id: "f-2" }] } });
+  const linje = (root().match(/Selvstudie:<\/span>(.*?)<\/div>/) || [, ""])[1];
+  tjek("selvstudie: forslagene fra begge servere tælles sammen, og stopuret står ikke her", /2 forslag venter/.test(linje) && !/Alfa/.test(linje), linje);
+  render({ studie: studie([]), stopur: { igang: null, forslag: [] } });
+  tjek("selvstudie: intet venter, ingen linje", !/Selvstudie:<\/span>/.test(root()));
+}
+
 // ── Skal tjekkes: forbindelser med fejl eller advarsel fra forbindelser.json, fejl først ──
 const forbindelser = { grupper: [
   { titel: "Claude", punkter: [{ navn: "Sprog", type: "Claude-rutine", status: "advarsel", tekst: "nye sprogkort og ugens tekst · slået fra" }, { navn: "Studie", type: "Claude-rutine", status: "ok", tekst: "køreplan" }] },

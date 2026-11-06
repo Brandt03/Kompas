@@ -8,7 +8,7 @@ byg på den, så tallene på siderne er regnet af den rigtige kode:
   måned til Kroppen i tal), perioder.json, oversigt.json og kompas.json.
 
 Kun rådata (Garmin med døgnets og nattens kurver, Hevy, kalender med studieblokke, et lille Sure-udtræk og et
-Skærmtid- og Studie-udtræk i samme form som de rigtige), periodernes vurderinger og ugereviewenes tekst er
+Skærmtid- og Studie-udtræk og selvstudiets sessioner i samme form som de rigtige), periodernes vurderinger og ugereviewenes tekst er
 opdigtet her; teksterne bygger på de tal, koden har regnet. Byg-vejen i begge projekter bruger kun
 standardbiblioteket, så modulet kræver ingen af garmin-coach' tredjepartspakker (mcp, garminconnect, icalendar).
 Uret fryses til `idag` kl. 7 under byg (Python og SQLite), så alt følger `idag`. Intet skrives uden for `ud` og
@@ -42,7 +42,7 @@ ZONER = {1: 124, 2: 138, 3: 153, 4: 167, 5: 182}
 
 # Pladsholderfag i samme form som titlerne fra universitetets skema: "Alfa – lorem ipsum (A) - KURS101.A -
 # Lecture (On Campus)". garmin-coach genkender dem som undervisning, og første ord bestemmer faget i Kompas.
-# (navn, kode, hold, kort navn i CalTask)
+# (navn, kode, hold, kort navn)
 FAG = [
     ("Alfa – lorem ipsum", "KURS101", "A", "Alfa"),
     ("Beta – dolor sit amet", "KURS102", "B", "Beta"),
@@ -58,11 +58,11 @@ SKEMA = {
     3: [(ALFA, "08:15", "10:00", "Lecture", "Online"), (BETA, "13:00", "14:45", "Lecture", "On Campus")],
     4: [(GAMMA, "08:15", "10:00", "Supervision", "On Campus"), (GAMMA, "13:00", "14:45", "Lecture", "On Campus")],
 }
-# Selvstudie, som CalTask logger det: ugedag -> (fag, start, varighed i timer)
+# Selvstudie, som det bliver logget: ugedag -> (fag, start, varighed i timer)
 SELVSTUDIE = {0: (ALFA, "08:15", 1.5), 2: (GAMMA, "12:45", 2.0), 3: (BETA, "10:30", 1.5), 6: (GAMMA, "13:00", 2.0)}
 SELVSTUDIE_TUNG = {1: (BETA, "15:15", 3.0), 2: (GAMMA, "19:00", 2.0), 4: (ALFA, "10:30", 2.5), 5: (ALFA, "11:00", 3.0)}
 # Studieblokke fra Kompas' studieplan (mærket #kompas-plan i kalenderen, plan_blok = 1): ugedag -> (fag, start, slut,
-# hvad). Dagene uden fast selvstudie i CalTask bliver tit glippet, og de to døgn før i går er altid glippet, så I dag
+# hvad). Dagene uden fast selvstudie bliver tit glippet, og de to døgn før i går er altid glippet, så I dag
 # har noget at vise under Står stille.
 PLAN = {0: (ALFA, "08:15", "10:00", "fagnoter"), 1: (BETA, "15:00", "16:45", "øvelser"),
         2: (GAMMA, "12:45", "14:45", "læsning"), 3: (BETA, "10:15", "12:00", "fagnoter"),
@@ -250,7 +250,8 @@ def _undervisning_og_kalender(tl: Tidslinje, rng: random.Random) -> list[tuple]:
             tilfoej(f"skema-{d}-{i}", _hm(d, a), _hm(d, b), titel)
         d += timedelta(days=1)
 
-    # Selvstudie logget i CalTask: kun sessioner, der er slut, når siden bygges
+    # Selvstudiet: kun sessioner, der er slut, når siden bygges. De står i kalenderen som CalTasks gamle begivenheder,
+    # som garmin-coach' perioder læser; overblik springer dem over og læser dem fra sessionerne (_sessioner_udtraek).
     nu = datetime.combine(tl.idag, KL)
     d = tl.selvstudie_fra
     while d <= tl.idag:
@@ -892,6 +893,22 @@ def _skaermtid_udtraek(sti: Path, tl: Tidslinje, rng: random.Random) -> None:
     sti.write_text(json.dumps({"dage": dage}, ensure_ascii=False))
 
 
+def _sessioner_udtraek(sti: Path, tl: Tidslinje) -> None:
+    """Studies eksport af selvstudiets sessioner (sessioner.json), lavet ud fra de samme sessioner som kalenderen. De
+    lange har en pause på ti minutter midt i: to stykker, og pausen tæller ikke."""
+    zone = lambda t: t.replace(tzinfo=DK).isoformat(timespec="minutes")  # noqa: E731
+    sessioner = []
+    for uid, s, e, titel, _ in tl.kalender:
+        if uid.startswith("caltask-"):
+            kort = titel.removeprefix("Selvstudie · ")
+            midt = s + (e - s) / 2
+            stykker = [(s, midt - timedelta(minutes=5)), (midt + timedelta(minutes=5), e)] if e - s >= timedelta(hours=1.5) else [(s, e)]
+            sessioner.append({"id": f"s-{s.date()}", "fag": kort.lower(), "kort": kort,
+                              "stykker": [[zone(a), zone(b)] for a, b in stykker]})
+    sti.write_text(json.dumps({"genereret": zone(datetime.combine(tl.idag, KL)), "fra": tl.selvstudie_fra.isoformat(),
+                               "sessioner": sessioner}, ensure_ascii=False))
+
+
 def _studie_udtraek(sti: Path, tl: Tidslinje, rng: random.Random) -> None:
     """Et Studie-udtræk (studie.json) med det, overblik læser: svar pr. dag i Træning og På farten pr. fag."""
     fag = []
@@ -1001,7 +1018,7 @@ AABNING = {
              "Sidste hele periode før studiestart, med fokus på at holde fast i rytmen."],
     "start": ["Studiestarten fyldte: nye skemaer, tidlige morgener og lidt kortere nætter."],
     "under": ["Undervisningen kører nu i fast rytme, og træningen har fundet sin plads omkring den.",
-              "Anden periode med undervisning. Selvstudiet logges nu i CalTask, så studietiden kan ses ved siden "
+              "Anden periode med undervisning. Selvstudiet logges nu, så studietiden kan ses ved siden "
               "af træning og søvn."],
 }
 
@@ -1248,12 +1265,14 @@ def lav(ud: Path, idag: date) -> None:
             # overblik: ugetabel, tre reviews og liv.json, læst fra den opdigtede database
             sure = tmp / "sure.json"
             _sure_udtraek(sure, tl, rng)
-            skaerm, studie = tmp / "skaermtid.json", tmp / "studie.json"
+            skaerm, studie, sessioner = tmp / "skaermtid.json", tmp / "studie.json", tmp / "sessioner.json"
             _skaermtid_udtraek(skaerm, tl, rng)
             _studie_udtraek(studie, tl, rng)
+            _sessioner_udtraek(sessioner, tl)
             for mod, felt, v in ((m.liv_config, "GARMIN_DB", coach_db), (m.liv_config, "SURE_JSON", sure),
                                  (m.liv_config, "SITE_DIR", mappe),
                                  (m.liv_config, "SKAERMTID_JSON", skaerm), (m.liv_config, "STUDIE_JSON", studie), (m.liv_config, "BELASTNING_JSON", mappe / "belastning.json"),
+                                 (m.liv_config, "SESSIONER_JSON", sessioner),
                                  (m.liv_config, "FOERSTE_UGE", tl.start.isoformat()),
                                  (m.liv_config, "SELVSTUDIE_FRA", tl.selvstudie_fra.isoformat()),
                                  (m.liv_config, "SELVSTUDIE_PRAEFIKS", "Selvstudie ·"),

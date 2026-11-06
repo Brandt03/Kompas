@@ -134,6 +134,77 @@
     }
     .topbar b { font-size: 15px; font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   }
+
+  /* Timer: knappen under Frister, menuen ved siden af og tælleren øverst over siden */
+  .timer-tid { margin-left: auto; font-size: 12.5px; font-variant-numeric: tabular-nums; color: var(--text-primary); }
+  .item.timer-koerer { color: var(--text-primary); }
+  .tm-pop {
+    position: fixed; z-index: 40; width: 300px; max-width: calc(100vw - 24px); padding: 12px; border-radius: 14px;
+    background: var(--container); box-shadow: var(--shadow-border-xs), 0 12px 40px rgba(0,0,0,.22); font-size: 13.5px; color: var(--text-primary);
+  }
+  .tm-pop[hidden], .tm-pille[hidden] { display: none; }
+  .tm-pop h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 14px; font-weight: 600; }
+  .tm-pop .lbl { font-size: 12px; color: var(--text-secondary); margin: 10px 0 4px; }
+  .tm-seg { display: flex; background: var(--surface-inset); border-radius: 10px; padding: 3px; gap: 2px; }
+  .tm-seg button { flex: 1; border: 0; background: none; font: inherit; font-size: 13px; color: var(--text-secondary); padding: 6px 8px; border-radius: 8px; cursor: pointer; white-space: nowrap; }
+  .tm-seg button[aria-pressed="true"] { background: var(--container); color: var(--text-primary); font-weight: 500; box-shadow: var(--shadow-border-xs); }
+  .tm-seg button.tm-pm { flex: none; width: 30px; }
+  .tm-to { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .tm-to .tm-seg span { flex: 1; text-align: center; align-self: center; font-variant-numeric: tabular-nums; }
+  .tm-fag { list-style: none; margin: 12px 0 0; padding: 10px 0 0; border-top: 1px solid var(--divider); display: grid; gap: 2px; }
+  .tm-fag button { display: flex; align-items: center; gap: 10px; width: 100%; border: 0; background: none; font: inherit; font-size: 14px; color: var(--text-primary);
+    padding: 7px 8px; border-radius: 8px; cursor: pointer; text-align: left; }
+  .tm-fag button:hover { background: var(--surface-hover); }
+  .tm-fag .ic { margin-left: auto; color: var(--text-secondary); }
+  .tm-sw { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+  .tm-knapper { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .tm-knap { display: inline-flex; align-items: center; gap: 6px; border: 0; font: inherit; font-size: 13.5px; font-weight: 500; padding: 8px 12px; border-radius: 9px; cursor: pointer;
+    background: var(--nav-indicator); color: var(--container); }
+  .tm-knap.ghost { background: var(--container); color: var(--text-primary); box-shadow: var(--shadow-border-xs); }
+  .tm-knap.quiet { background: none; color: var(--text-secondary); padding: 8px 6px; }
+  .tm-knap:hover { opacity: .88; }
+  .tm-pop select, .tm-pop input { font: inherit; font-size: 13px; color: var(--text-primary); background: var(--container); border: 0; box-shadow: var(--shadow-border-xs); border-radius: 8px; padding: 6px 8px; }
+  .tm-advar { margin-top: 10px; padding: 8px 10px; border-radius: 10px; background: var(--warning-tint); font-size: 12.5px; display: grid; gap: 6px; }
+  .tm-fejl { color: var(--destructive); font-size: 12.5px; margin-top: 8px; }
+  .tm-link { display: inline-block; margin-top: 10px; color: var(--text-secondary); font-size: 12.5px; }
+  .tm-pille {
+    position: fixed; z-index: 15; top: 10px; left: calc(var(--side-w) + (100vw - var(--side-w)) / 2); transform: translateX(-50%);
+    display: flex; align-items: center; gap: 8px; padding: 5px 6px 5px 5px; border-radius: 999px; font-size: 14px; white-space: nowrap;
+    background: var(--container); box-shadow: var(--shadow-border-xs), 0 6px 24px rgba(0,0,0,.18); color: var(--text-primary);
+  }
+  .tm-pille.tm-skift { animation: tm-skift 1.6s ease-out 2; }
+  @keyframes tm-skift { 0% { box-shadow: var(--shadow-border-xs), 0 6px 24px rgba(0,0,0,.18), 0 0 0 0 var(--nav-indicator); }
+    30% { box-shadow: var(--shadow-border-xs), 0 6px 24px rgba(0,0,0,.18), 0 0 0 6px color-mix(in srgb, var(--nav-indicator) 35%, transparent); }
+    100% { box-shadow: var(--shadow-border-xs), 0 6px 24px rgba(0,0,0,.18), 0 0 0 14px transparent; } }
+  .tm-pille .tm-stor { width: 32px; height: 32px; border-radius: 50%; border: 0; display: grid; place-items: center; cursor: pointer; background: var(--nav-indicator); color: var(--container); }
+  .tm-pille .tm-lys { width: 8px; height: 8px; border-radius: 50%; background: var(--success); flex: none; }
+  .tm-pille .tm-lys.pause { background: var(--warning); }
+  .tm-pille b { font-variant-numeric: tabular-nums; font-weight: 600; padding-left: 8px; border-left: 1px solid var(--divider); }
+  .tm-pille .icon-btn { width: 30px; height: 30px; }
+  @media (max-width: 899px) { .tm-pille { left: 50%; top: calc(env(safe-area-inset-top) + 58px); } }
+  .group[data-timer] { margin-top: 1px !important; }
+  .group[data-timer] li { position: relative; }
+  .timer-hurtig { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); width: 28px; height: 28px; }
+  .timer-hurtig[hidden] { display: none; }
+  /* Gem session: når du stopper timeren */
+  .tm-dialog { width: min(440px, calc(100vw - 24px)); padding: 18px; border: 0; border-radius: 16px; background: var(--container); color: var(--text-primary);
+    box-shadow: var(--shadow-border-xs), 0 20px 60px rgba(0,0,0,.3); font-size: 14px; }
+  .tm-dialog::backdrop { background: rgba(0,0,0,.35); }
+  .tm-dialog .hoved { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
+  .tm-dialog h2 { margin: 0; font-size: 18px; font-weight: 600; }
+  .tm-dialog .kasser { border: 0; background: none; font: inherit; font-size: 13px; color: var(--destructive); cursor: pointer; padding: 4px; }
+  .tm-felter { display: grid; gap: 8px; }
+  .tm-raekke { display: grid; gap: 8px; grid-template-columns: repeat(var(--n, 2), minmax(0, 1fr)); }
+  .tm-felt { display: grid; gap: 3px; padding: 8px 10px; border-radius: 10px; background: var(--surface-inset); font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+  .tm-felt input, .tm-felt select, .tm-felt textarea { font: inherit; font-size: 14.5px; font-weight: 400; color: var(--text-primary); background: none; border: 0; padding: 0; outline: none; width: 100%; min-width: 0; }
+  .tm-felt textarea { min-height: 64px; resize: vertical; }
+  .tm-felt:focus-within { box-shadow: 0 0 0 2px var(--nav-indicator); }
+  .tm-obs { font-size: 12.5px; color: var(--text-secondary); display: flex; gap: 8px; align-items: center; }
+  .tm-obs[hidden] { display: none; }
+  .tm-obs b { background: var(--destructive-tint); color: var(--destructive); border-radius: 6px; padding: 2px 6px; font-size: 11.5px; letter-spacing: .03em; }
+  .tm-dialog .knapper { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
+  .tm-dialog .knapper .tm-knap { justify-content: center; padding: 11px; }
+  .group[data-timer] + .group[data-label], .group[data-timer] + .group[data-enkelt] { margin-top: 12px; }
 </style>
 </head>
 <body>
@@ -154,6 +225,7 @@
       <div id="tree"></div>
     </nav>
     <div class="foot">
+      <a class="item" id="forbindelser" href="#/kompas/forbindelser.html" data-src="/kompas/forbindelser.html"></a>
       <div class="status down" id="kopi-status" role="status" hidden><i></i><span></span></div>
       <div class="status" id="sure-status" role="status"><i></i><span>Tjekker Sure …</span></div>
       <a class="item" id="newtab" href="/" target="_blank" rel="noopener"></a>
@@ -170,6 +242,10 @@
     <iframe id="frame" title="Indhold" allow="publickey-credentials-get; publickey-credentials-create; clipboard-write"></iframe>
   </div>
 
+  <div class="tm-pop" id="timer-pop" role="dialog" aria-label="Timer" hidden></div>
+  <div class="tm-pille" id="timer-pille" role="status" aria-label="Timeren kører" hidden></div>
+  <dialog class="tm-dialog" id="timer-gem" aria-labelledby="timer-gem-titel"></dialog>
+
 <script src="/kompas/assets/icons.js"></script>
 <script>
 // Kompas owns only "Kompas". Every other group comes from the projects themselves: each writes a kompas.json
@@ -178,15 +254,17 @@
 // `match` lists the path prefixes that count as "this page" when you click around inside it (Sure navigates
 // on its own); `praecis` means only the exact path; `fane` is the id of a tab inside the page that shows this
 // view, for projects with several views on one page. A page without `sti` is planned ("snart").
-// `oeverst` puts a page in the top group, under I dag and Forbindelser, while the project still owns it.
+// `oeverst` puts a page in the top group, under I dag, while the project still owns it.
 // `nyt` is a key for the page's newest content (a new weekly review, a new plan). When it changes, the menu
 // shows a dot until the page is opened. Which key you last saw is remembered in this browser only.
 // An area with only one page is no folder: it shows as one item with the area's name and icon.
 // Several projects can name the same omraade; their pages then share that folder.
 const HOME = "/kompas/";
-const ØVERST = [{ label: "I dag", icon: "sun", src: HOME }, { label: "Forbindelser", icon: "plug", src: "/kompas/forbindelser.html" }];
+const ØVERST = [{ label: "I dag", icon: "sun", src: HOME }];
+// Forbindelser står i bunden af menuen over Sures status, men findes stadig under Gå til
+const BUND = { items: [{ label: "Forbindelser", icon: "plug", src: "/kompas/forbindelser.html" }] };
 let NAV = [{ items: [...ØVERST] }];
-let PAGES = NAV[0].items;
+let PAGES = [...NAV[0].items, ...BUND.items];
 
 const $ = id => document.getElementById(id);
 const frame = $("frame");
@@ -196,6 +274,7 @@ $("mark").innerHTML = icon("compass", 18);
 $("open").innerHTML = icon("menu", 20);
 $("close").innerHTML = icon("x", 18);
 $("reload").innerHTML = icon("rotate-cw", 18);
+$("forbindelser").innerHTML = `${icon("plug")}<span>Forbindelser</span>`;
 $("newtab").innerHTML = `${icon("external-link")}<span>Åbn siden i ny fane</span>`;
 $("find-row").insertAdjacentHTML("afterbegin", icon("search", 15));
 if (!/Mac|iPhone|iPad/.test(navigator.platform)) $("find-kbd").textContent = "Ctrl K";
@@ -221,12 +300,12 @@ async function loadNav() {
     const first = !g.fejl && merged.find(x => !x.fejl && x.label === g.label);
     if (first) first.items.push(...g.items); else merged.push(g);
   }
-  // Sider med `oeverst` står i den øverste gruppe, efter I dag og Forbindelser (fx Studies Frister), men hører stadig til
+  // Sider med `oeverst` står i den øverste gruppe, efter I dag (fx Studies Frister), men hører stadig til
   // projektet; et område, der kun havde dem, forsvinder ikke, så længe det har andre sider
   const op = merged.flatMap(g => g.items.filter(p => p.oeverst));
   for (const g of merged) g.items = g.items.filter(p => !p.oeverst);
   NAV = [{ items: [...ØVERST, ...op] }, ...merged.filter(g => g.fejl || g.items.length)];
-  PAGES = NAV.flatMap(g => g.items).filter(p => p.src);
+  PAGES = [...NAV, BUND].flatMap(g => g.items).filter(p => p.src);
   renderNav();
   husk();
 }
@@ -278,6 +357,9 @@ function visMapper() {
   });
 }
 
+// Timeren står under Frister, som sidste punkt i den øverste gruppe (se Timer nedenfor)
+const TIMER_HTML = `<div class="group" data-timer hidden><ul><li><button class="item" id="timer-knap" type="button" aria-haspopup="dialog" aria-expanded="false">${icon("timer")}<span>Timer</span><span class="timer-tid" id="timer-tid"></span></button>
+  <button class="icon-btn timer-hurtig" id="timer-hurtig" type="button" hidden>${icon("play", 14)}</button></li></ul></div>`;
 const enkelt = g => g.label && !g.fejl && g.items.length === 1 && !g.items[0].snart;
 function renderNav() {
   $("tree").innerHTML = NAV.map((g, i) => enkelt(g) ? `
@@ -288,8 +370,10 @@ function renderNav() {
       ? `<span class="item" aria-disabled="true" title="Ikke bygget endnu">${icon(p.icon)}<span>${esc(p.label)}</span><span class="pill">snart</span></span>`
       : `<a class="item" href="#${esc(p.src)}" data-src="${esc(p.src)}">${icon(p.icon)}<span>${esc(p.label)}</span></a>`}</li>`).join("")}
     </ul>
-  </div>`).join("");
+  </div>`).map((h, i) => i === 0 ? h + TIMER_HTML : h).join("");
   aabn(ÅBEN);
+  // Timeren tegnes, når hele scriptet er kørt (den står længere nede)
+  queueMicrotask(() => visTimer());
   if ($("find").value) findPages();
 }
 renderNav();
@@ -301,7 +385,7 @@ function findPages() {
   $("hits").hidden = !q.length;
   $("tree").hidden = !!q.length;
   if (!q.length) return;
-  const hits = NAV.flatMap(g => g.items.filter(p => p.src).map(p => ({ p, g, tekst: norm(`${p.label} ${g.label || "Kompas"}`) })))
+  const hits = [...NAV, BUND].flatMap(g => g.items.filter(p => p.src).map(p => ({ p, g, tekst: norm(`${p.label} ${g.label || "Kompas"}`) })))
     .filter(h => q.every(w => h.tekst.includes(w)));
   $("hits").innerHTML = hits.length
     ? `<ul>${hits.map(({ p, g }) =>
@@ -354,7 +438,7 @@ function pageFor(path) {
 let sidst = null;
 function mark(path, set = true) {
   const page = pageFor(path);
-  document.querySelectorAll("#nav a.item").forEach(a => {
+  document.querySelectorAll("#nav a.item, #forbindelser").forEach(a => {
     if (page && a.dataset.src === page.src) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
   });
   if (set && page?.nyt && SET[page.src] !== page.nyt) { SET[page.src] = page.nyt; gemSet(); }
@@ -366,7 +450,9 @@ function mark(path, set = true) {
   }
   prikker();
   const label = page ? page.label : "I dag";
-  document.title = `${label} · Kompas`;
+  // Mens timeren kører, tæller fanens titel; ellers er den sidens navn
+  TITEL = `${label} · Kompas`;
+  tikTimer();
   frame.title = label;
   $("top-title").textContent = label;
   $("newtab").href = path;
@@ -460,6 +546,7 @@ $("nav").addEventListener("click", e => {
   history.replaceState(null, "", "#" + a.dataset.src);
   go(a.dataset.src);
 });
+$("forbindelser").addEventListener("click", () => document.body.classList.remove("open"));
 document.querySelector(".brand").addEventListener("click", e => {
   e.preventDefault(); document.body.classList.remove("open"); history.replaceState(null, "", "#" + HOME); go(HOME);
 });
@@ -515,6 +602,287 @@ async function checkKopi() {
 checkSure();
 checkKopi();
 setInterval(() => { checkSure(); checkKopi(); }, 60000);
+
+// --- Timer: Studies stopur (Selvstudie) på alle sider ------------------------------------------------
+// Studie-serveren holder stopuret (/studie/api/stopur), så det kan startes på Mac'en og stoppes på bærbaren; rammen
+// henter det hvert halve minut og tæller selv sekunderne imellem. Knappen under Frister åbner timeren (stopur eller
+// Pomodoro, og fagene); mens den kører, står en tæller øverst over siden, og fanens titel tæller med. Svarer
+// Studie-serveren ikke (fx bærbarens kopi), er der ingen timer. Valgene (stopur eller Pomodoro, længde, antal, pause)
+// huskes i denne browser.
+const TIMER_API = "/studie/api/stopur", LANG_T = 3;
+let SU = null, TIMER_VIST = null, TITEL = document.title, LYD = null, TM_FEJL = null;
+const VARIGHEDER = [25, 45, 60, 90, 120];
+let VALG = { slags: "stopur", arbejde: 25, antal: 4, pause: 5 };
+try { VALG = { ...VALG, ...JSON.parse(localStorage.getItem("kompas-timer") || "{}") }; } catch (e) {}
+const gemValg = () => { try { localStorage.setItem("kompas-timer", JSON.stringify(VALG)); } catch (e) {} };
+const ms = s => Date.parse(s), to2 = n => String(n).padStart(2, "0");
+// Som slutFor i Studies Scripts/sessioner.js: et åbent stykke slutter nu, med Pomodoro højst arbejde-minutter efter starten
+const stykkeSlut = (st, p, nu) => st[1] ? ms(st[1]) : p ? Math.min(nu, ms(st[0]) + p.arbejde * 6e4) : nu;
+const arbejdet = (g, nu) => g.stykker.reduce((a, st) => a + Math.max(0, stykkeSlut(st, g.pomodoro, nu) - ms(st[0])), 0);
+const urTxt = t => { const s = Math.max(0, Math.round(t / 1000)), h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60);
+  return h ? `${h}:${to2(m)}:${to2(s % 60)}` : `${to2(m)}:${to2(s % 60)}`; };
+const klok = t => { const d = new Date(t); return `${to2(d.getHours())}:${to2(d.getMinutes())}`; };
+// koerer (stopur), fokus (Pomodoro), pause (du trykkede pause), pomopause (Pomodoros pause), klar (pausen er slut) eller
+// faerdig (alle Pomodoros er taget)
+function tTilstand(g, nu) {
+  const st = g.stykker.at(-1), p = g.pomodoro;
+  if (!st[1] && (!p || ms(st[0]) + p.arbejde * 6e4 > nu)) return { navn: p ? "fokus" : "koerer", tilbage: p ? ms(st[0]) + p.arbejde * 6e4 - nu : null, fra: ms(st[0]) };
+  const slut = stykkeSlut(st, p, nu);
+  if (p && slut - ms(st[0]) >= p.arbejde * 6e4 - 1000) {
+    if (p.antal && g.stykker.length >= p.antal) return { navn: "faerdig", siden: slut };
+    const tilbage = slut + p.pause * 6e4 - nu;
+    return tilbage > 0 ? { navn: "pomopause", tilbage, siden: slut } : { navn: "klar", siden: slut };
+  }
+  return { navn: "pause", siden: slut };
+}
+const fagAf = id => SU?.fag.find(f => f.id === id) || { kort: id, farve: "var(--gray-400)" };
+const langt = (g, ts, nu) => ts.navn === "koerer" && nu - ts.fra > LANG_T * 36e5;
+
+async function timerKald(krop) {
+  const r = await fetch(TIMER_API, krop ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(krop) } : { cache: "no-store" });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.fejl || `Studie-serveren svarede ${r.status}`);
+  return d;
+}
+async function hentTimer() {
+  try { SU = await timerKald(); } catch (e) { SU = null; }
+  visTimer();
+}
+// En ændring fra timeren: Selvstudie i rammen henter sine tal igen
+async function timerHandling(krop) {
+  try {
+    SU = await timerKald(krop); TM_FEJL = SU.besked || null;
+    try { frame.contentWindow.postMessage({ kompas: "stopur" }, location.origin); } catch (e) {}
+  } catch (e) { TM_FEJL = e.message; }
+  visTimer(true);
+}
+
+const hurtigFag = () => SU?.fag.find(f => f.id === VALG.fag) || SU?.fag[0];
+function visTimer(popOgså = false) {
+  const knap = $("timer-knap"), g = SU?.igang, hurtig = $("timer-hurtig");
+  if (knap) { knap.closest(".group").hidden = !SU; knap.classList.toggle("timer-koerer", !!g); }
+  if (hurtig) {
+    hurtig.hidden = !SU || !!g || !hurtigFag();
+    const f = hurtigFag(), navn = f && `Start ${f.kort} (${VALG.slags === "pomodoro" ? `Pomodoro ${VALG.arbejde} min` : "stopur"})`;
+    if (navn) { hurtig.title = navn; hurtig.setAttribute("aria-label", navn); }
+  }
+  if (!SU) { $("timer-pille").hidden = true; $("timer-pop").hidden = true; document.title = TITEL; return; }
+  const nu = Date.now(), ts = g && tTilstand(g, nu);
+  TIMER_VIST = g ? `${g.id}:${ts.navn}:${g.stykker.length}:${g.fag}:${langt(g, ts, nu)}` : "stille";
+  // Tælleren øverst
+  const pille = $("timer-pille");
+  pille.hidden = !g;
+  if (g) {
+    const kører = ts.navn === "koerer" || ts.navn === "fokus", f = fagAf(g.fag);
+    const stor = kører ? ["pause", "Pause"] : ts.navn === "faerdig" ? ["square", "Stop og gem"] : ["play", ts.navn === "pause" ? "Fortsæt" : "Næste fokus"];
+    pille.innerHTML = `<button class="tm-stor" type="button" data-h="${kører ? "pause" : ts.navn === "faerdig" ? "stop" : "fortsaet"}" aria-label="${stor[1]}" title="${stor[1]}">${icon(stor[0], 15)}</button>
+      <i class="tm-lys${kører ? "" : " pause"}"></i>${g.pomodoro ? "🍅" : ""}<span class="tm-sw" style="background:${f.farve}"></span><span>${esc(f.kort)}</span>
+      <b id="timer-pille-ur"></b>
+      <button class="icon-btn" type="button" data-aabn aria-label="Åbn timeren" title="Åbn timeren">${icon("settings", 15)}</button>
+      <button class="icon-btn" type="button" data-h="stop" aria-label="Stop og gem" title="Stop og gem">${icon("square", 14)}</button>`;
+  }
+  if (popOgså || $("timer-pop").hidden) tegnPop();
+  tikTimer();
+}
+function tegnPop() {
+  const pop = $("timer-pop"), g = SU?.igang, nu = Date.now();
+  if (!SU) return;
+  if (!g) {
+    const pomo = VALG.slags === "pomodoro";
+    pop.innerHTML = `<h3>${icon("timer", 16)}Timer</h3>
+      <div class="tm-seg" role="group" aria-label="Slags"><button type="button" data-valg="slags" data-v="stopur" aria-pressed="${!pomo}">Stopur</button>
+        <button type="button" data-valg="slags" data-v="pomodoro" aria-pressed="${pomo}">Pomodoro</button></div>
+      ${pomo ? `<div class="lbl">Varighed (min)</div><div class="tm-seg"><button type="button" class="tm-pm" data-valg="arbejde" data-d="-5" aria-label="5 minutter kortere">−</button>
+          ${[...new Set([...VARIGHEDER, VALG.arbejde])].sort((a, b) => a - b).map(v => `<button type="button" data-valg="arbejde" data-v="${v}" aria-pressed="${v === VALG.arbejde}">${v}</button>`).join("")}
+          <button type="button" class="tm-pm" data-valg="arbejde" data-d="5" aria-label="5 minutter længere">+</button></div>
+        <div class="tm-to"><div><div class="lbl">Pomodoros</div><div class="tm-seg"><button type="button" class="tm-pm" data-valg="antal" data-d="-1" aria-label="Færre">−</button>
+            <span>${VALG.antal}</span><button type="button" class="tm-pm" data-valg="antal" data-d="1" aria-label="Flere">+</button></div></div>
+          <div><div class="lbl">Pause</div><div class="tm-seg"><button type="button" class="tm-pm" data-valg="pause" data-d="-1" aria-label="Kortere pause">−</button>
+            <span>${VALG.pause} min</span><button type="button" class="tm-pm" data-valg="pause" data-d="1" aria-label="Længere pause">+</button></div></div></div>` : ""}
+      <ul class="tm-fag">${SU.fag.map(f => `<li><button type="button" data-start="${esc(f.id)}"><span class="tm-sw" style="background:${f.farve}"></span>${esc(f.kort)}${icon("play", 14)}</button></li>`).join("")}</ul>
+      ${TM_FEJL ? `<div class="tm-fejl">${esc(TM_FEJL)}</div>` : ""}
+      <a class="tm-link" href="#/studie/selvstudie.html" data-luk>Selvstudie: sessioner, forslag og tilføj bagefter</a>`;
+  } else {
+    const ts = tTilstand(g, nu), f = fagAf(g.fag), kører = ts.navn === "koerer" || ts.navn === "fokus";
+    const navn = { koerer: "Kører", fokus: `Fokus ${g.stykker.length}${g.pomodoro?.antal ? ` af ${g.pomodoro.antal}` : ""} · ${g.pomodoro?.arbejde} min`, pause: `Pause siden ${klok(ts.siden)}`,
+      pomopause: `Pause · ${g.pomodoro?.pause} min`, klar: "Klar til næste fokus", faerdig: "Alle Pomodoros er taget" }[ts.navn];
+    pop.innerHTML = `<h3><span class="tm-sw" style="background:${f.farve}"></span>${esc(f.kort)}<span style="font-weight:400;color:var(--text-secondary)">· ${esc(navn)}</span></h3>
+      <div style="font-size:26px;font-weight:600;font-variant-numeric:tabular-nums" id="timer-pop-ur"></div>
+      <div style="color:var(--text-secondary);font-size:12.5px">startet ${klok(ms(g.stykker[0][0]))}</div>
+      <div class="tm-knapper">${kører ? `<button class="tm-knap ghost" type="button" data-h="pause">${icon("pause", 14)}Pause</button>`
+          : ts.navn === "faerdig" ? "" : `<button class="tm-knap" type="button" data-h="fortsaet">${icon("play", 14)}${ts.navn === "pause" ? "Fortsæt" : "Næste fokus"}</button>`}
+        <button class="tm-knap${kører || ts.navn === "faerdig" ? "" : " ghost"}" type="button" data-h="stop">${icon("square", 13)}Stop og gem</button></div>
+      ${langt(g, ts, nu) ? `<div class="tm-advar">Det har kørt siden ${klok(ts.fra)}. Glemte du at stoppe? Stop og ret sluttiden, når du gemmer.</div>` : ""}
+      <div class="tm-knapper"><label style="color:var(--text-secondary);font-size:12.5px">Fag <select id="timer-skift">${SU.fag.map(x => `<option value="${esc(x.id)}"${x.id === g.fag ? " selected" : ""}>${esc(x.kort)}</option>`).join("")}</select></label>
+        <button class="tm-knap quiet" type="button" data-h="annuller">Kassér</button></div>
+      ${TM_FEJL ? `<div class="tm-fejl">${esc(TM_FEJL)}</div>` : ""}
+      <a class="tm-link" href="#/studie/selvstudie.html" data-luk>Åbn Selvstudie</a>`;
+  }
+}
+// Hvert sekund: tallene, fanens titel og, når tilstanden skifter (fx et fokus, der er slut), resten
+function tikTimer() {
+  const g = SU?.igang;
+  if (!g) { document.title = TITEL; $("timer-tid") && ($("timer-tid").textContent = ""); return; }
+  const nu = Date.now(), ts = tTilstand(g, nu), nøgle = `${g.id}:${ts.navn}:${g.stykker.length}:${g.fag}:${langt(g, ts, nu)}`;
+  if (nøgle !== TIMER_VIST) { const før = TIMER_VIST; visTimer(true); if (g.pomodoro && før?.startsWith(g.id)) signal(ts.navn, g); return; }
+  const ur = ts.navn === "faerdig" ? urTxt(arbejdet(g, nu)) : urTxt(ts.tilbage ?? (ts.navn === "klar" ? 0 : arbejdet(g, nu)));
+  const kort = fagAf(g.fag).kort;
+  const tegn = { koerer: "⏱", fokus: "🍅", pause: "⏸", pomopause: "☕", klar: "🍅", faerdig: "✅" }[ts.navn];
+  document.title = ts.navn === "pomopause" ? `${tegn} ${ur} | Pause` : ts.navn === "klar" ? `${tegn} Klar | ${kort}` : ts.navn === "faerdig" ? `${tegn} Færdig | ${kort}` : `${tegn} ${ur} | ${kort}`;
+  for (const id of ["timer-tid", "timer-pille-ur", "timer-pop-ur"]) if ($(id)) $(id).textContent = ts.navn === "klar" ? "Klar" : ur;
+}
+// Pomodoro: en klokke, et pust på tælleren øverst og en notifikation, når et fokus eller en pause er slut.
+// Pausen: tre toner, der falder roligt og klinger længe ud (pust ud). Klar til fokus: tre hurtige, lyse toner op.
+// Alle Pomodoros taget: en brudt akkord op, der bliver hængende. Tonerne er C-dur fra C6, hvor små højttalere spiller kraftigst
+const KLOKKE = {
+  pomopause: { toner: [1568, 1319, 1047], afstand: 0.34, hale: 2.4 },
+  klar: { toner: [1047, 1568, 2093], afstand: 0.12, hale: 1.3 },
+  faerdig: { toner: [1047, 1319, 1568, 2093], afstand: 0.11, hale: 2.8, styrke: 0.8 },
+};
+// Hver tone er en lille klokke: grundtonen med en svagt forstemt tvilling (varme) og to overtoner, der klinger hurtigere ud.
+// Et kort ekko giver rum, og en kompressor til sidst holder det rent, når tonerne overlapper
+function klokke({ toner, afstand, hale, styrke: alt = 1 }) {
+  if (!LYD) return;
+  if (LYD.state === "suspended") LYD.resume().catch(() => {});
+  const t0 = LYD.currentTime + 0.05, ud = LYD.createDynamicsCompressor(), ind = LYD.createGain();
+  ud.threshold.value = -10; ud.ratio.value = 8; ud.attack.value = 0.002; ind.gain.value = 0.75 * alt; ud.connect(LYD.destination); ind.connect(ud);
+  const ekko = LYD.createDelay(1), tilbage = LYD.createGain(), dæmp = LYD.createBiquadFilter(), vaad = LYD.createGain();
+  ekko.delayTime.value = 0.19; tilbage.gain.value = 0.3; dæmp.type = "lowpass"; dæmp.frequency.value = 2500; vaad.gain.value = 0.35;
+  ind.connect(ekko); ekko.connect(dæmp); dæmp.connect(tilbage); tilbage.connect(ekko); dæmp.connect(vaad); vaad.connect(ud);
+  toner.forEach((f, i) => {
+    const t = t0 + i * afstand;
+    for (const [frek, styrke, klang] of [[f, 0.5, 1], [f * 1.003, 0.2, 1], [f * 2, 0.12, 0.5], [f * 3, 0.04, 0.25]]) {
+      const o = LYD.createOscillator(), v = LYD.createGain();
+      o.type = "sine"; o.frequency.value = frek; o.connect(v); v.connect(ind);
+      v.gain.setValueAtTime(0.0001, t); v.gain.linearRampToValueAtTime(styrke, t + 0.012); v.gain.exponentialRampToValueAtTime(0.0001, t + hale * klang);
+      o.start(t); o.stop(t + hale * klang + 0.05);
+    }
+  });
+}
+function signal(navn, g) {
+  const tekst = { pomopause: `Fokus slut: ${g.pomodoro.pause} min pause`, klar: "Pausen er slut", faerdig: "Alle Pomodoros er taget" }[navn];
+  if (!tekst) return;
+  try { klokke(KLOKKE[navn]); } catch (e) {}
+  const pille = $("timer-pille"); pille.classList.remove("tm-skift"); void pille.offsetWidth; pille.classList.add("tm-skift");
+  try { if (Notification.permission === "granted") new Notification(tekst, { body: `${fagAf(g.fag).kort} · Selvstudie`, tag: "pomodoro", silent: true }); } catch (e) {}
+}
+// Browseren spiller først lyd efter et klik; det første klik eller tastetryk på en side låser den op, også efter en genindlæsning
+const lasOpLyd = () => { try { LYD ||= new AudioContext(); if (LYD.state === "suspended") LYD.resume(); } catch (e) {} };
+document.addEventListener("pointerdown", lasOpLyd, { capture: true });
+document.addEventListener("keydown", lasOpLyd, { capture: true });
+
+function aabnTimer(vis) {
+  const pop = $("timer-pop"), knap = $("timer-knap");
+  pop.hidden = !vis;
+  knap?.setAttribute("aria-expanded", String(vis));
+  if (!vis) return;
+  TM_FEJL = null; tegnPop(); tikTimer();
+  // Ved siden af knappen; på en smal skærm øverst på siden
+  if (SMAL.matches || !knap) { pop.style.left = "12px"; pop.style.top = "60px"; }
+  else { const r = knap.getBoundingClientRect(); pop.style.left = `${r.right + 8}px`; pop.style.top = `${Math.max(8, Math.min(r.top - 8, innerHeight - pop.offsetHeight - 8))}px`; }
+  hentTimer();
+}
+document.addEventListener("click", e => {
+  // Quickstart: det sidste fag med dine sidste valg, uden at åbne timeren
+  if (e.target.closest("#timer-hurtig")) {
+    const fag = hurtigFag(), pomo = VALG.slags === "pomodoro";
+    return timerHandling({ handling: "start", fag: fag.id, pomodoro: pomo ? { arbejde: VALG.arbejde, antal: VALG.antal, pause: VALG.pause } : false });
+  }
+  const knap = e.target.closest("#timer-knap, [data-aabn]");
+  if (knap) { e.preventDefault(); aabnTimer($("timer-pop").hidden); return; }
+  const inde = e.target.closest("#timer-pop, #timer-pille");
+  if (!inde) { if (!$("timer-pop").hidden) aabnTimer(false); return; }
+  if (e.target.closest("[data-luk]")) { aabnTimer(false); document.body.classList.remove("open"); return; }
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.valg) {
+    const k = b.dataset.valg, GR = { arbejde: [5, 180], antal: [1, 12], pause: [1, 60] };
+    if (k === "slags") VALG.slags = b.dataset.v;
+    else VALG[k] = Math.max(GR[k][0], Math.min(GR[k][1], b.dataset.v ? +b.dataset.v : VALG[k] + +b.dataset.d));
+    gemValg(); tegnPop(); return;
+  }
+  // Pomodoro beder om lov til notifikationer første gang
+  if (b.dataset.start) {
+    const pomo = VALG.slags === "pomodoro";
+    VALG.fag = b.dataset.start; gemValg();
+    if (pomo && "Notification" in window && Notification.permission === "default") Notification.requestPermission().catch(() => {});
+    aabnTimer(false);
+    return timerHandling({ handling: "start", fag: b.dataset.start, pomodoro: pomo ? { arbejde: VALG.arbejde, antal: VALG.antal, pause: VALG.pause } : false });
+  }
+  const h = b.dataset.h; if (!h) return;
+  if (h === "annuller" && !confirm("Kassér sessionen? Den bliver ikke gemt.")) return;
+  if (h === "stop" || h === "annuller") aabnTimer(false);
+  if (h === "stop") return aabnGem();
+  timerHandling({ handling: h });
+});
+document.addEventListener("change", e => { if (e.target.id === "timer-skift") timerHandling({ handling: "skift", fag: e.target.value }); });
+// Gem session: Stop åbner en formular med datoen, starten, slutningen og pausen fra timeren, som du kan rette, og faget,
+// en aktivitet og en note. Annullér lader timeren køre videre; tiden, mens formularen er åben, tæller ikke. Kun det, du
+// har ændret, sendes; resten tager serveren fra timeren.
+let GEM = null;
+const datoTxt = d => `${d.getFullYear()}-${to2(d.getMonth() + 1)}-${to2(d.getDate())}`;
+function aabnGem() {
+  const g = SU?.igang; if (!g) return;
+  const nu = Date.now(), start = ms(g.stykker[0][0]), slut = Math.max(...g.stykker.map(st => stykkeSlut(st, g.pomodoro, nu)));
+  const pause = Math.round((slut - start - arbejdet(g, nu)) / 6e4), sd = new Date(start);
+  GEM = { start, slut, pause, dato: datoTxt(sd), fra: klok(start), til: klok(slut) };
+  const el = $("timer-gem"), aktiv = SU.aktiviteter || [];
+  el.innerHTML = `<form method="dialog" id="timer-gem-form">
+    <div class="hoved"><h2 id="timer-gem-titel">Gem session</h2><button type="button" class="kasser" data-gem="kasser">Kassér timer</button></div>
+    <div class="tm-felter">
+      <label class="tm-felt">Dato<input type="date" name="dato" value="${GEM.dato}" required></label>
+      <div class="tm-raekke" style="--n:3"><label class="tm-felt">Start<input type="time" name="fra" value="${GEM.fra}" required></label>
+        <label class="tm-felt">Slut<input type="time" name="til" value="${GEM.til}" required></label>
+        <label class="tm-felt">Pause (min)<input type="number" name="pause" value="${pause}" min="0" step="1" inputmode="numeric"></label></div>
+      <div class="tm-obs" id="timer-gem-obs" hidden></div>
+      <div class="tm-raekke"><label class="tm-felt">Fag<select name="fag">${SU.fag.map(f => `<option value="${esc(f.id)}"${f.id === g.fag ? " selected" : ""}>${esc(f.kort)}</option>`).join("")}</select></label>
+        <label class="tm-felt">Aktivitet<input name="aktivitet" list="timer-aktiviteter" maxlength="60" placeholder="fx Øvelser" autocomplete="off"></label></div>
+      <datalist id="timer-aktiviteter">${aktiv.map(a => `<option value="${esc(a)}">`).join("")}</datalist>
+      <label class="tm-felt">Note<textarea name="note" maxlength="1000" placeholder="fx Forelæsning 7, slides 1-20"></textarea></label>
+    </div>
+    <div class="tm-fejl" id="timer-gem-fejl"></div>
+    <div class="knapper"><button type="button" class="tm-knap ghost" data-gem="annuller">Annullér</button><button type="submit" class="tm-knap">Gem</button></div></form>`;
+  el.showModal();
+  gemObs();
+}
+// Start og slut som tidspunkter: slut før start betyder over midnat
+function gemTider(f) {
+  const a = new Date(`${f.dato.value}T${f.fra.value}`), z = new Date(`${f.dato.value}T${f.til.value}`);
+  if (z <= a) z.setDate(z.getDate() + 1);
+  const fraÆndret = f.dato.value !== GEM.dato || f.fra.value !== GEM.fra, tilÆndret = f.dato.value !== GEM.dato || f.til.value !== GEM.til;
+  return { a: fraÆndret ? a.getTime() : GEM.start, z: tilÆndret ? z.getTime() : GEM.slut, fraÆndret, tilÆndret };
+}
+function gemObs() {
+  const f = $("timer-gem-form"); if (!f) return;
+  const { a, z } = gemTider(f), min = (z - a) / 6e4 - (+f.pause.value || 0), obs = $("timer-gem-obs");
+  obs.hidden = min >= 5;
+  obs.innerHTML = min < 1 ? "<b>OBS</b>Under et minut: intet bliver gemt." : "<b>OBS</b>Sessionen er under 5 minutter.";
+}
+$("timer-gem").addEventListener("input", gemObs);
+$("timer-gem").addEventListener("click", async e => {
+  const b = e.target.closest("[data-gem]"); if (!b) return;
+  if (b.dataset.gem === "annuller") { $("timer-gem").close(); return; }
+  if (!confirm("Kassér timeren? Sessionen bliver ikke gemt.")) return;
+  $("timer-gem").close();
+  timerHandling({ handling: "annuller" });
+});
+$("timer-gem").addEventListener("submit", async e => {
+  e.preventDefault();
+  const f = e.target, { a, z, fraÆndret } = gemTider(f), krop = { handling: "stop", slut: new Date(z).toISOString(), fag: f.fag.value,
+    aktivitet: f.aktivitet.value, note: f.note.value };
+  if (fraÆndret) krop.start = new Date(a).toISOString();
+  if (f.pause.value !== String(GEM.pause)) krop.pause_min = f.pause.value === "" ? 0 : +f.pause.value;
+  if (z > Date.now()) { $("timer-gem-fejl").textContent = "Slut kan ikke ligge ude i fremtiden."; return; }
+  try {
+    SU = await timerKald(krop); TM_FEJL = SU.besked || null;
+    try { frame.contentWindow.postMessage({ kompas: "stopur" }, location.origin); } catch (err) {}
+    $("timer-gem").close(); visTimer(true);
+  } catch (err) { $("timer-gem-fejl").textContent = err.message; }
+});
+document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("timer-pop").hidden) aabnTimer(false); });
+hentTimer();
+setInterval(tikTimer, 1000);
+setInterval(hentTimer, 30000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) hentTimer(); });
 
 // The menu arrives from the projects; the frame can start loading meanwhile. It's fetched again every
 // 10 minutes, so a new review or plan gets its dot while the page is open.

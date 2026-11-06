@@ -6,6 +6,7 @@ Skriver det, sprog/server.js ville svare, med datoerne regnet ud fra idag:
   ud/sprog/api/pakke.json       GET /sprog/api/pakke: sprogene, dagens kø, teksterne, tallene, reglerne
   ud/sprog/api/tekster.json     GET /sprog/api/tekster
   ud/sprog/api/regler.json      GET /sprog/api/regler
+  ud/sprog/api/tid.json         GET /sprog/api/tid: forslaget ud fra dagens svar, ugens tid og de gemte sessioner
 
 Spansk er det aktive sprog (A2 efter niveautesten), tysk er på pause, og dansk og engelsk er studiesprog, som i
 standardopsætningen i sprog/kerne.js. Kortene, teksterne og reglerne er opdigtede eksempler i samme form som dem,
@@ -104,6 +105,12 @@ REGLER = [
      "kilde": "egne-ord.md (Beta)", "uger_siden": 0},
 ]
 
+# Tid på sprog, som kerne.js regner den: reglerne og de gemte sessioner (sprog, dage siden, klokken, minutter). Sessionerne
+# ligger om de morgener, hvor køens kort sidst blev besvaret.
+FORSLAG = {"pause_min": 10, "mindst_min": 5, "dage": 14}
+SESSIONER = [("es", 2, time(8, 31), 13), ("es", 3, time(8, 34), 11), ("es", 4, time(8, 30), 15), ("da", 5, time(8, 35), 8),
+             ("es", 6, time(8, 32), 12), ("es", 9, time(8, 29), 14), ("de", 11, time(8, 33), 9)]
+
 TEKSTER = [
     {"titel": "En la estación",
      "tekst": "Lucía vive en Madrid, pero este fin de semana viaja a Sevilla para visitar a su abuela. Llega a la "
@@ -153,6 +160,24 @@ def _kort(t: tuple, idag: date, ny: bool = False, dage=None, stabilitet=None) ->
             "note": note, "regel": regel, "ny": ny, "stabilitet": stabilitet,
             "forfald": _iso(datetime.combine(idag, time(0, 0)).astimezone()) if sidst else None,
             "sidst": _iso(sidst) if sidst else None}
+
+
+def _tid(nu: datetime, idag: date, mandag: date) -> dict:
+    """Som tid() i kerne.js: dagens tre svar er et forslag, der venter; sessionerne er gemt tidligere."""
+    svar = [nu - timedelta(minutes=m) for m in (41, 38, 35)]  # det sidste er sidst_svar i pakken
+    start = svar[0] - (svar[1] - svar[0])  # det første svar får den mediane tid mellem svarene
+    sessioner = []
+    for i, (sp, dage, kl, minutter) in enumerate(SESSIONER):
+        a = datetime.combine(idag - timedelta(days=dage), kl).astimezone()
+        sessioner.append({"id": f"s-{i + 1:012x}", "sprog": sp, "navn": SPROG[sp]["navn"], "start": _iso(a),
+                          "slut": _iso(a + timedelta(minutes=minutter)), "timer": round(minutter / 60, 2)})
+    uge = [s for (_, dage, _, _), s in zip(SESSIONER, sessioner) if idag - timedelta(days=dage) >= mandag]
+    return {"forslag_regler": FORSLAG,
+            "forslag": [{"id": f"f-{_iso(svar[0])}", "start": _iso(start), "slut": _iso(svar[-1]), "svar": len(svar),
+                         "dele": [{"sprog": "es", "navn": SPROG["es"]["navn"], "timer": round((svar[-1] - start).seconds / 3600, 2),
+                                   "stykker": [[_iso(start), _iso(svar[-1])]]}]}],
+            "uge": {"mandag": mandag.isoformat(), "timer": round(sum(s["timer"] for s in uge), 2), "sessioner": len(uge)},
+            "sessioner": sessioner}
 
 
 def lav(ud: Path, idag: date) -> None:
@@ -223,5 +248,5 @@ def lav(ud: Path, idag: date) -> None:
     mappe = ud / "sprog"
     (mappe / "api").mkdir(parents=True, exist_ok=True)
     for navn, data in (("kompas.json", manifest), ("api/pakke.json", pakke), ("api/tekster.json", tekster),
-                       ("api/regler.json", regler)):
+                       ("api/regler.json", regler), ("api/tid.json", _tid(nu, idag, mandag))):
         (mappe / navn).write_text(json.dumps(data, ensure_ascii=False, indent=1))
