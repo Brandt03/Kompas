@@ -22,8 +22,10 @@ jobs:
 
   python:
     name: Demo og tests (Python ${{ matrix.python }})
-    runs-on: ubuntu-latest
+    # Fast version: ubuntu-latest (26.04) har ikke længere Python 3.9
+    runs-on: ubuntu-24.04
     strategy:
+      fail-fast: false
       matrix:
         # 3.9 er macOS' indbyggede Python, som demoen skal kunne køre på
         python: ["3.9", "3.13"]
